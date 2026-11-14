@@ -132,13 +132,25 @@ impl World {
     }
 
     fn git_as(&self, dir: &Path, who: Author, at: Timestamp, args: &[&str]) -> Result<String, GitError> {
+        self.git_by(dir, who, who, at, args)
+    }
+
+    /// Git run with `author` and `committer` as the commit's two people, both at `at`.
+    fn git_by(
+        &self,
+        dir: &Path,
+        author: Author,
+        committer: Author,
+        at: Timestamp,
+        args: &[&str],
+    ) -> Result<String, GitError> {
         let date = format!("@{} +0000", at.as_second());
         let out = git::command(&self.env, dir, args)
-            .env("GIT_AUTHOR_NAME", who.name)
-            .env("GIT_AUTHOR_EMAIL", who.email)
+            .env("GIT_AUTHOR_NAME", author.name)
+            .env("GIT_AUTHOR_EMAIL", author.email)
             .env("GIT_AUTHOR_DATE", &date)
-            .env("GIT_COMMITTER_NAME", who.name)
-            .env("GIT_COMMITTER_EMAIL", who.email)
+            .env("GIT_COMMITTER_NAME", committer.name)
+            .env("GIT_COMMITTER_EMAIL", committer.email)
             .env("GIT_COMMITTER_DATE", &date)
             .output()
             .map_err(|e| GitError::Spawn { message: e.to_string() })?;
@@ -178,6 +190,16 @@ impl RepoBuilder<'_> {
         }
         self.git(&["add", "-A"]);
         self.git_as(who, at, &["commit", "--quiet", "--allow-empty", "-m", message]);
+        self.head()
+    }
+
+    /// [`Self::commit`] written by `author` and committed by someone else, as when a
+    /// maintainer applies a contributor's patch.
+    pub fn commit_by(&self, author: Author, committer: Author, at: Timestamp, message: &str) -> String {
+        self.git(&["add", "-A"]);
+        self.world
+            .git_by(&self.path, author, committer, at, &["commit", "--quiet", "--allow-empty", "-m", message])
+            .unwrap_or_else(|e| fail(&format!("commit as {} for {}", committer.name, author.name), e));
         self.head()
     }
 

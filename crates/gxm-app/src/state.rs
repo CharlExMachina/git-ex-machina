@@ -3,7 +3,7 @@
 use gxm_core::diff::{self, Hunk};
 use gxm_core::env::Env;
 use gxm_core::graph::{self, GraphRow};
-use gxm_core::history::{self, ChangeStatus, Commit, FileChange};
+use gxm_core::history::{self, ChangeStatus, Commit, CommitInfo, FileChange};
 use gxm_core::repo::RepoSummary;
 use gxm_core::workspace::Workspace;
 use rune::TextEdit;
@@ -122,7 +122,8 @@ pub enum Subject {
 /// The inspector's data for its subject.
 pub struct Details {
     pub subject: Subject,
-    pub body: String,
+    /// A single commit's message, committer, trailers and containing refs.
+    pub info: Option<CommitInfo>,
     pub files: Vec<FileChange>,
     /// The file whose first hunk the inspector previews.
     pub file: Option<String>,
@@ -358,10 +359,10 @@ impl App {
         let Some(repo) = self.repo().map(|r| r.summary.path.clone()) else { return false };
         let env = &self.env;
         let details = want.map(|subject| {
-            let (body, files) = match &subject {
-                Subject::Worktree => (Ok(String::new()), history::uncommitted(env, &repo)),
+            let (info, files) = match &subject {
+                Subject::Worktree => (Ok(None), history::uncommitted(env, &repo)),
                 Subject::Head(id) | Subject::Commit(id) => {
-                    (history::body(env, &repo, id), history::changes(env, &repo, id))
+                    (history::info(env, &repo, id).map(Some), history::changes(env, &repo, id))
                 }
                 Subject::Commits(ids) => {
                     let mut all: Vec<FileChange> = Vec::new();
@@ -378,13 +379,13 @@ impl App {
                             Err(e) => error = Some(e),
                         }
                     }
-                    (Ok(String::new()), error.map_or(Ok(all), Err))
+                    (Ok(None), error.map_or(Ok(all), Err))
                 }
             };
-            let error = body.as_ref().err().or(files.as_ref().err()).map(ToString::to_string);
+            let error = info.as_ref().err().or(files.as_ref().err()).map(ToString::to_string);
             let mut files = files.unwrap_or_default();
             review_order(&mut files);
-            let mut d = Details { subject, body: body.unwrap_or_default(), files, file: None, hunk: None, error };
+            let mut d = Details { subject, info: info.ok().flatten(), files, file: None, hunk: None, error };
             let first = d.files.first().map(|f| f.path.clone());
             preview(env, &repo, &mut d, first);
             d

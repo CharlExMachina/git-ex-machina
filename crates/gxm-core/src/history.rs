@@ -224,9 +224,66 @@ fn parse_numstat(out: &str) -> Result<Vec<LineCounts>, GitError> {
     Ok(rows)
 }
 
-/// A commit's message after its subject line, trimmed.
-pub fn body(env: &Env, repo: &Path, commit: &str) -> Result<String, GitError> {
-    Ok(git::run(env, repo, &["show", "-s", "--format=%b", commit])?.trim().to_owned())
+/// What the inspector shows about a commit beyond its row: the message's body without its
+/// trailers, the trailers themselves, who committed it and when, and the refs that contain it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CommitInfo {
+    pub body: String,
+    /// `Co-authored-by: …`, `Refs: …`, in the order they're written.
+    pub trailers: Vec<(String, String)>,
+    pub committer: String,
+    pub committer_email: String,
+    pub committed: Timestamp,
+    /// Branches, remote branches and tags whose history includes the commit.
+    pub contained_in: Vec<RefLabel>,
+}
+
+pub fn info(env: &Env, repo: &Path, commit: &str) -> Result<CommitInfo, GitError> {
+    let out = git::run(env, repo, &["show", "-s", "--format=%cn%x1f%ce%x1f%ct%x1f%b", commit])?;
+    let bad = || GitError::Parse { what: "a commit's details", line: out.clone() };
+    let mut fields = out.splitn(4, FIELD);
+    let committer = fields.next().ok_or_else(bad)?.to_owned();
+    let committer_email = fields.next().ok_or_else(bad)?.to_owned();
+    let secs: i64 = fields.next().ok_or_else(bad)?.trim().parse().map_err(|_| bad())?;
+    let committed = Timestamp::from_second(secs).map_err(|_| bad())?;
+    let (body, trailers) = split_trailers(fields.next().unwrap_or_default());
+    let refs = git::run(
+        env,
+        repo,
+        &["for-each-ref", "--contains", commit, "--format=%(refname)", "refs/heads", "refs/remotes", "refs/tags"],
+    )?;
+    let contained_in = refs
+        .lines()
+        .filter_map(|r| {
+            let (kind, name) = if let Some(n) = r.strip_prefix("refs/heads/") {
+                (RefKind::LocalBranch, n)
+            } else if let Some(n) = r.strip_prefix("refs/tags/") {
+                (RefKind::Tag, n)
+            } else {
+                (RefKind::RemoteBranch, r.strip_prefix("refs/remotes/")?)
+            };
+            // `origin/HEAD` only points at another branch.
+            (!name.ends_with("/HEAD")).then(|| RefLabel { kind, name: name.to_owned() })
+        })
+        .collect();
+    Ok(CommitInfo { body, trailers, committer, committer_email, committed, contained_in })
+}
+
+/// A message body's trailers are its last paragraph when every line in it is `Key: value`
+/// (git's own rule, simplified). Returns the body without them, and the trailers.
+pub fn split_trailers(body: &str) -> (String, Vec<(String, String)>) {
+    let body = body.trim();
+    let (rest, last) = body.rsplit_once("\n\n").unwrap_or(("", body));
+    let parse = |line: &str| {
+        let (key, value) = line.split_once(": ")?;
+        let token = !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+        token.then(|| (key.to_owned(), value.trim().to_owned()))
+    };
+    let trailers: Option<Vec<_>> = last.lines().map(parse).collect();
+    match trailers {
+        Some(t) if !t.is_empty() => (rest.trim().to_owned(), t),
+        _ => (body.to_owned(), Vec::new()),
+    }
 }
 
 /// How many commits are reachable from a branch, a remote branch, a tag or HEAD.
@@ -288,4 +345,28 @@ pub fn uncommitted(env: &Env, repo: &Path) -> Result<Vec<FileChange>, GitError> 
         }
     }
     Ok(files)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn trailers_are_the_last_paragraph_of_key_value_lines() {
+        let body = "Collapses on the spring.\n\nCo-authored-by: Lea Brandt <lea@example.com>\nRefs: #121\n";
+        let (rest, trailers) = split_trailers(body);
+        assert_eq!(rest, "Collapses on the spring.");
+        assert_eq!(
+            trailers,
+            [
+                ("Co-authored-by".to_owned(), "Lea Brandt <lea@example.com>".to_owned()),
+                ("Refs".to_owned(), "#121".to_owned())
+            ]
+        );
+        // A trailer-only body, and a last paragraph that's prose, not trailers.
+        assert_eq!(split_trailers("Refs: #1").1.len(), 1);
+        let prose = "First.\n\nNote: this line reads like a trailer.\nThis one doesn't, so neither is.";
+        assert_eq!(split_trailers(prose), (prose.to_owned(), Vec::new()));
+        assert_eq!(split_trailers(""), (String::new(), Vec::new()));
+    }
 }

@@ -62,6 +62,11 @@ pub fn long(at: Timestamp, now: Timestamp, tz: &TimeZone) -> String {
     format!("{} at {clock}", at_z.strftime("%b %-d, %Y"))
 }
 
+/// The date and time, compact: `Nov 10, 2026, 18:42`.
+pub fn date_time(at: Timestamp, tz: &TimeZone) -> String {
+    at.to_zoned(tz.clone()).strftime("%b %-d, %Y, %H:%M").to_string()
+}
+
 /// The full date and time, for a tooltip: `Mon, Nov 9, 2026 at 14:05`.
 pub fn absolute(at: Timestamp, tz: &TimeZone) -> String {
     at.to_zoned(tz.clone()).strftime("%a, %b %-d, %Y at %H:%M").to_string()
@@ -106,6 +111,7 @@ mod tests {
         assert_eq!(long("2026-11-09T11:05:00Z"), "Monday at 11:05");
         assert_eq!(long("2026-11-08T16:20:00Z"), "Nov 8 at 16:20");
         assert_eq!(long("2025-12-31T09:00:00Z"), "Dec 31, 2025 at 09:00");
+        assert_eq!(date_time("2026-11-10T18:42:00Z".parse().unwrap(), &tz), "Nov 10, 2026, 18:42");
         assert_eq!(absolute("2026-11-09T14:05:00Z".parse().unwrap(), &tz), "Mon, Nov 9, 2026 at 14:05");
     }
 }

@@ -147,12 +147,14 @@ pub fn atlas_web(w: &World) -> PathBuf {
     r.replace_lines("src/theme/motion.rs", 10, 2, &lines("pub const SMOOTH: Spring = Spring::new(0.38, 1.0);", 9));
     r.git(&["mv", "src/brass.json", "src/theme/brass.json"]);
     r.replace_lines("src/theme/brass.json", 5, 3, &lines("  \"spring\": \"smooth\",", 3));
-    commit(
-        &r,
+    // Ana wrote it with Lea and Kenji committed it, so the inspector has a committer and
+    // trailers to show.
+    r.commit_by(
         ANA,
-        "2026-11-10T18:42:00Z",
-        "Spring the sidebar collapse",
-        "The sidebar now collapses on the smooth spring instead of snapping.",
+        KENJI,
+        t("2026-11-10T18:42:00Z"),
+        "Spring the sidebar collapse\n\nThe sidebar now collapses on the smooth spring instead of snapping.\n\n\
+         Co-authored-by: Lea Brandt <lea.brandt@example.com>\nRefs: #121",
     );
     r.push("main");
 

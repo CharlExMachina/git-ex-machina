@@ -2,7 +2,7 @@
 //! changed files (`FileChangeRow`) and the selected file's first hunk (`DiffHunk`).
 
 use gxm_core::diff::{Hunk, LineKind};
-use gxm_core::history::{ChangeStatus, FileChange};
+use gxm_core::history::{ChangeStatus, Commit, CommitInfo, FileChange};
 use gxm_core::time;
 use rune::{El, ScrollSpec, col, row, text};
 
@@ -55,12 +55,20 @@ pub fn inspector(s: &App, t: &Theme) -> El {
 }
 
 fn content(s: &App, d: &Details, t: &Theme) -> El {
-    let mut c = col().w_full().padding(20.0).gap(18.0).child(heading(s, d, t));
+    // A commit's Message tab is for reading it: its whole message, then who, when and where.
+    // Its Files tab is the changes, under a short header.
+    let reading = s.tab == InspectorTab::Message && matches!(d.subject, Subject::Head(_) | Subject::Commit(_));
+    let mut c = col().w_full().padding(20.0).gap(18.0).child(heading(s, d, t, !reading));
     if let Some(e) = &d.error {
         c = c.child(text(e.clone()).font(ty::CAPTION).color(t.removed).wrap());
     }
-    if !d.body.is_empty() {
-        c = c.child(text(d.body.clone()).font(ty::BODY).color(t.ink_muted).wrap());
+    if let (true, Subject::Head(id) | Subject::Commit(id), Some(info)) = (reading, &d.subject, &d.info) {
+        if !info.body.is_empty() {
+            c = c.child(text(info.body.clone()).font(ty::BODY.lh(20.0)).color(t.ink).wrap());
+        }
+        if let Some(commit) = s.commit(id) {
+            c = c.child(message_details(s, commit, info, t));
+        }
     }
     if let Subject::Commits(ids) = &d.subject {
         c = c.child(commit_list(s, ids, t));
@@ -77,8 +85,9 @@ fn content(s: &App, d: &Details, t: &Theme) -> El {
     c
 }
 
-/// The kicker, the title in the display face, then who and when, or a note.
-fn heading(s: &App, d: &Details, t: &Theme) -> El {
+/// The kicker, the title, then who and when (when `byline`; the Message tab lists those in
+/// its details instead), or a note.
+fn heading(s: &App, d: &Details, t: &Theme, byline: bool) -> El {
     let title = |s: String| text(s).key(keys::INSPECTOR_TITLE).font(ty::DISPLAY_SM).color(t.ink).wrap();
     let mut h = col().w_full().gap(8.0);
     match &d.subject {
@@ -91,6 +100,9 @@ fn heading(s: &App, d: &Details, t: &Theme) -> El {
             h = h.child(ui::label(t, &kicker));
             let Some(c) = s.commit(id) else { return h };
             h = h.child(title(c.subject.clone()));
+            if !byline {
+                return h;
+            }
             h = h.child(
                 row()
                     .gap(8.0)
@@ -146,6 +158,73 @@ fn heading(s: &App, d: &Details, t: &Theme) -> El {
             .child(title(format!("{} commits", ids.len())))
             .child(text(selection_note(s, ids)).font(ty::CAPTION).color(t.ink_muted)),
     }
+}
+
+/// A commit's details, as labelled rows: author, committer when it's someone else or another
+/// time, the message's trailers, the commit and its parents, and the refs that contain it.
+fn message_details(s: &App, c: &Commit, info: &CommitInfo, t: &Theme) -> El {
+    let tz = &s.env.tz;
+    let when = |at| format!("{} · {}", time::date_time(at, tz), time::relative(at, s.env.now(), tz));
+    let person = |name: &str, email: &str| {
+        row()
+            .gap(8.0)
+            .center_y()
+            .child(ui::avatar(t, name, author_color(t, email)))
+            .child(text(name.to_owned()).font(ty::CAPTION_STRONG).color(t.ink).truncate())
+    };
+    let dated =
+        |who: El, at| col().gap(2.0).child(who).child(text(when(at)).font(ty::CAPTION).color(t.ink_muted).wrap());
+    let mut rows = vec![("Author".to_owned(), dated(person(&c.author, &c.email), c.time))];
+    // The committer shows when it's someone else, and their date only when it's another time.
+    let same_person = info.committer == c.author && info.committer_email == c.email;
+    let same_time = (info.committed.as_second() - c.time.as_second()).abs() <= 60;
+    if !(same_person && same_time) {
+        let who = person(&info.committer, &info.committer_email);
+        rows.push(("Committer".to_owned(), if same_time { who } else { dated(who, info.committed) }));
+    }
+    for (key, value) in &info.trailers {
+        // `Name <email>` reads as a person; anything else as written.
+        let el = match value.rsplit_once(" <").and_then(|(n, e)| e.strip_suffix('>').map(|e| (n, e))) {
+            Some((name, email)) => person(name, email),
+            None => row().child(text(value.clone()).font(ty::CAPTION).color(t.ink).wrap()),
+        };
+        rows.push((key.clone(), el));
+    }
+    let short = |id: &str| id.get(..7).unwrap_or(id).to_owned();
+    rows.push((
+        "Commit".to_owned(),
+        row().child(text(c.id.get(..8).unwrap_or(&c.id).to_owned()).font(ty::MONO_SM).color(t.ink)),
+    ));
+    if !c.parents.is_empty() {
+        let label = if c.parents.len() == 1 { "Parent" } else { "Parents" };
+        let ids: Vec<String> = c.parents.iter().map(|p| short(p)).collect();
+        rows.push((label.to_owned(), row().child(text(ids.join(" · ")).font(ty::MONO_SM).color(t.ink_muted))));
+    }
+    if !info.contained_in.is_empty() {
+        // A long-lived commit can be in hundreds of tags: show the first few.
+        const SHOWN: usize = 8;
+        let mut refs = row().gap(6.0).flex_wrap();
+        for r in info.contained_in.iter().take(SHOWN) {
+            refs = refs.child(super::history::ref_badge(t, r.kind, &r.name, t.ink_faint));
+        }
+        if info.contained_in.len() > SHOWN {
+            let more = format!("+{} more", info.contained_in.len() - SHOWN);
+            refs = refs.child(row().h(20.0).center_y().child(text(more).font(ty::CAPTION).color(t.ink_muted)));
+        }
+        rows.push(("On".to_owned(), refs));
+    }
+    let mut grid = col().w_full().gap(12.0).child(ui::label(t, "Details"));
+    for (label, value) in rows {
+        grid = grid.child(
+            row()
+                .w_full()
+                .gap(12.0)
+                .items_start()
+                .child(row().w(88.0).h(18.0).center_y().child(text(label).font(ty::CAPTION).color(t.ink_faint)))
+                .child(value.grow(1.0).min_w(0.0)),
+        );
+    }
+    grid
 }
 
 /// What a multi-selection allows.

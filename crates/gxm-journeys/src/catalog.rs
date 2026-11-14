@@ -43,7 +43,6 @@ pub fn first_look() -> Journey {
     // first file's first hunk.
     .see_in(keys::INSPECTOR, "HEAD OF MAIN")
     .see_in(keys::INSPECTOR_TITLE, "Merge feature/graph-virtualization")
-    .see_in(keys::INSPECTOR, "Brings row virtualization into main. No conflicts.")
     .see_in(keys::INSPECTOR_FILES, "4 files · +232 −93")
     .see_in(keys::changed_file("src/graph/legacy_layout.rs"), "D")
     .see_in(keys::HUNK, "fn layout_row(row: &Row)")
@@ -57,9 +56,24 @@ pub fn first_look() -> Journey {
     .see_in(keys::INSPECTOR_FILES, "2 files · +81 −31")
     .see_in(keys::changed_file("src/avatars/metrics.rs"), "A")
     .mark("commit")
+    // The Message tab is for reading the commit: its whole message, who wrote and committed
+    // it, its trailers, and the branches and tags that contain it.
+    .tap(keys::TAB_MESSAGE)
+    .gone(keys::INSPECTOR_FILES)
+    .see_in(keys::INSPECTOR, "Avatars that are on screen stay cached")
+    .see_in(keys::INSPECTOR, "fix/avatar-cache")
     .press(Press::DOWN)
     .see_in(keys::INSPECTOR_TITLE, "Spring the sidebar collapse")
+    .see_in(keys::INSPECTOR, "Committer")
+    .see_in(keys::INSPECTOR, "Kenji Mori")
+    .see_in(keys::INSPECTOR, "Co-authored-by")
+    .see_in(keys::INSPECTOR, "Lea Brandt")
+    .see_in(keys::INSPECTOR, "#121")
+    .mark("message")
+    // Files is the changes; the message stays on its own tab.
+    .tap(keys::TAB_FILES)
     .see_in(keys::changed_file("src/theme/brass.json"), "R")
+    .not_see("collapses on the smooth spring")
     // Clicking the selected commit again lets go of it, and the inspector returns to HEAD.
     .tap_text("Spring the sidebar collapse")
     .see_in(keys::INSPECTOR, "HEAD OF MAIN")

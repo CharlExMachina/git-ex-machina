@@ -1,7 +1,7 @@
-◉─╮     5832000  (HEAD → main) Merge feature/graph-virtualization  · Ana Ruiz · 2h
+◉─╮     1faa4ce  (HEAD → main) Merge feature/graph-virtualization  · Ana Ruiz · 2h
 │ ●     c0e8db2  (feature/graph-virtualization) Virtualize commit rows past 10k  · Kenji Mori · 3h
 │ │ ●   1cabd07  (fix/avatar-cache) Evict avatars by last paint, not insert  · Lea Brandt · 5h
-● │ │   bd3b72a  (origin/main) Spring the sidebar collapse  · Ana Ruiz · Yesterday
+● │ │   a52c1c2  (origin/main) Spring the sidebar collapse  · Ana Ruiz · Yesterday
 │ ● │   4f7549e  Draw lanes with cubic joins  · Kenji Mori · Mon
 ├─┼─●   8f566f4  Measure avatar cache pressure  · Lea Brandt · Mon
 ● │     76245e5  (tag v0.4.0) Fix avatar cache eviction  · Lea Brandt · Mon
