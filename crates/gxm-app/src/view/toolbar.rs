@@ -6,6 +6,7 @@
 //! - one commit: Checkout, Cherry-pick, Revert, Branch from here
 //! - several: Bisect (a line of three or more), Squash (consecutive, no merge), Cherry-pick
 
+use gxm_core::forge::model::ReviewStatus;
 use gxm_core::history::RefKind;
 use gxm_core::ops::Op;
 use rune::{El, Icon};
@@ -31,6 +32,9 @@ pub fn toolbar(s: &App, t: &Theme) -> El {
         );
     }
     let b = Buttons { s, t };
+    if s.pull_view().is_some() {
+        return bar.children(b.pull());
+    }
     let actions: Vec<El> = match s.subject() {
         Some(Subject::Worktree) if s.all_staged() => {
             vec![b.commit(), b.op(Variant::Secondary, None, keys::UNSTAGE_ALL, Op::UnstageAll, None), b.discard()]
@@ -112,9 +116,23 @@ impl Buttons<'_> {
     /// A button that runs `op`. While an operation runs, its button stays pressed and the
     /// others wait, dimmed as `.gu-btn:disabled`.
     fn op(&self, variant: Variant, glyph: Option<&'static Icon>, key: &str, op: Op, badge: Option<String>) -> El {
+        let label = op.verb();
+        self.op_as(variant, glyph, key, op, label, badge)
+    }
+
+    /// [`Buttons::op`] under a label of its own.
+    fn op_as(
+        &self,
+        variant: Variant,
+        glyph: Option<&'static Icon>,
+        key: &str,
+        op: Op,
+        label: &str,
+        badge: Option<String>,
+    ) -> El {
         if self.s.repo().is_none() {
             // Nothing to act on yet: `.gu-btn:disabled`.
-            return ui::button_in(self.t, variant, glyph, op.verb(), badge, false)
+            return ui::button_in(self.t, variant, glyph, label, badge, false)
                 .key(key)
                 .disabled(true)
                 .opacity(0.6)
@@ -122,7 +140,7 @@ impl Buttons<'_> {
         }
         let running = self.s.ops.running();
         let pressed = running.is_some_and(|r| r.verb() == op.verb());
-        let b = ui::button_in(self.t, variant, glyph, op.verb(), badge, pressed).key(key);
+        let b = ui::button_in(self.t, variant, glyph, label, badge, pressed).key(key);
         match running {
             Some(_) if pressed => b.disabled(true),
             Some(_) => b.disabled(true).opacity(0.6),
@@ -151,6 +169,39 @@ impl Buttons<'_> {
     fn discard(&self) -> El {
         self.op(Variant::Secondary, None, keys::DISCARD_ALL, Op::DiscardAll, None)
             .help("Sets every change aside in a stash, so nothing is lost")
+    }
+
+    /// With a pull request open: Review (or Reviewed, once the person has), Check out its
+    /// branch, Squash and merge (waiting), and Close pull request, back to the plain history.
+    fn pull(&self) -> Vec<El> {
+        let (s, t) = (self.s, self.t);
+        let me = s.pulls.viewer().map(|u| u.login.clone()).unwrap_or_default();
+        let reviewed = s.open_pull_full().and_then(|p| p.review_of(&me)).is_some_and(|r| r != ReviewStatus::Requested);
+        let review = if reviewed {
+            ui::button(t, Variant::Secondary, Some(&icons::CHECK), "Reviewed", None).help("Review it again")
+        } else {
+            ui::button(t, Variant::Primary, Some(&icons::EYE), "Review", None)
+        };
+        let head = s.open_pull_full().map(|p| p.summary.head_ref.clone());
+        let check_out = match head {
+            Some(branch) => {
+                let op = Op::Checkout(branch);
+                self.op_as(Variant::Secondary, Some(&icons::BRANCH), keys::CHECK_OUT_PULL, op, "Check out", None)
+            }
+            None => ui::button_disabled(t, Some(&icons::BRANCH), "Check out").key(keys::CHECK_OUT_PULL),
+        };
+        let failing = s.open_pull_full().is_some_and(|p| p.failing().next().is_some());
+        let why = if failing { "Waits until every check passes" } else { "Coming next: merge from here" };
+        vec![
+            review.key(keys::REVIEW).on_press(|s: &mut App| s.open_cockpit()),
+            check_out,
+            ui::button_disabled(t, Some(&icons::MERGE), "Squash and merge").key(keys::SQUASH_AND_MERGE).help(why),
+            rune::el().grow(1.0),
+            ui::button(t, Variant::Ghost, Some(&icons::X), "Close pull request", None)
+                .key(keys::CLOSE_PULL_REQUEST)
+                .help("Back to the history (the pull request stays open)")
+                .on_press(|s: &mut App| s.close_pull()),
+        ]
     }
 
     /// A control whose workflow isn't built yet: disabled, saying what's next.

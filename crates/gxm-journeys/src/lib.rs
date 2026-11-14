@@ -49,6 +49,8 @@ pub enum Step {
     Hold(&'static str),
     /// Let time pass (animations settle, the person reads).
     Wait(f64),
+    /// Scroll with the wheel until the element with this key is wholly in view.
+    ScrollTo(String),
     /// Keep the app running until this text shows inside the element with this key: for work
     /// that runs in real time off the UI thread, such as a push.
     WaitFor { key: String, text: String },
@@ -128,6 +130,11 @@ impl Journey {
         self.step(Step::Hold(mods))
     }
 
+    /// Scrolls (with the wheel, as a person would) until the element keyed `key` is in view.
+    pub fn scroll_to(self, key: impl Into<String>) -> Journey {
+        self.step(Step::ScrollTo(key.into()))
+    }
+
     pub fn wait(self, secs: f64) -> Journey {
         self.step(Step::Wait(secs))
     }
@@ -174,6 +181,7 @@ impl std::fmt::Display for Step {
             Step::Hold("") => write!(f, "let go of the modifiers"),
             Step::Hold(m) => write!(f, "hold {m}"),
             Step::Wait(s) => write!(f, "wait {s}s"),
+            Step::ScrollTo(k) => write!(f, "scroll to [{k}]"),
             Step::WaitFor { key, text } => write!(f, "wait for {text:?} in [{key}]"),
             Step::Mark(m) => write!(f, "mark {m:?}"),
             Step::See(t) => write!(f, "see {t:?}"),

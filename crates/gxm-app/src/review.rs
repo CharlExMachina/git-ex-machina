@@ -117,6 +117,7 @@ impl App {
             summary,
             returning,
         }));
+        self.relight();
         self.refresh_details();
     }
 
@@ -126,6 +127,7 @@ impl App {
         if let Mode::Pull(v) = std::mem::replace(&mut self.mode, Mode::History) {
             self.selection = v.returning;
         }
+        self.relight();
         self.refresh_details();
     }
 
@@ -238,6 +240,9 @@ impl App {
     pub fn land_pulls(&mut self) -> bool {
         let before = self.pulls.machine.sending.clone();
         let (sent, changed) = self.pulls.land(&self.env);
+        if changed && self.pull_view().is_some() {
+            self.relight();
+        }
         for n in sent {
             if let Some(v) = self.pull_view_mut().filter(|v| v.number == n) {
                 v.draft = ReviewDraft { viewed: std::mem::take(&mut v.draft.viewed), ..ReviewDraft::default() };
@@ -263,6 +268,27 @@ impl App {
             && let Some(n) = self.pulls.of_commit(&id).map(|p| p.number)
         {
             self.pulls.want(&self.env, n, false);
+        }
+    }
+}
+
+impl App {
+    /// The comment being written, for its field.
+    pub fn composer_edit(&mut self) -> &mut TextEdit {
+        match &mut self.mode {
+            Mode::Pull(v) => match v.cockpit.as_mut().and_then(|c| c.composer.as_mut()) {
+                Some(c) => &mut c.edit,
+                None => &mut self.scratch,
+            },
+            Mode::History => &mut self.scratch,
+        }
+    }
+
+    /// The review's summary, for its field.
+    pub fn summary_edit(&mut self) -> &mut TextEdit {
+        match &mut self.mode {
+            Mode::Pull(v) => &mut v.summary,
+            Mode::History => &mut self.scratch,
         }
     }
 }

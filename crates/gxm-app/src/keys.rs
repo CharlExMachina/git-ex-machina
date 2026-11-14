@@ -110,9 +110,14 @@ pub fn thread(id: &str) -> String {
     format!("thread-{}", sanitize(id))
 }
 
-/// The reply field under a thread.
+/// The reply well under a thread, which opens the field when pressed.
 pub fn reply(id: &str) -> String {
     format!("reply-{}", sanitize(id))
+}
+
+/// The field a reply is written in, once open.
+pub fn reply_field(id: &str) -> String {
+    format!("reply-field-{}", sanitize(id))
 }
 
 /// A line of the diff: `new` for the line as the pull request leaves it, else as it was.

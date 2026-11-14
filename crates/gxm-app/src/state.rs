@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use gxm_core::diff::Hunk;
 use gxm_core::env::Env;
-use gxm_core::graph::GraphRow;
+use gxm_core::graph::{self, GraphRow};
 use gxm_core::history::{Commit, CommitInfo, FileChange};
 use gxm_core::repo::RepoSummary;
 use rune::TextEdit;
@@ -12,6 +12,8 @@ use rune::TextEdit;
 use crate::keys;
 use crate::load::Loads;
 use crate::ops::Ops;
+use crate::pulls::Pulls;
+use crate::review::Mode;
 
 pub struct App {
     pub env: Env,
@@ -33,6 +35,12 @@ pub struct App {
     /// The commit message, written in the inspector's Message tab while the working tree is
     /// shown.
     pub message: TextEdit,
+    /// The selected repository's pull requests.
+    pub pulls: Pulls,
+    /// The history, or a pull request on it.
+    pub mode: Mode,
+    /// Where a field's edits land once what it edited is gone (a comment kept a moment ago).
+    pub scratch: TextEdit,
 }
 
 /// Loading is an explicit machine: nothing is read before the first frame is up, and the
@@ -63,6 +71,8 @@ pub struct History {
     pub total: Option<usize>,
     pub details: Option<Details>,
     pub error: Option<String>,
+    /// With a pull request open: which parts of each row are its (see [`App::relight`]).
+    pub lit: Option<Vec<graph::Lit>>,
 }
 
 pub enum Row {
@@ -159,7 +169,33 @@ impl App {
             ops: Ops::default(),
             loads: Loads::default(),
             message: TextEdit::new(""),
+            pulls: Pulls::default(),
+            mode: Mode::History,
+            scratch: TextEdit::new(""),
         }
+    }
+
+    /// Lights the open pull request's commits in the graph, or clears the light.
+    pub fn relight(&mut self) {
+        let n = self.pull_view().map(|v| v.number);
+        let Some(h) = &self.history else { return };
+        let lit = n.map(|n| {
+            let member: Vec<bool> = h
+                .rows
+                .iter()
+                .map(|r| matches!(r, Row::Commit(c) if self.pulls.of_commit(&c.id).is_some_and(|p| p.number == n)))
+                .collect();
+            graph::light(&h.graph, &member)
+        });
+        if let Some(h) = &mut self.history {
+            h.lit = lit;
+        }
+    }
+
+    /// The row a pull request's banner sits above: its newest commit in the history.
+    pub fn pull_tip(&self) -> Option<usize> {
+        let lit = self.history.as_ref()?.lit.as_ref()?;
+        lit.iter().position(|l| l.node)
     }
 
     pub fn repo(&self) -> Option<&RepoEntry> {

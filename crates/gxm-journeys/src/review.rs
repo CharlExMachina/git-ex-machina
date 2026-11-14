@@ -122,11 +122,13 @@ pub fn review_pull_request() -> Journey {
     .tap(keys::VERDICT_APPROVE)
     .mark("cockpit")
     // A reply and a new comment, kept as drafts on this machine until the review goes.
+    .scroll_to(keys::reply("PRRT_1"))
     .tap(keys::reply("PRRT_1"))
     .type_text(REPLY)
     .press(Press::ENTER)
     .see_in(keys::thread("PRRT_1"), REPLY)
     .see_in(keys::thread("PRRT_1"), "Pending")
+    .scroll_to(keys::diff_line(CACHE, true, 6))
     .tap(keys::diff_line(CACHE, true, 6))
     .type_text(COMMENT)
     .press(Press::ENTER)
