@@ -7,7 +7,7 @@
   --lane-1: #e2ad62; --lane-2: #6fc2b4; --lane-3: #86ade8; --lane-4: #e88fa4; --lane-5: #b3c56e; --lane-6: #bba4e8; --on-lane: #121110;
   --shadow-raised: inset 0 1px 0 rgba(255,255,255,0.07), 0 0 0 1px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.5); --shadow-primary: inset 0 1px 0 rgba(255,246,225,0.6), inset 0 -1px 0 rgba(90,50,0,0.3), 0 0 0 1px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.5); --shadow-badge: inset 0 1px 1px rgba(0,0,0,0.6);
   --shadow-pressed: inset 0 1px 2px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.55);
-  --shadow-lifted: inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.35);
+  --shadow-lifted: inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.35); --shadow-lifted-first: inset 0 1px 0 rgba(255,255,255,0.06), -1px 0 0 rgba(0,0,0,0.45), 1px 0 0 rgba(0,0,0,0.45), 0 -1px 0 rgba(0,0,0,0.45); --shadow-lifted-middle: -1px 0 0 rgba(0,0,0,0.45), 1px 0 0 rgba(0,0,0,0.45); --shadow-lifted-last: -1px 0 0 rgba(0,0,0,0.45), 1px 0 0 rgba(0,0,0,0.45), 0 1px 0 rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.35);
   --shadow-well: inset 0 1px 2px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.03);
   --shadow-popover: 0 0 0 1px rgba(0,0,0,0.6), 0 12px 32px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.3);
   --shadow-focus: 0 0 0 2px #191817, 0 0 0 4px #eab872;
@@ -21,7 +21,7 @@
   --lane-1: #8f5c17; --lane-2: #1f7768; --lane-3: #2f62b0; --lane-4: #b03d5b; --lane-5: #5b6f1c; --lane-6: #6c4fb5; --on-lane: #ffffff;
   --shadow-raised: inset 0 1px 0 #ffffff, 0 0 0 1px rgba(46,34,20,0.15), 0 1px 1px rgba(46,34,20,0.12), 0 2px 4px -2px rgba(46,34,20,0.22); --shadow-primary: inset 0 1px 0 rgba(255,232,190,0.38), inset 0 -1px 0 rgba(60,30,0,0.22), 0 0 0 1px #774a0c, 0 1px 1px rgba(46,34,20,0.20), 0 2px 4px -2px rgba(46,34,20,0.34); --shadow-badge: inset 0 1px 1px rgba(46,34,20,0.28);
   --shadow-pressed: inset 0 1px 2px rgba(46,34,20,0.18), 0 0 0 1px rgba(46,34,20,0.15);
-  --shadow-lifted: inset 0 1px 0 rgba(255,255,255,1), 0 0 0 1px rgba(46,34,20,0.08), 0 2px 6px rgba(46,34,20,0.08);
+  --shadow-lifted: inset 0 1px 0 rgba(255,255,255,1), 0 0 0 1px rgba(46,34,20,0.08), 0 2px 6px rgba(46,34,20,0.08); --shadow-lifted-first: inset 0 1px 0 rgba(255,255,255,1), -1px 0 0 rgba(46,34,20,0.08), 1px 0 0 rgba(46,34,20,0.08), 0 -1px 0 rgba(46,34,20,0.08); --shadow-lifted-middle: -1px 0 0 rgba(46,34,20,0.08), 1px 0 0 rgba(46,34,20,0.08); --shadow-lifted-last: -1px 0 0 rgba(46,34,20,0.08), 1px 0 0 rgba(46,34,20,0.08), 0 1px 0 rgba(46,34,20,0.08), 0 2px 6px rgba(46,34,20,0.08);
   --shadow-well: inset 0 1px 2px rgba(46,34,20,0.10), inset 0 0 0 1px rgba(46,34,20,0.06);
   --shadow-popover: 0 0 0 1px rgba(46,34,20,0.10), 0 12px 32px rgba(46,34,20,0.16), 0 2px 6px rgba(46,34,20,0.06);
   --shadow-focus: 0 0 0 2px #f7f5f2, 0 0 0 4px #8a560f;
@@ -170,6 +170,13 @@ body { margin: 0; font-family: var(--font-sans); font-size: 13px; line-height: 1
 .gu-commit:hover { background: var(--control-hover); }
 
 .gu-commit[aria-selected="true"] { background: var(--raised); box-shadow: var(--shadow-lifted); position: relative; z-index: 1; }
+
+/* Neighbouring selected rows merge into one block (each row sits in a display: contents host). */
+.sc-host-x:has(> .gu-commit[aria-selected="true"]):has(+ .sc-host-x > .gu-commit[aria-selected="true"]) > .gu-commit[aria-selected="true"] { border-bottom-left-radius: 0; border-bottom-right-radius: 0; box-shadow: var(--shadow-lifted-first); z-index: 2; }
+
+.sc-host-x:has(> .gu-commit[aria-selected="true"]) + .sc-host-x > .gu-commit[aria-selected="true"] { border-top-left-radius: 0; border-top-right-radius: 0; box-shadow: var(--shadow-lifted-last); }
+
+.sc-host-x:has(> .gu-commit[aria-selected="true"]) + .sc-host-x:has(+ .sc-host-x > .gu-commit[aria-selected="true"]) > .gu-commit[aria-selected="true"] { box-shadow: var(--shadow-lifted-middle); }
 
 .gu-commit-graph { flex: none; display: block; }
 

@@ -17,3 +17,14 @@ Feedback: light-mode buttons lacked dark mode's "premium" feel, and the dark pri
 Feedback: the serif title was a sudden change of voice in an all-sans interface.
 
 - `.display-sm` (the inspector's title, its only use): Instrument Serif 400 22px/26px → Hanken Grotesk 600 18px/24px, -0.01em. Chosen from three sans versions tried in the mockup (600 18/24, 500 20/26, 600 16/22).
+
+## 2026-11-14: neighbouring selected rows merge
+
+Feedback: selected rows next to each other read as separate pills. They should merge into one block, and stay separate only when no neighbour is selected.
+
+- `--shadow-lifted-first`, `--shadow-lifted-middle` and `--shadow-lifted-last` (new, both themes) split the lifted shadow into its top, side and bottom edges.
+  - The first row of a run keeps its top edge, its rounded top corners and the lit top line.
+  - A middle row keeps only its side edges.
+  - The last row keeps its bottom edge, its rounded bottom corners and the drop.
+- Rows with a selected row below them paint above it (`z-index: 2`), so the last row's drop can't cut across the run.
+- The mockup wraps each row in a `display: contents` host (`.sc-host-x`), so the rules match neighbours through it.

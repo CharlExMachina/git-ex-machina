@@ -213,6 +213,36 @@ impl Theme {
         [outer(0.0, 2.0, 6.0, 0.0, drop), outer(0.0, 0.0, 0.0, 1.0, ring), inset(0.0, 1.0, 0.0, 0.0, hi)]
     }
 
+    /// `--shadow-lifted-first`: the first of neighbouring selected rows. Its top and side edges
+    /// and the lit top line, no bottom edge or drop (the next row continues it).
+    pub fn shadow_lifted_first(&self) -> [Shadow; 4] {
+        let [hi, ring, _] = self.shadows.lifted;
+        [
+            outer(-1.0, 0.0, 0.0, 0.0, ring),
+            outer(1.0, 0.0, 0.0, 0.0, ring),
+            outer(0.0, -1.0, 0.0, 0.0, ring),
+            inset(0.0, 1.0, 0.0, 0.0, hi),
+        ]
+    }
+
+    /// `--shadow-lifted-middle`: a selected row with selected rows on both sides. Side edges only.
+    pub fn shadow_lifted_middle(&self) -> [Shadow; 2] {
+        let [_, ring, _] = self.shadows.lifted;
+        [outer(-1.0, 0.0, 0.0, 0.0, ring), outer(1.0, 0.0, 0.0, 0.0, ring)]
+    }
+
+    /// `--shadow-lifted-last`: the last of neighbouring selected rows. Side and bottom edges,
+    /// and the drop.
+    pub fn shadow_lifted_last(&self) -> [Shadow; 4] {
+        let [_, ring, drop] = self.shadows.lifted;
+        [
+            outer(0.0, 2.0, 6.0, 0.0, drop),
+            outer(-1.0, 0.0, 0.0, 0.0, ring),
+            outer(1.0, 0.0, 0.0, 0.0, ring),
+            outer(0.0, 1.0, 0.0, 0.0, ring),
+        ]
+    }
+
     /// `inset 0 1px 2px <shade>, inset 0 0 0 1px <ring>`.
     pub fn shadow_well(&self) -> [Shadow; 2] {
         let [shade, ring] = self.shadows.well;

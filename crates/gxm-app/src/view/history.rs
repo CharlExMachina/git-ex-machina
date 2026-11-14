@@ -199,15 +199,28 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
             s.pick(&id, how);
         },
     );
-    if selected {
-        el = el.fill(t.raised);
-        for sh in t.shadow_lifted() {
-            el = el.box_shadow(sh);
-        }
-        el
-    } else {
-        el.hover(t.control_hover)
+    if !selected {
+        return el.hover(t.control_hover);
     }
+    // Neighbouring selected rows merge into one block: the first keeps its top, a middle row
+    // only its sides, the last its bottom and drop. A row with a selected row below paints over
+    // it, so the drop beneath can't cut across the block (the design's `z-index: 2`).
+    let picked = |k: Option<usize>| k.and_then(|k| h.rows.get(k)).is_some_and(|r| s.is_selected(r.id()));
+    let (above, below) = (picked(i.checked_sub(1)), picked(Some(i + 1)));
+    let r = size::RADIUS_SM;
+    let top = if above { 0.0 } else { r };
+    let bottom = if below { 0.0 } else { r };
+    el = el.fill(t.raised).corners([top, top, bottom, bottom]).paint_order(if below { 2 } else { 1 });
+    let shadows: Vec<rune::Shadow> = match (above, below) {
+        (false, false) => t.shadow_lifted().to_vec(),
+        (false, true) => t.shadow_lifted_first().to_vec(),
+        (true, true) => t.shadow_lifted_middle().to_vec(),
+        (true, false) => t.shadow_lifted_last().to_vec(),
+    };
+    for sh in shadows {
+        el = el.box_shadow(sh);
+    }
+    el
 }
 
 /// A commit's row: graph, refs and subject, author, date, short id.
