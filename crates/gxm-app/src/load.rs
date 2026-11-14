@@ -95,6 +95,12 @@ impl App {
     /// Opens a repository's history with nothing selected, so the inspector shows HEAD. The
     /// sidebar marks it at once; its history replaces the one on screen when the read lands.
     pub fn select_repo(&mut self, i: usize) {
+        // Another repository: back to its plain history, and ask its provider for its pull
+        // requests.
+        if let Some(entry) = self.repos.get(i) {
+            self.mode = crate::review::Mode::History;
+            self.pulls.open(&self.env, entry.summary.path.clone(), entry.summary.origin.as_ref());
+        }
         self.loads.keep = None;
         self.read_history(i);
         self.selection = Selection::default();
@@ -121,6 +127,8 @@ impl App {
     /// Asks for the inspector's details when its subject changed. Until they land, the inspector
     /// keeps showing the last ones.
     pub fn refresh_details(&mut self) {
+        // A commit in a pull request starts reading that pull request, so it opens at once.
+        self.prefetch_pull();
         let Some(path) = self.history.as_ref().map(|h| h.path.clone()) else { return };
         let Some(subject) = self.subject() else {
             self.loads.details.cancel();
@@ -213,6 +221,7 @@ impl App {
             history.details = old.details;
         }
         self.history = Some(history);
+        self.relight();
         self.loads.details_for = None;
         let path = read.path;
         self.loads.count.request((self.env.clone(), path), |(env, path)| {
@@ -271,7 +280,7 @@ fn read_history(env: &Env, path: PathBuf) -> Read {
         Row::Commit(c) => (c.id.as_str(), c.parents.iter().map(String::as_str).collect()),
     }));
     let cols = graph.iter().map(|g| g.width).max().unwrap_or(1);
-    let history = History { path: path.clone(), rows, graph, cols, total: None, details: None, error };
+    let history = History { path: path.clone(), rows, graph, cols, total: None, details: None, error, lit: None };
     Read { path, summary, history }
 }
 

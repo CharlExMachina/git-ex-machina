@@ -115,6 +115,9 @@ fn diff(s: &App, t: &Theme) -> El {
     let note = |msg: String, color| col().padding(20.0).child(text(msg).font(ty::BODY).color(color).wrap());
     // One commit alone: its own diff, read only (comments belong to the pull request's lines).
     if let Some((_, changes)) = s.cockpit().and_then(|c| c.commit.as_ref()) {
+        let Some(changes) = changes else {
+            return note("Reading the commit…".to_owned(), t.ink_faint);
+        };
         let body = match s.cockpit_file() {
             None => note("This commit changes no files.".to_owned(), t.ink_faint),
             Some(path) => file_diff(s, path, changes.diffs.get(path).map(Vec::as_slice).unwrap_or_default(), false, t),

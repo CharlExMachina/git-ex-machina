@@ -48,7 +48,8 @@ pub struct Cockpit {
     /// The hunk `j` and `k` last moved to.
     pub change: usize,
     /// One commit shown alone, with its changes; None shows the whole pull request.
-    pub commit: Option<(String, Changes)>,
+    /// Its id at once; its changes once they're read.
+    pub commit: Option<(String, Option<Changes>)>,
 }
 
 /// A comment being written.
@@ -109,8 +110,12 @@ impl App {
             }
             _ => None,
         };
-        let draft = draft_path.as_deref().map(drafts::load).unwrap_or_default();
-        let summary = TextEdit::new(draft.summary.clone());
+        // The saved draft is read off the UI thread and taken when it lands (see `land_pulls`).
+        if let Some(path) = &draft_path {
+            self.pulls.disk.read_draft(path.clone());
+        }
+        let draft = ReviewDraft::default();
+        let summary = TextEdit::new("");
         let returning = std::mem::take(&mut self.selection);
         self.mode = Mode::Pull(Box::new(PullView {
             number: n,
@@ -233,9 +238,9 @@ impl App {
     pub fn save_draft(&mut self) {
         let Some(v) = self.pull_view_mut() else { return };
         v.draft.summary = v.summary.text.clone();
-        if let Some(path) = &v.draft_path {
-            // A draft that can't be saved still lives in memory until the review is sent.
-            drafts::save(path, &v.draft).ok();
+        if let Some(path) = v.draft_path.clone() {
+            let draft = v.draft.clone();
+            self.pulls.disk.save_draft(path, draft);
         }
     }
 
@@ -246,6 +251,23 @@ impl App {
         let before = self.pulls.machine.sending.clone();
         let landed = self.pulls.land(&self.env);
         let changed = landed.changed;
+        // A saved draft lands unless the person started a new one in the meantime.
+        if let Some((path, draft)) = landed.draft
+            && let Some(v) = self.pull_view_mut()
+            && v.draft_path.as_ref() == Some(&path)
+            && v.draft == ReviewDraft::default()
+            && v.summary.text.is_empty()
+        {
+            v.summary = TextEdit::new(draft.summary.clone());
+            v.draft = draft;
+        }
+        if let Some((id, changes)) = landed.commit
+            && let Some(c) = self.cockpit_mut()
+            && c.commit.as_ref().is_some_and(|(want, _)| *want == id)
+        {
+            // A commit git can't show leaves the cockpit on the whole pull request.
+            c.commit = changes.ok().map(|changes| (id, Some(changes)));
+        }
         if changed && self.pull_view().is_some() {
             self.relight();
         }
@@ -349,9 +371,11 @@ impl App {
             Link::Connected { repo, .. } => repo.clone(),
             _ => return,
         };
-        let one = id.and_then(|id| gxm_core::forge::local::commit_changes(&self.env, &repo, &id).ok().map(|c| (id, c)));
+        if let Some(id) = &id {
+            self.pulls.disk.read_commit(&self.env, repo, id.clone());
+        }
         if let Some(c) = self.cockpit_mut() {
-            c.commit = one;
+            c.commit = id.map(|id| (id, None));
             c.file = None;
             c.change = 0;
             c.composer = None;
@@ -361,7 +385,7 @@ impl App {
     /// What the cockpit shows: one commit's changes, or the whole pull request's.
     pub fn shown_changes(&self) -> Option<&Changes> {
         match self.cockpit().and_then(|c| c.commit.as_ref()) {
-            Some((_, changes)) => Some(changes),
+            Some((_, changes)) => changes.as_ref(),
             None => self.pull_changes(),
         }
     }

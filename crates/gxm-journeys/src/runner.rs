@@ -221,7 +221,7 @@ impl Driver {
             if started.elapsed() > crate::WAIT_LIMIT {
                 return Err(format!("a background read was still running after {:?}", crate::WAIT_LIMIT));
             }
-            if self.rt.state.loads.busy() {
+            if self.rt.state.busy() {
                 quiet = 0;
                 std::thread::sleep(POLL);
             } else {

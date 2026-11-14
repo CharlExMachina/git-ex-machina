@@ -16,6 +16,8 @@ use gxm_core::forge::model::{Pull, PullSummary, Submission, User, Verdict};
 use gxm_core::forge::{self, Forge, NotConnected, RepoKey, cache};
 use gxm_core::remote::Remote;
 use rune::Latest;
+
+use crate::pull_disk::PullDisk;
 use rune::machine::{Attempt, Effects, Seq};
 use serde::{Deserialize, Serialize};
 
@@ -229,6 +231,8 @@ pub struct Pulls {
     details_job: Latest<(Attempt, u64, Result<Box<Details>, String>)>,
     send_job: Latest<(Attempt, u64, Result<(), String>)>,
     merge_job: Latest<(Attempt, u64, Result<(), String>)>,
+    /// Reads and writes of the disk: cached answers, drafts, a commit's changes.
+    pub disk: PullDisk,
 }
 
 /// What a write asks of the provider, carried to the effect that sends it.
@@ -245,6 +249,10 @@ pub struct Landed {
     pub sent: Vec<u64>,
     /// Pull requests the provider merged: fetch.
     pub merged: Vec<u64>,
+    /// A review draft read from disk.
+    pub draft: Option<(PathBuf, gxm_core::forge::drafts::ReviewDraft)>,
+    /// One commit's changes, read for the cockpit.
+    pub commit: Option<(String, Result<Changes, String>)>,
 }
 
 impl Default for Pulls {
@@ -258,6 +266,7 @@ impl Default for Pulls {
             details_job: Latest::default(),
             send_job: Latest::default(),
             merge_job: Latest::default(),
+            disk: PullDisk::default(),
         }
     }
 }
@@ -268,6 +277,7 @@ impl Pulls {
         self.details_job.set_waker(waker.clone());
         self.send_job.set_waker(waker.clone());
         self.merge_job.set_waker(waker.clone());
+        self.disk.set_waker(waker);
     }
 
     /// Connects to `repo`'s provider and reads its index, showing the cached one meanwhile.
@@ -280,10 +290,11 @@ impl Pulls {
                 Err(why) => Link::NotConnected(why),
             },
         };
-        self.index = match &self.link {
-            Link::Connected { key, .. } => cache::load(env, key, "pulls"),
-            _ => None,
-        };
+        self.index = None;
+        // The last index shows while the provider is asked again.
+        if let Link::Connected { key, .. } = &self.link {
+            self.disk.read_index(env, key);
+        }
         if matches!(self.link, Link::Connected { .. }) {
             let effects = step(&mut self.machine, Event::Open);
             self.apply(env, effects, None);
@@ -296,10 +307,8 @@ impl Pulls {
     /// provider. `refresh` asks the provider even when it's already known.
     pub fn want(&mut self, env: &Env, n: u64, refresh: bool) {
         let Link::Connected { key, .. } = &self.link else { return };
-        if !self.details.contains_key(&n)
-            && let Some(pull) = cache::load::<Pull>(env, key, &format!("pull-{n}"))
-        {
-            self.details.insert(n, Details { pull, changes: None });
+        if !self.details.contains_key(&n) {
+            self.disk.read_pull(env, key, n);
         }
         let known = self.details.get(&n).is_some_and(|d| d.changes.is_some());
         if refresh || !known {
@@ -344,7 +353,29 @@ impl Pulls {
         if let Some((a, n, r)) = self.merge_job.take() {
             events.push(Event::MergeLanded(a, n, r));
         }
+        let disk = self.disk.land();
         let mut landed = Landed { changed: !events.is_empty(), ..Landed::default() };
+        let key = match &self.link {
+            Link::Connected { key, .. } => Some(key.clone()),
+            _ => None,
+        };
+        // Cached answers count only for the repository still open, and only until fresher ones.
+        if let Some((k, index)) = disk.index
+            && key.as_ref() == Some(&k)
+            && self.index.is_none()
+        {
+            self.index = Some(index);
+            landed.changed = true;
+        }
+        if let Some((k, n, pull)) = disk.pull
+            && key.as_ref() == Some(&k)
+            && !self.details.contains_key(&n)
+        {
+            self.details.insert(n, Details { pull, changes: None });
+            landed.changed = true;
+        }
+        landed.changed |= disk.draft.is_some() || disk.commit.is_some();
+        (landed.draft, landed.commit) = (disk.draft, disk.commit);
         for e in events {
             for effect in step(&mut self.machine, e) {
                 match effect {
@@ -405,6 +436,15 @@ impl Pulls {
             // The app carries these out (see `land`).
             Effect::ClearDrafts(_) | Effect::FetchRemote(_) => {}
         }
+    }
+
+    /// Something is being read, written or asked of the provider.
+    pub fn busy(&self) -> bool {
+        self.index_job.is_pending()
+            || self.details_job.is_pending()
+            || self.send_job.is_pending()
+            || self.merge_job.is_pending()
+            || self.disk.busy()
     }
 
     /// The pull request commit `id` belongs to.

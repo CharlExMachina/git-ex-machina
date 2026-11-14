@@ -41,14 +41,15 @@ pub fn journey(args: &[String]) -> Result<(), String> {
     // Each replay runs the script from the start and its git operations change the world (a
     // push moves the remote), so every replay gets a freshly built world. The app reads off its
     // UI thread in real time, so replays keep pace with the wall clock as the journey did
-    // (`--realtime`), and run side by side to make up for it.
-    let app = |replay: usize| -> Result<Command, String> {
+    // (`--realtime`), and run side by side to make up for it. A world also serves its GitHub,
+    // so each replay keeps its world until the app exits.
+    let app = |replay: usize| -> Result<(Command, gxm_world::World), String> {
         let fresh = build_world_in(name, &crate::target().join("worlds").join(format!("{name}-replay-{replay}")))?;
         let mut c = Command::new(&bin);
         c.envs(fresh.env().child_vars()).arg("--script").arg(&script).args(["--theme", theme, "--realtime"]);
         // `--realtime` announces each mark on stdout; the renders are what matter here.
         c.stdout(std::process::Stdio::null());
-        Ok(c)
+        Ok((c, fresh))
     };
     let shots: Vec<(std::path::PathBuf, String)> = recording
         .marks
@@ -58,10 +59,12 @@ pub fn journey(args: &[String]) -> Result<(), String> {
         .collect();
     for batch in shots.chunks(REPLAYS_AT_ONCE) {
         let mut cmds = Vec::new();
+        let mut worlds = Vec::new();
         for (replay, (png, at)) in batch.iter().enumerate() {
-            let mut c = app(replay)?;
+            let (mut c, world) = app(replay)?;
             c.arg("--snap").arg(png).arg("--tree").arg(png.with_extension("json")).args(["--scale", "2", "--at", at]);
             cmds.push(c);
+            worlds.push(world);
         }
         std::thread::scope(|scope| {
             let runs: Vec<_> = cmds.into_iter().map(|mut c| scope.spawn(move || run(&mut c))).collect();
@@ -73,7 +76,8 @@ pub fn journey(args: &[String]) -> Result<(), String> {
     }
     if video {
         let mp4 = dir.join(format!("{name}.mp4"));
-        run(app(0)?.arg("--video").arg(&mp4).args(["--keys", "--pointer", "--scale", "1", "--fps", "30"]))?;
+        let (mut c, _world) = app(0)?;
+        run(c.arg("--video").arg(&mp4).args(["--keys", "--pointer", "--scale", "1", "--fps", "30"]))?;
         let gif = dir.join(format!("{name}.gif"));
         let filter = "fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4";
         run(Command::new("ffmpeg").args(["-loglevel", "error", "-y", "-i"]).arg(&mp4).args(["-vf", filter]).arg(&gif))?;

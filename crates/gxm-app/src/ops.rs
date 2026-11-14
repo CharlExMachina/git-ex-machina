@@ -81,6 +81,13 @@ impl App {
                 }
                 // The history scrolls to HEAD when the re-read lands.
                 self.reload_repo();
+                if matches!(op, Op::Fetch | Op::Pull | Op::Push) {
+                    // New commits may belong to pull requests (a merge just made, say).
+                    self.pulls.refresh(&self.env);
+                    if let Some(n) = self.pull_view().map(|v| v.number) {
+                        self.pulls.want(&self.env, n, true);
+                    }
+                }
                 OpState::Idle
             }
             Err(message) => OpState::Failed { op, message },

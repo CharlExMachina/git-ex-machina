@@ -175,6 +175,11 @@ impl App {
         }
     }
 
+    /// A read, a write or a provider call is in flight: what's on screen may be about to change.
+    pub fn busy(&self) -> bool {
+        self.loads.busy() || self.pulls.busy()
+    }
+
     /// Lights the open pull request's commits in the graph, or clears the light.
     pub fn relight(&mut self) {
         let n = self.pull_view().map(|v| v.number);
