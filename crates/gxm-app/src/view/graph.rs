@@ -73,7 +73,10 @@ pub fn row(t: &Theme, g: &GraphRow, cols: usize, look: &RowLook) -> El {
         }
     }
     let ink = color(t, g.color);
-    if !ups.is_empty() && !look.under_worktree {
+    if look.under_worktree {
+        // The worktree's dashed rail comes down into this row and ends under the node's ring.
+        shape = dashed_rail(shape, nx, 0.0, MID, H, ink);
+    } else if !ups.is_empty() {
         shape = shape.line([nx, 0.0], [nx, MID], STROKE, LineCap::Round, ink);
     }
     if !downs.is_empty() {
@@ -90,24 +93,46 @@ pub fn row(t: &Theme, g: &GraphRow, cols: usize, look: &RowLook) -> El {
     canvas(shape).w(width(cols)).h(H)
 }
 
-/// The uncommitted row's mark: a dashed accent ring (`stroke-dasharray: 2.5 2`, 1.5 wide) and
-/// a dashed lane-1 rail down to HEAD (`2 3`, 2 wide, round caps), in a 52 × 30 box.
-pub fn worktree(t: &Theme, staged: bool) -> El {
-    let c = [12.0, MID];
+/// The uncommitted row's mark: a ring of six even dashes, stroked like the graph's rails
+/// (gaps at the top and bottom, where the rail leaves it), and a dashed rail in `lane` running
+/// down into HEAD's row, where [`row`] continues it under HEAD's node.
+pub fn worktree(t: &Theme, staged: bool, lane: Color) -> El {
+    let c = [PAD, MID];
     let mut shape = Shape::new();
     if staged {
-        shape = shape.fill(circle(c, 4.5), t.accent).stroke_with(circle(c, 4.5), true, 1.5, LineCap::Butt, t.accent);
+        shape =
+            shape.fill(circle(c, RING_R), t.accent).stroke_with(circle(c, RING_R), true, 1.5, LineCap::Butt, t.accent);
     } else {
-        for arc in dashed_circle(c, 4.5, 2.5, 2.0) {
-            shape = shape.stroke_with(arc, false, 1.5, LineCap::Butt, t.accent);
+        for arc in dashed_ring(c, RING_R, 6) {
+            shape = shape.stroke_path(&arc, STROKE, LineCap::Round, lane);
         }
     }
-    let mut y = 19.5;
-    while y < H {
-        shape = shape.line([12.0, y], [12.0, (y + 2.0).min(H)], STROKE, LineCap::Round, t.lane(1));
-        y += 5.0;
-    }
+    shape = dashed_rail(shape, PAD, RAIL_START, H, 0.0, lane);
     canvas(shape).w(52.0).h(H)
+}
+
+/// The worktree ring's radius.
+const RING_R: f32 = 4.5;
+/// Where the dashed rail starts, in the worktree row: just under the ring.
+const RAIL_START: f32 = MID + RING_R + 2.0;
+/// The rail's dashes: `DASH` long (plus round caps of half the stroke at each end), every
+/// `DASH + GAP`, measured from `RAIL_START` across both rows so they meet at the row edge.
+const DASH: f32 = 2.5;
+const GAP: f32 = 4.0;
+
+/// Dashes of the worktree rail between `from` and `to` in a row whose top is `row_top` points
+/// below the worktree row's top.
+fn dashed_rail(mut shape: Shape, x: f32, from: f32, to: f32, row_top: f32, color: Color) -> Shape {
+    let period = DASH + GAP;
+    let mut s = RAIL_START;
+    while s < row_top + to {
+        let (a, b) = ((s - row_top).max(from), (s + DASH - row_top).min(to));
+        if b > a {
+            shape = shape.line([x, a], [x, b], STROKE, LineCap::Round, color);
+        }
+        s += period;
+    }
+    shape
 }
 
 /// A circle as a closed polygon, fine enough to stay round at twice the size.
@@ -121,24 +146,24 @@ fn circle(c: [f32; 2], r: f32) -> Vec<[f32; 2]> {
         .collect()
 }
 
-/// The arcs an SVG circle stroked with `stroke-dasharray: dash gap` draws: starting at 3
-/// o'clock and running clockwise.
-fn dashed_circle(c: [f32; 2], r: f32, dash: f32, gap: f32) -> Vec<Vec<[f32; 2]>> {
-    let length = std::f32::consts::TAU * r;
-    let mut arcs = Vec::new();
-    let mut s = 0.0;
-    while s < length {
-        let e = (s + dash).min(length);
-        let steps = 6;
-        arcs.push(
-            (0..=steps)
-                .map(|i| {
-                    let a = (s + (e - s) * i as f32 / steps as f32) / r;
-                    [c[0] + r * a.cos(), c[1] + r * a.sin()]
-                })
-                .collect(),
-        );
-        s += dash + gap;
-    }
-    arcs
+/// `n` even dashes round a circle, each a smooth arc (one cubic Bézier) with round caps, placed
+/// so the top and the bottom fall in gaps. The caps lengthen each dash by the stroke's width,
+/// so the arcs themselves cover only 30% of each step.
+fn dashed_ring(c: [f32; 2], r: f32, n: usize) -> Vec<Path> {
+    let step = std::f32::consts::TAU / n as f32;
+    let half = step * 0.3 / 2.0;
+    let at = |a: f32| [c[0] + r * a.cos(), c[1] + r * a.sin()];
+    (0..n)
+        .map(|k| {
+            // Dashes centred on 0°, 60°, 120°…: the bottom (90°) and top (270°) fall between.
+            let mid = step * k as f32;
+            let (a0, a1) = (mid - half, mid + half);
+            // The standard cubic for a circular arc: handles tangent to the circle, k·r long.
+            let k = 4.0 / 3.0 * ((a1 - a0) / 4.0).tan() * r;
+            let (p0, p3) = (at(a0), at(a1));
+            let p1 = [p0[0] - k * a0.sin(), p0[1] + k * a0.cos()];
+            let p2 = [p3[0] + k * a1.sin(), p3[1] - k * a1.cos()];
+            Path::new().move_to(p0).cubic_to(p1, p2, p3)
+        })
+        .collect()
 }

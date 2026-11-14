@@ -166,7 +166,7 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
             let mut r = row()
                 .gap(6.0)
                 .pr(12.0)
-                .child(graph::worktree(t, staged))
+                .child(graph::worktree(t, staged, graph::color(t, g.color)))
                 .child(row().grow(1.0).child(text("Uncommitted changes").font(ty::BODY_STRONG).color(t.ink)));
             if staged {
                 r = r.child(text("Staged").font(ty::CAPTION).color(t.ink_muted));
