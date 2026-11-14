@@ -90,7 +90,9 @@ pub struct Selection {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InspectorTab {
-    Message,
+    /// "Overview" for a commit (its message and details), "Message" on the uncommitted row
+    /// (the commit message being written).
+    Overview,
     Files,
 }
 

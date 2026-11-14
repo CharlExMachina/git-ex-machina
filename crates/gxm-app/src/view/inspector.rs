@@ -20,6 +20,8 @@ pub fn inspector(s: &App, t: &Theme) -> El {
         Some(Subject::Head(id) | Subject::Commit(id)) => Some(id.clone()),
         _ => None,
     };
+    // On the uncommitted row the first tab is where the commit message is written.
+    let first_tab = if matches!(details.map(|d| &d.subject), Some(Subject::Worktree)) { "Message" } else { "Overview" };
     let tab = |label: &str, key: &str, which: InspectorTab| {
         let on = s.tab == which;
         (ui::segment_label(t, label, on).key(key).on_press(move |s: &mut App| s.tab = which), on)
@@ -35,7 +37,7 @@ pub fn inspector(s: &App, t: &Theme) -> El {
         .child(ui::segmented(
             t,
             vec![
-                tab("Message", keys::TAB_MESSAGE, InspectorTab::Message),
+                tab(first_tab, keys::TAB_OVERVIEW, InspectorTab::Overview),
                 tab("Files", keys::TAB_FILES, InspectorTab::Files),
             ],
         ))
@@ -55,9 +57,9 @@ pub fn inspector(s: &App, t: &Theme) -> El {
 }
 
 fn content(s: &App, d: &Details, t: &Theme) -> El {
-    // A commit's Message tab is for reading it: its whole message, then who, when and where.
+    // A commit's Overview tab is for reading it: its whole message, then who, when and where.
     // Its Files tab is the changes, under a short header.
-    let reading = s.tab == InspectorTab::Message && matches!(d.subject, Subject::Head(_) | Subject::Commit(_));
+    let reading = s.tab == InspectorTab::Overview && matches!(d.subject, Subject::Head(_) | Subject::Commit(_));
     let mut c = col().w_full().padding(20.0).gap(18.0).child(heading(s, d, t, !reading));
     if let Some(e) = &d.error {
         c = c.child(text(e.clone()).font(ty::CAPTION).color(t.removed).wrap());
@@ -73,7 +75,7 @@ fn content(s: &App, d: &Details, t: &Theme) -> El {
     if let Subject::Commits(ids) = &d.subject {
         c = c.child(commit_list(s, ids, t));
     }
-    if s.tab == InspectorTab::Message && d.subject == Subject::Worktree {
+    if s.tab == InspectorTab::Overview && d.subject == Subject::Worktree {
         c = c.child(message_editor(s, t));
     }
     if s.tab == InspectorTab::Files {
@@ -85,7 +87,7 @@ fn content(s: &App, d: &Details, t: &Theme) -> El {
     c
 }
 
-/// The kicker, the title, then who and when (when `byline`; the Message tab lists those in
+/// The kicker, the title, then who and when (when `byline`; the Overview tab lists those in
 /// its details instead), or a note.
 fn heading(s: &App, d: &Details, t: &Theme, byline: bool) -> El {
     let title = |s: String| text(s).key(keys::INSPECTOR_TITLE).font(ty::DISPLAY_SM).color(t.ink).wrap();

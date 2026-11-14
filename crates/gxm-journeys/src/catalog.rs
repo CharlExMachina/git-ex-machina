@@ -56,9 +56,10 @@ pub fn first_look() -> Journey {
     .see_in(keys::INSPECTOR_FILES, "2 files · +81 −31")
     .see_in(keys::changed_file("src/avatars/metrics.rs"), "A")
     .mark("commit")
-    // The Message tab is for reading the commit: its whole message, who wrote and committed
+    // The Overview tab is for reading the commit: its whole message, who wrote and committed
     // it, its trailers, and the branches and tags that contain it.
-    .tap(keys::TAB_MESSAGE)
+    .see_in(keys::TAB_OVERVIEW, "Overview")
+    .tap(keys::TAB_OVERVIEW)
     .gone(keys::INSPECTOR_FILES)
     .see_in(keys::INSPECTOR, "Avatars that are on screen stay cached")
     .see_in(keys::INSPECTOR, "fix/avatar-cache")
@@ -95,8 +96,9 @@ pub fn first_look() -> Journey {
     .see_in(keys::INSPECTOR_FILES, "3 files")
     .see_in(keys::changed_file("src/toolbar/context.rs"), "A")
     .mark("uncommitted")
-    // The Message tab is the message alone; Files brings the files back.
-    .tap(keys::TAB_MESSAGE)
+    // On the uncommitted row the same tab is the commit message being written: "Message".
+    .see_in(keys::TAB_OVERVIEW, "Message")
+    .tap(keys::TAB_OVERVIEW)
     .gone(keys::INSPECTOR_FILES)
     .tap(keys::TAB_FILES)
     .see_in(keys::INSPECTOR_FILES, "3 files")

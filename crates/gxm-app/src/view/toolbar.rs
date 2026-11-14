@@ -139,7 +139,7 @@ impl Buttons<'_> {
         b.on_press_tx(|s: &mut App, tx| {
             let message = s.message.text.trim().to_owned();
             if message.is_empty() {
-                s.tab = InspectorTab::Message;
+                s.tab = InspectorTab::Overview;
                 tx.focus(keys::COMMIT_MESSAGE, true);
             } else {
                 s.start(Op::Commit(message));
