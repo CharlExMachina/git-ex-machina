@@ -53,6 +53,13 @@ pub struct RowLook<'a> {
 /// How far what isn't the pull request's dims (`.dim { opacity: .38 }` in `design/pr-flow`).
 pub const DIM: f32 = 0.38;
 
+/// A dimmed line's colour: solid, as the lane at [`DIM`] over the canvas the graph sits on.
+/// A translucent stroke would double up wherever two pieces overlap (the round caps where rows
+/// meet, a curve's segments) and bead the line.
+fn dimmed(t: &Theme, c: Color) -> Color {
+    crate::theme::mix(c, DIM, t.canvas)
+}
+
 /// The selected node's ring, and the cut-out of background under it that stops the rails a
 /// little outside the ring.
 const SELECTED_RING: f32 = 8.0;
@@ -61,7 +68,7 @@ const SELECTED_CUT: f32 = 10.25;
 pub fn row(t: &Theme, g: &GraphRow, cols: usize, look: &RowLook<'_>) -> El {
     let nx = x(g.lane);
     let lit = |k: usize| look.light.is_none_or(|l| l.edges.get(k).copied().unwrap_or(false));
-    let ink_of = |c: Color, on: bool| if on { c } else { c.alpha(DIM) };
+    let ink_of = |c: Color, on: bool| if on { c } else { dimmed(t, c) };
     let mut shape = Shape::new();
     let (mut up, mut down) = (None, None);
     // What dims is drawn first, so the pull request's lines run over it.
@@ -132,7 +139,7 @@ pub fn passing(t: &Theme, g: &GraphRow, cols: usize, light: Option<&Lit>, h: f32
             Edge::Out { .. } => continue,
         };
         let on = light.is_none_or(|l| l.edges.get(k).copied().unwrap_or(false));
-        let ink = if on { color(t, c) } else { color(t, c).alpha(DIM) };
+        let ink = if on { color(t, c) } else { dimmed(t, color(t, c)) };
         shape = shape.line([x(lane), 0.0], [x(lane), h], STROKE, LineCap::Butt, ink);
     }
     canvas(shape).w(width(cols)).h(h)
