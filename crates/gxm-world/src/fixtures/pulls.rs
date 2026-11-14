@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use super::t;
+use super::{ANA as ANA_AUTHOR, t};
 use crate::World;
 use crate::hub::{ANA, CheckData, CommentData, KENJI, LEA, PullData, ReviewData, ThreadData, Verdict};
 
@@ -107,6 +107,43 @@ pub fn atlas_pulls(w: &World, atlas: &Path) {
             comments: Vec::new(),
             threads: Vec::new(),
             checks: vec![check("lint", true, "", 35), check("unit tests", true, "", 70)],
+        },
+    );
+}
+
+/// Ana's own pull request on her dotfiles, #12: its branch pushed, every check green, nothing
+/// in the way of merging it.
+pub fn dotfiles_pull(w: &World, dotfiles: &Path) {
+    let r = w.open(dotfiles);
+    r.branch("prompt");
+    r.write("zsh/prompt.zsh", "PROMPT='%~ $ '\n");
+    r.commit(ANA_AUTHOR, t("2026-11-11T09:10:00Z"), "Show only the folder in the prompt", &[]);
+    r.append("zsh/prompt.zsh", "RPROMPT='$(git_branch)'\n");
+    r.commit(ANA_AUTHOR, t("2026-11-11T11:40:00Z"), "Add the branch to the right prompt", &[]);
+    r.push("prompt");
+    r.checkout("main");
+    let head = r.git(&["rev-parse", "prompt"]).trim().to_owned();
+    let check = |name: &str, seconds| CheckData { name: name.to_owned(), passed: true, title: String::new(), seconds };
+    w.hub().add_pull(
+        "personal",
+        "dotfiles",
+        PullData {
+            number: 12,
+            title: "Shorter zsh prompt".to_owned(),
+            body: "The prompt shows the folder only, and the branch moves to the right.".to_owned(),
+            merged: false,
+            author: ANA,
+            head_ref: "prompt".to_owned(),
+            head_sha: head,
+            base_ref: "main".to_owned(),
+            merge_commit: None,
+            created: t("2026-11-11T11:45:00Z"),
+            commits: 2,
+            requested: Vec::new(),
+            reviews: Vec::new(),
+            comments: Vec::new(),
+            threads: Vec::new(),
+            checks: vec![check("shellcheck", 9), check("install on macOS", 48)],
         },
     );
 }

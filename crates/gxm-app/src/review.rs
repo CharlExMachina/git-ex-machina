@@ -29,6 +29,8 @@ pub struct PullView {
     pub summary: TextEdit,
     /// The history's selection before the pull request opened, given back when it closes.
     returning: Selection,
+    /// While confirming Squash and merge: the squash commit's message.
+    pub merging: Option<TextEdit>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,6 +47,8 @@ pub struct Cockpit {
     pub composer: Option<Composer>,
     /// The hunk `j` and `k` last moved to.
     pub change: usize,
+    /// One commit shown alone, with its changes; None shows the whole pull request.
+    pub commit: Option<(String, Changes)>,
 }
 
 /// A comment being written.
@@ -116,6 +120,7 @@ impl App {
             draft_path,
             summary,
             returning,
+            merging: None,
         }));
         self.relight();
         self.refresh_details();
@@ -133,7 +138,7 @@ impl App {
 
     pub fn open_cockpit(&mut self) {
         if let Some(v) = self.pull_view_mut() {
-            v.cockpit = Some(Cockpit { file: None, split: false, composer: None, change: 0 });
+            v.cockpit = Some(Cockpit { file: None, split: false, composer: None, change: 0, commit: None });
         }
     }
 
@@ -153,7 +158,7 @@ impl App {
     /// The file the cockpit shows: the one picked, else the first.
     pub fn cockpit_file(&self) -> Option<&str> {
         let picked = self.cockpit()?.file.as_deref();
-        picked.or_else(|| self.pull_changes()?.files.first().map(|f| f.path.as_str()))
+        picked.or_else(|| self.shown_changes()?.files.first().map(|f| f.path.as_str()))
     }
 
     pub fn select_pull_file(&mut self, path: &str) {
@@ -210,7 +215,7 @@ impl App {
     /// Moves to the next (`1`) or previous (`-1`) hunk of the file; returns its key.
     pub fn step_change(&mut self, by: isize) -> Option<String> {
         let path = self.cockpit_file()?.to_owned();
-        let count = self.pull_changes()?.diffs.get(&path).map_or(0, Vec::len);
+        let count = self.shown_changes()?.diffs.get(&path).map_or(0, Vec::len);
         let c = self.cockpit_mut()?;
         c.change = c.change.saturating_add_signed(by).min(count.saturating_sub(1));
         Some(crate::keys::hunk(c.change))
@@ -239,11 +244,19 @@ impl App {
     /// closes on the graph showing the review.
     pub fn land_pulls(&mut self) -> bool {
         let before = self.pulls.machine.sending.clone();
-        let (sent, changed) = self.pulls.land(&self.env);
+        let landed = self.pulls.land(&self.env);
+        let changed = landed.changed;
         if changed && self.pull_view().is_some() {
             self.relight();
         }
-        for n in sent {
+        for n in landed.merged {
+            if let Some(v) = self.pull_view_mut().filter(|v| v.number == n) {
+                v.merging = None;
+            }
+            // The merge is on the provider; fetching brings it into the history.
+            self.start(gxm_core::ops::Op::Fetch);
+        }
+        for n in landed.sent {
             if let Some(v) = self.pull_view_mut().filter(|v| v.number == n) {
                 v.draft = ReviewDraft { viewed: std::mem::take(&mut v.draft.viewed), ..ReviewDraft::default() };
                 v.summary = TextEdit::new("");
@@ -289,6 +302,67 @@ impl App {
         match &mut self.mode {
             Mode::Pull(v) => &mut v.summary,
             Mode::History => &mut self.scratch,
+        }
+    }
+}
+
+impl App {
+    /// Opens the merge box's confirmation, with the squash commit's message to edit.
+    pub fn start_merge(&mut self) {
+        let title = self.open_pull_full().map(|p| format!("{} (#{})", p.summary.title, p.summary.number));
+        if let (Some(title), Some(v)) = (title, self.pull_view_mut()) {
+            v.tab = PullTab::Overview;
+            v.merging = Some(TextEdit::new(title));
+        }
+    }
+
+    pub fn cancel_merge(&mut self) {
+        if let Some(v) = self.pull_view_mut() {
+            v.merging = None;
+        }
+    }
+
+    /// Squashes and merges the open pull request on the provider.
+    pub fn confirm_merge(&mut self) {
+        let Some(v) = self.pull_view() else { return };
+        let Some(headline) = v.merging.as_ref().map(|e| e.text.trim().to_owned()).filter(|h| !h.is_empty()) else {
+            return;
+        };
+        let n = v.number;
+        self.pulls.merge(&self.env, n, headline);
+    }
+
+    /// The squash commit's message, for its field.
+    pub fn merge_headline_edit(&mut self) -> &mut TextEdit {
+        match &mut self.mode {
+            Mode::Pull(v) => match &mut v.merging {
+                Some(e) => e,
+                None => &mut self.scratch,
+            },
+            Mode::History => &mut self.scratch,
+        }
+    }
+
+    /// Shows one of the pull request's commits alone in the cockpit (or all again, with None).
+    pub fn show_pull_commit(&mut self, id: Option<String>) {
+        let repo = match &self.pulls.link {
+            Link::Connected { repo, .. } => repo.clone(),
+            _ => return,
+        };
+        let one = id.and_then(|id| gxm_core::forge::local::commit_changes(&self.env, &repo, &id).ok().map(|c| (id, c)));
+        if let Some(c) = self.cockpit_mut() {
+            c.commit = one;
+            c.file = None;
+            c.change = 0;
+            c.composer = None;
+        }
+    }
+
+    /// What the cockpit shows: one commit's changes, or the whole pull request's.
+    pub fn shown_changes(&self) -> Option<&Changes> {
+        match self.cockpit().and_then(|c| c.commit.as_ref()) {
+            Some((_, changes)) => Some(changes),
+            None => self.pull_changes(),
         }
     }
 }

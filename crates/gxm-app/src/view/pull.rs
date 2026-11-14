@@ -42,7 +42,12 @@ pub fn inspector(s: &App, v: &PullView, t: &Theme) -> El {
             vec![
                 tab("Overview", keys::TAB_OVERVIEW, PullTab::Overview, None),
                 tab("Checks", keys::TAB_CHECKS, PullTab::Checks, None),
-                tab("Conversation", keys::TAB_CONVERSATION, PullTab::Conversation, p.map(|p| p.conversation.len())),
+                tab(
+                    "Conversation",
+                    keys::TAB_CONVERSATION,
+                    PullTab::Conversation,
+                    p.map(|p| p.conversation.len()).filter(|n| *n > 0),
+                ),
             ],
         ))
         .child(rune::el().grow(1.0))
@@ -82,9 +87,13 @@ pub fn header(s: &App, p: &Pull, t: &Theme) -> El {
         .center_y()
         .child(pull_parts::person(s, t, &sum.author, ty::CAPTION_STRONG))
         .child(
-            text(format!("wants to merge {} into", pull_parts::plural(p.commits as usize, "commit")))
-                .font(ty::CAPTION)
-                .color(t.ink_muted),
+            text(format!(
+                "{} {} into",
+                if sum.state == gxm_core::forge::model::PullState::Merged { "merged" } else { "wants to merge" },
+                pull_parts::plural(p.commits as usize, "commit")
+            ))
+            .font(ty::CAPTION)
+            .color(t.ink_muted),
         )
         .child(ref_badge(t, gxm_core::history::RefKind::Head, &sum.base_ref, t.accent))
         .child(text("from").font(ty::CAPTION).color(t.ink_muted))

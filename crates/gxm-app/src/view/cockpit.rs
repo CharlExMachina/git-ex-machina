@@ -69,7 +69,7 @@ fn top(s: &App, t: &Theme) -> El {
 
 /// The file shown: its status, path and line counts, and Viewed.
 fn file_header(s: &App, t: &Theme) -> El {
-    let changes = s.pull_changes();
+    let changes = s.shown_changes();
     let file = s.cockpit_file().and_then(|p| changes?.files.iter().find(|f| f.path == p));
     let mut h = row()
         .key(keys::FILE_HEADER)
@@ -113,6 +113,14 @@ fn file_header(s: &App, t: &Theme) -> El {
 
 fn diff(s: &App, t: &Theme) -> El {
     let note = |msg: String, color| col().padding(20.0).child(text(msg).font(ty::BODY).color(color).wrap());
+    // One commit alone: its own diff, read only (comments belong to the pull request's lines).
+    if let Some((_, changes)) = s.cockpit().and_then(|c| c.commit.as_ref()) {
+        let body = match s.cockpit_file() {
+            None => note("This commit changes no files.".to_owned(), t.ink_faint),
+            Some(path) => file_diff(s, path, changes.diffs.get(path).map(Vec::as_slice).unwrap_or_default(), false, t),
+        };
+        return col().w_full().grow(1.0).min_h(0.0).scroll(ScrollSpec { stick_bottom: false }).child(body);
+    }
     let body = match s.pull_details().map(|d| &d.changes) {
         None | Some(None) => note("Reading the diff…".to_owned(), t.ink_faint),
         Some(Some(Err(e))) => note(format!("Git couldn't show this pull request's changes: {e}"), t.removed),
@@ -120,18 +128,21 @@ fn diff(s: &App, t: &Theme) -> El {
             None => note("This pull request changes no files.".to_owned(), t.ink_faint),
             Some(path) => {
                 let hunks = changes.diffs.get(path).map(Vec::as_slice).unwrap_or_default();
-                file_diff(s, path, hunks, t)
+                file_diff(s, path, hunks, true, t)
             }
         },
     };
     col().w_full().grow(1.0).min_h(0.0).scroll(ScrollSpec { stick_bottom: false }).child(body)
 }
 
-/// Every hunk of the file, 12 apart, with what's said about its lines under them.
-fn file_diff(s: &App, path: &str, hunks: &[Hunk], t: &Theme) -> El {
+/// Every hunk of the file, 12 apart; reviewing, with what's said about its lines under them.
+fn file_diff(s: &App, path: &str, hunks: &[Hunk], review: bool, t: &Theme) -> El {
     let split = s.cockpit().is_some_and(|c| c.split);
-    let threads: Vec<&Thread> =
-        s.open_pull_full().map(|p| p.threads.iter().filter(|th| th.path == path).collect()).unwrap_or_default();
+    let threads: Vec<&Thread> = if review {
+        s.open_pull_full().map(|p| p.threads.iter().filter(|th| th.path == path).collect()).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     let mut placed = vec![false; threads.len()];
     let mut c = col().key(keys::DIFF).w_full().px(16.0).py(14.0).gap(12.0);
     for (k, h) in hunks.iter().enumerate() {
@@ -154,9 +165,9 @@ fn file_diff(s: &App, path: &str, hunks: &[Hunk], t: &Theme) -> El {
         let rows = if split { pairs(&h.lines) } else { h.lines.iter().map(|l| (Some(l), None)).collect() };
         for (a, b) in rows {
             card = card.child(if split {
-                split_row(path, a, b, t)
+                split_row(path, a, b, review, t)
             } else {
-                a.map_or_else(rune::el, |l| line(path, l, t))
+                a.map_or_else(rune::el, |l| line(path, l, review, t))
             });
             // A context line is on both sides of a split row; what's said about it shows once.
             let same = matches!((a, b), (Some(x), Some(y)) if std::ptr::eq(x, y));
@@ -167,7 +178,9 @@ fn file_diff(s: &App, path: &str, hunks: &[Hunk], t: &Theme) -> El {
                         card = card.child(thread(s, th, t));
                     }
                 }
-                card = card.child(drafts_at(s, path, side, t));
+                if review {
+                    card = card.child(drafts_at(s, path, side, t));
+                }
             }
         }
         c = c.child(card);
@@ -227,19 +240,23 @@ fn number(n: Option<u32>, color: rune::Color) -> El {
         .child(text(n.map(|n| n.to_string()).unwrap_or_default()).font(ty::MONO_11.lh(18.0)).color(color))
 }
 
-/// Pressing a line starts a comment on it.
-fn commentable(el: El, path: &str, l: &HunkLine, new: bool) -> El {
+/// Pressing a line starts a comment on it, while reviewing.
+fn commentable(el: El, path: &str, l: &HunkLine, new: bool, review: bool) -> El {
     let (side, n) = if new { (Side::New, l.new) } else { (Side::Old, l.old) };
     let Some(n) = n else { return el };
     let path = path.to_owned();
-    el.key(keys::diff_line(&path, new, n)).on_press_tx(move |s: &mut App, tx| {
+    let el = el.key(keys::diff_line(&path, new, n));
+    if !review {
+        return el;
+    }
+    el.on_press_tx(move |s: &mut App, tx| {
         s.compose(Target::Line { path: path.clone(), side, line: n });
         tx.focus(keys::LINE_COMMENT, true);
     })
 }
 
 /// `DiffHunk`'s line: 36 | 36 | 16 | the text, mono 12/18.
-fn line(path: &str, l: &HunkLine, t: &Theme) -> El {
+fn line(path: &str, l: &HunkLine, review: bool, t: &Theme) -> El {
     let (bg, mark, sign) = tone(l, t);
     let mut r = row()
         .w_full()
@@ -252,11 +269,11 @@ fn line(path: &str, l: &HunkLine, t: &Theme) -> El {
     if let Some(bg) = bg {
         r = r.fill(bg);
     }
-    commentable(r, path, l, l.kind != LineKind::Removed)
+    commentable(r, path, l, l.kind != LineKind::Removed, review)
 }
 
 /// Split: the line as it was on the left, as it is on the right, each 36 | 16 | the text.
-fn split_row(path: &str, a: Option<&HunkLine>, b: Option<&HunkLine>, t: &Theme) -> El {
+fn split_row(path: &str, a: Option<&HunkLine>, b: Option<&HunkLine>, review: bool, t: &Theme) -> El {
     let half = |l: Option<&HunkLine>, new: bool| {
         let mut h = row().grow(1.0).min_w(0.0).h(18.0).center_y();
         if new {
@@ -271,7 +288,7 @@ fn split_row(path: &str, a: Option<&HunkLine>, b: Option<&HunkLine>, t: &Theme) 
         if let Some(bg) = bg {
             h = h.fill(bg);
         }
-        commentable(h, path, l, new)
+        commentable(h, path, l, new, review)
     };
     row().w_full().child(half(a, false)).child(half(b, true))
 }

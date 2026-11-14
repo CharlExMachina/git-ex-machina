@@ -105,6 +105,10 @@ impl Forge for GitHub {
         pull(pr)
     }
 
+    fn squash_merge(&self, pull: &Pull, headline: &str) -> Result<(), ForgeError> {
+        self.merge(pull, headline)
+    }
+
     fn submit(&self, pull: &Pull, review: &Submission) -> Result<(), ForgeError> {
         let threads: Vec<Value> = review
             .comments
@@ -139,6 +143,19 @@ impl Forge for GitHub {
   submitPullRequestReview(input: {pullRequestReviewId: $reviewId, event: $event, body: $body}) { pullRequestReview { id state } }
 }",
             &json!({ "reviewId": review_id, "event": event, "body": review.body }),
+        )?;
+        Ok(())
+    }
+}
+
+impl GitHub {
+    pub(super) fn merge(&self, pull: &Pull, headline: &str) -> Result<(), ForgeError> {
+        self.run(
+            "MergePull",
+            "mutation MergePull($pullRequestId: ID!, $expectedHeadOid: GitObjectID!, $commitHeadline: String) {
+  mergePullRequest(input: {pullRequestId: $pullRequestId, mergeMethod: SQUASH, expectedHeadOid: $expectedHeadOid, commitHeadline: $commitHeadline}) { pullRequest { state } }
+}",
+            &json!({ "pullRequestId": pull.id, "expectedHeadOid": pull.summary.head_sha, "commitHeadline": headline }),
         )?;
         Ok(())
     }

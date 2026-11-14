@@ -8,9 +8,10 @@ use rune::{Color, El, col, icon, rich, row, text};
 use super::history::author_color;
 use crate::icons;
 use crate::keys;
+use crate::pulls::Merging;
 use crate::state::{App, Row};
 use crate::theme::{Theme, ty};
-use crate::ui;
+use crate::ui::{self, Variant};
 
 /// A person's colour: their commits' colour when they've committed here, so a name keeps its
 /// colour between the history and the pull request; else one chosen by their login.
@@ -116,6 +117,9 @@ pub fn review_signal(t: &Theme, status: ReviewStatus) -> El {
 
 /// `Reviewers`: the label, then a 28-tall row per reviewer: who, `(you)`, their state.
 pub fn reviewers(s: &App, p: &Pull, t: &Theme) -> El {
+    if p.reviewers.is_empty() {
+        return rune::el();
+    }
     let me = s.pulls.viewer().map(|v| v.login.as_str());
     let mut c = col().w_full().gap(2.0).child(row().px(8.0).pb(6.0).child(ui::label(t, "Reviewers")));
     for r in &p.reviewers {
@@ -178,12 +182,81 @@ pub fn merge_box(s: &App, p: &Pull, t: &Theme) -> El {
         Mergeable::Conflicts => fact(&icons::X, t.removed, format!("Conflicts with {base}"), detail),
         Mergeable::Unknown => fact(&icons::CLOCK, t.accent, "Checking for conflicts".to_owned(), detail),
     });
-    let why = if failing.is_empty() { "Coming next: merge from here" } else { "Waits until every check passes" };
-    card.child(
-        row()
-            .mt(2.0)
-            .gap(8.0)
-            .child(ui::button_disabled(t, Some(&icons::MERGE), "Squash and merge").help(why))
-            .child(ui::button_disabled(t, Some(&icons::CHEVRON), "").help("Coming next: merge or rebase instead")),
-    )
+    card.child(merge_controls(s, p, t))
+}
+
+/// Whether the provider would merge it now: open, every check passed, no conflicts.
+pub fn ready_to_merge(p: &Pull) -> bool {
+    p.summary.state == PullState::Open
+        && p.checks.iter().all(|c| matches!(c.state, CheckState::Passed | CheckState::Skipped))
+        && p.mergeable == Mergeable::Clean
+}
+
+/// Why it can't be merged yet, for the disabled button's tooltip.
+pub fn why_not_merge(p: &Pull) -> &'static str {
+    if p.failing().next().is_some() {
+        "Waits until every check passes"
+    } else if p.checks.iter().any(|c| c.state == CheckState::Pending) {
+        "Waits for the checks to finish"
+    } else if p.mergeable == Mergeable::Conflicts {
+        "Resolve the conflicts first"
+    } else {
+        "Waits for GitHub to check for conflicts"
+    }
+}
+
+/// Squash and merge (waiting, or ready), or its confirmation: the commit's message, Confirm
+/// squash and merge, Cancel.
+fn merge_controls(s: &App, p: &Pull, t: &Theme) -> El {
+    let other = ui::button_disabled(t, Some(&icons::CHEVRON), "").help("Coming next: merge or rebase instead");
+    let merging = matches!(s.pulls.machine.merging, Merging::Merging { number, .. } if number == p.summary.number);
+    let failed = match &s.pulls.machine.merging {
+        Merging::Failed { number, message } if *number == p.summary.number => Some(message.clone()),
+        _ => None,
+    };
+    let mut c = col().w_full().mt(2.0).gap(10.0);
+    match s.pull_view().and_then(|v| v.merging.as_ref()) {
+        Some(headline) => {
+            let field = rune::text_input(headline, ty::BODY)
+                .key(keys::MERGE_HEADLINE)
+                .on_edit(|s: &mut App| s.merge_headline_edit())
+                .on_submit(|s: &mut App, _tx| s.confirm_merge())
+                .single_line()
+                .color(t.ink)
+                .w_full();
+            let confirm =
+                ui::button_in(t, Variant::Primary, Some(&icons::MERGE), "Confirm squash and merge", None, merging)
+                    .key(keys::CONFIRM_MERGE);
+            let confirm =
+                if merging { confirm.disabled(true) } else { confirm.on_press(|s: &mut App| s.confirm_merge()) };
+            c = c.child(ui::well(t).w_full().px(10.0).py(5.0).child(field)).child(
+                row().gap(8.0).child(confirm).child(
+                    ui::button(t, Variant::Ghost, None, "Cancel", None)
+                        .key(keys::CANCEL_MERGE)
+                        .on_press(|s: &mut App| s.cancel_merge()),
+                ),
+            );
+        }
+        None if ready_to_merge(p) => {
+            c = c.child(
+                row()
+                    .gap(8.0)
+                    .child(
+                        ui::button(t, Variant::Primary, Some(&icons::MERGE), "Squash and merge", None)
+                            .key(keys::MERGE_START)
+                            .help("Squash its commits into one on the base branch")
+                            .on_press(|s: &mut App| s.start_merge()),
+                    )
+                    .child(other),
+            );
+        }
+        None => {
+            let wait = ui::button_disabled(t, Some(&icons::MERGE), "Squash and merge").help(why_not_merge(p));
+            c = c.child(row().gap(8.0).child(wait.key(keys::MERGE_START)).child(other));
+        }
+    }
+    if let Some(message) = failed {
+        c = c.child(text(format!("Not merged: {message}")).font(ty::CAPTION).color(t.removed).wrap());
+    }
+    c
 }

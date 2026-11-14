@@ -119,6 +119,7 @@ pub fn review_pull_request() -> Journey {
     .see_in(keys::FILE_HEADER, METRICS)
     .tap(keys::VIEWED)
     .see_in(keys::COCKPIT_FILES, "1 of 2 viewed")
+    .mark("viewed")
     .tap(keys::pull_file(CACHE))
     .tap(keys::VERDICT_APPROVE)
     .gone(keys::reviewer("lea-brandt"))
@@ -129,6 +130,16 @@ pub fn review_pull_request() -> Journey {
     .see_in(keys::diff_line(CACHE, true, 5), "let oldest = self.by_last_paint.pop_min(); // 1")
     .mark("split")
     .tap(keys::DIFF_UNIFIED)
+    // One commit alone: Lea's first, which only measured.
+    .tap(keys::pull_commit("8f566f4"))
+    .see_in(keys::FILE_HEADER, "+3 −1")
+    .see_in(keys::DIFF, "counters.record(hit, miss, evicted);")
+    .see_in(keys::COCKPIT_FILES, "8f566f4 · show all")
+    .gone(keys::thread("PRRT_1"))
+    .mark("one-commit")
+    .tap(keys::PULL_COMMITS_ALL)
+    .see_in(keys::FILE_HEADER, "+30 −32")
+    .see_in(keys::thread("PRRT_1"), "Kenji Mori")
     // A reply and a new comment, kept as drafts on this machine until the review goes.
     .scroll_to(keys::reply("PRRT_1"))
     .tap(keys::reply("PRRT_1"))
@@ -195,4 +206,9 @@ pub fn review_pull_request() -> Journey {
     .see_in(keys::BRANCH_SUMMARY, "main ↑4 · 1,284 commits")
     .see_in(keys::INSPECTOR_TITLE, PR)
     .mark("history")
+    // A repository on a provider that isn't connected yet says so where the pull request goes.
+    .tap(keys::repo("payments-api"))
+    .see_in(keys::PULL_NOTICE, "Pull requests on Bitbucket are coming next.")
+    .gone(keys::SEE_PULL_REQUEST)
+    .mark("not-connected")
 }

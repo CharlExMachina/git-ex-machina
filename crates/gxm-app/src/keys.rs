@@ -124,3 +124,18 @@ pub fn reply_field(id: &str) -> String {
 pub fn diff_line(path: &str, new: bool, line: u32) -> String {
     format!("line-{}-{}{line}", sanitize(path), if new { 'R' } else { 'L' })
 }
+
+// Merging from the merge box.
+pub const MERGE_START: &str = "merge-start";
+/// The squash commit's message, while confirming.
+pub const MERGE_HEADLINE: &str = "merge-headline";
+pub const CONFIRM_MERGE: &str = "confirm-merge";
+pub const CANCEL_MERGE: &str = "cancel-merge";
+
+/// A commit in the cockpit's sidebar, by its short id: pressed, the cockpit shows it alone.
+pub fn pull_commit(short: &str) -> String {
+    format!("pull-commit-{short}")
+}
+
+/// Back to every commit's changes in the cockpit.
+pub const PULL_COMMITS_ALL: &str = "pull-commits-all";

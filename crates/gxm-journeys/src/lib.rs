@@ -12,6 +12,7 @@
 //! step, never one per assertion.
 
 pub mod catalog;
+mod merge;
 mod review;
 mod runner;
 

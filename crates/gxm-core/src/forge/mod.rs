@@ -32,6 +32,9 @@ pub trait Forge: Send + Sync {
     fn pull(&self, number: u64) -> Result<Pull, ForgeError>;
     /// Sends a review of `pull`, comments and replies included, as one review.
     fn submit(&self, pull: &Pull, review: &Submission) -> Result<(), ForgeError>;
+    /// Squashes `pull` into its base as one commit with this message, provided its branch is
+    /// still at the commit the person saw.
+    fn squash_merge(&self, pull: &Pull, headline: &str) -> Result<(), ForgeError>;
 }
 
 /// Why a provider call failed.

@@ -20,12 +20,14 @@ pub fn commit_pulls(env: &Env, repo: &Path, pulls: &[PullSummary]) -> HashMap<St
     let mut by_commit = HashMap::new();
     for p in pulls {
         let commits = match (p.state, &p.merge_commit) {
+            // A merge commit, a squash or a rebase: the commit it made, and the branch's own
+            // commits when the history still has them.
             (PullState::Merged, Some(merge)) => {
-                let brought = rev_list(env, repo, &[&format!("{merge}^2"), &format!("^{merge}^1")]);
-                brought.map(|mut c| {
-                    c.push(merge.clone());
-                    c
-                })
+                let mut own = rev_list(env, repo, &[&p.head_sha, &format!("^{merge}^1")]).unwrap_or_default();
+                if git::run(env, repo, &["cat-file", "-e", &format!("{merge}^{{commit}}")]).is_ok() {
+                    own.push(merge.clone());
+                }
+                Ok(own)
             }
             (PullState::Open | PullState::Draft, _) => {
                 let base = base_ref(env, repo, &p.base_ref);
@@ -65,12 +67,17 @@ pub struct Changes {
 
 /// The pull request's diff from where it left its base, as the provider shows it (`base...head`).
 pub fn changes(env: &Env, repo: &Path, p: &PullSummary) -> Result<Changes, GitError> {
-    let (from, to) = match (&p.merge_commit, p.state) {
-        (Some(merge), PullState::Merged) => (format!("{merge}^1"), format!("{merge}^2")),
-        _ => (base_ref(env, repo, &p.base_ref), p.head_sha.clone()),
+    // Merged, what the merge commit brought into its first parent; open, the branch from where
+    // it left its base.
+    let (base, to) = match (&p.merge_commit, p.state) {
+        (Some(merge), PullState::Merged) => (format!("{merge}^1"), merge.clone()),
+        _ => {
+            let from = base_ref(env, repo, &p.base_ref);
+            (git::run(env, repo, &["merge-base", &from, &p.head_sha])?.trim().to_owned(), p.head_sha.clone())
+        }
     };
-    let base = git::run(env, repo, &["merge-base", &from, &to])?.trim().to_owned();
-    let log = git::run(env, repo, &["log", "--reverse", "--format=%H%x1f%s", &format!("{base}..{to}")])?;
+    let log = git::run(env, repo, &["log", "--reverse", "--format=%H%x1f%s", &format!("{base}..{}", p.head_sha)])
+        .unwrap_or_default();
     let commits =
         log.lines().filter_map(|l| l.split_once('\u{1f}')).map(|(a, b)| (a.to_owned(), b.to_owned())).collect();
     let files = history::range_changes(env, repo, &base, &to)?;
@@ -79,4 +86,16 @@ pub fn changes(env: &Env, repo: &Path, p: &PullSummary) -> Result<Changes, GitEr
         diffs.insert(f.path.clone(), diff::range_hunks(env, repo, &base, &to, &f.path)?);
     }
     Ok(Changes { commits, files, diffs })
+}
+
+/// What one commit changed, against its first parent: the cockpit showing a single commit.
+pub fn commit_changes(env: &Env, repo: &Path, id: &str) -> Result<Changes, GitError> {
+    let parent = format!("{id}^");
+    let files = history::range_changes(env, repo, &parent, id)?;
+    let mut diffs = HashMap::new();
+    for f in &files {
+        diffs.insert(f.path.clone(), diff::range_hunks(env, repo, &parent, id, &f.path)?);
+    }
+    let subject = git::run(env, repo, &["show", "-s", "--format=%s", id])?.trim().to_owned();
+    Ok(Changes { commits: vec![(id.to_owned(), subject)], files, diffs })
 }

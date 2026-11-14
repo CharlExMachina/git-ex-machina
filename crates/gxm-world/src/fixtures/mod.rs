@@ -13,7 +13,7 @@ mod atlas;
 mod pulls;
 
 pub use atlas::atlas_web;
-pub use pulls::{DESCRIPTION, atlas_pulls};
+pub use pulls::{DESCRIPTION, atlas_pulls, dotfiles_pull};
 
 // The app colours people by a hash of their email; these addresses give the colours the
 // design gives them (Ana blue, Kenji teal, Lea rose).
@@ -74,6 +74,7 @@ pub fn mockup(w: &World) -> Mockup {
         ),
         atlas_web,
     };
+    dotfiles_pull(w, &m.dotfiles);
     w.add_to_workspace(&m.atlas_web, true);
     w.add_to_workspace(&m.rune_playground, true);
     for repo in [&m.payments_api, &m.brand_tokens, &m.dotfiles, &m.field_notes, &m.infra_terraform] {

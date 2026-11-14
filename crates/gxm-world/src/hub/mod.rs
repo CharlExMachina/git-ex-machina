@@ -115,6 +115,9 @@ pub struct SentReview {
 }
 
 struct State {
+    /// Where the world's remotes are, and git's environment there: merging happens in them.
+    remotes: std::path::PathBuf,
+    env: gxm_core::env::Env,
     now: Timestamp,
     viewer: Person,
     repos: Vec<(String, String, Vec<PullData>)>,
@@ -128,8 +131,9 @@ pub struct Hub {
 }
 
 impl Hub {
-    pub(crate) fn start(now: Timestamp) -> Hub {
-        let state = Arc::new(Mutex::new(State { now, viewer: ANA, repos: Vec::new(), next_id: 1 }));
+    pub(crate) fn start(env: gxm_core::env::Env, remotes: std::path::PathBuf) -> Hub {
+        let now = env.now();
+        let state = Arc::new(Mutex::new(State { remotes, env, now, viewer: ANA, repos: Vec::new(), next_id: 1 }));
         let shared = Arc::clone(&state);
         let server = server::Server::start(move |req| {
             if req.authorization.as_deref() != Some(&format!("bearer {TOKEN}")) {
@@ -166,6 +170,12 @@ impl Hub {
             Some((_, _, pulls)) => pulls.push(pull),
             None => s.repos.push((owner.to_owned(), name.to_owned(), vec![pull])),
         }
+    }
+
+    /// Whether a pull request has been merged, and the commit merging made.
+    pub fn merged(&self, owner: &str, name: &str, number: u64) -> Option<String> {
+        let s = self.lock();
+        graphql::find(&s, owner, name, number).filter(|p| p.merged).and_then(|p| p.merge_commit.clone())
     }
 
     /// The reviews submitted on a pull request, oldest first.

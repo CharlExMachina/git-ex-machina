@@ -52,6 +52,7 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
                 ),
         );
     }
+    let picked = s.cockpit().and_then(|c| c.commit.as_ref()).map(|(id, _)| id.clone());
     let mut files = col().key(keys::COCKPIT_FILES).w_full();
     if let Some(changes) = s.pull_changes() {
         let total = changes.files.len();
@@ -77,31 +78,42 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
             }));
         let shown = s.cockpit_file();
         let mut rows = col().px(8.0);
-        for f in &changes.files {
+        // With one commit picked, its files; else the pull request's.
+        let listed = s.shown_changes().unwrap_or(changes);
+        for f in &listed.files {
             let talk: usize = s
                 .open_pull_full()
                 .map_or(0, |p| p.threads.iter().filter(|th| th.path == f.path).map(|th| th.comments.len()).sum());
             rows = rows.child(file_row(f, talk, v.draft.is_viewed(&f.path), shown == Some(f.path.as_str()), t));
         }
         files = files.child(rows).child(
-            row()
-                .w_full()
-                .pt(16.0)
-                .px(16.0)
-                .pb(8.0)
-                .justify_between()
-                .child(ui::label(t, "Commits"))
-                .child(text("all").font(ty::MONO_SM).color(t.ink_muted)),
+            row().w_full().pt(16.0).px(16.0).pb(8.0).justify_between().child(ui::label(t, "Commits")).child(
+                match &picked {
+                    None => text("all").font(ty::MONO_SM).color(t.ink_muted),
+                    Some(id) => text(format!("{} · show all", short(id)))
+                        .font(ty::MONO_SM)
+                        .color(t.accent)
+                        .key(keys::PULL_COMMITS_ALL)
+                        .help("Show every commit's changes")
+                        .on_press(|s: &mut App| s.show_pull_commit(None)),
+                },
+            ),
         );
         let mut commits = col().px(16.0).gap(6.0);
         for (id, subject) in &changes.commits {
+            let on = picked.as_deref() == Some(id.as_str());
+            let (sha_ink, subject_ink) = if on { (t.accent, t.ink) } else { (t.ink_faint, t.ink_muted) };
+            let pick = id.clone();
             commits = commits.child(
                 row()
+                    .key(keys::pull_commit(short(id)))
                     .w_full()
                     .gap(8.0)
                     .center_y()
-                    .child(text(id.get(..7).unwrap_or(id).to_owned()).font(ty::MONO_SM).color(t.ink_faint))
-                    .child(text(subject.clone()).font(ty::CAPTION).color(t.ink_muted).truncate().grow(1.0).min_w(0.0)),
+                    .help("Show this commit's changes alone")
+                    .child(text(short(id).to_owned()).font(ty::MONO_SM).color(sha_ink))
+                    .child(text(subject.clone()).font(ty::CAPTION).color(subject_ink).truncate().grow(1.0).min_w(0.0))
+                    .on_press(move |s: &mut App| s.show_pull_commit(Some(pick.clone()))),
             );
         }
         files = files.child(commits);
@@ -284,4 +296,8 @@ fn your_review(s: &App, t: &Theme) -> El {
         c = c.child(text(format!("Not sent: {message}")).font(ty::CAPTION).color(t.removed).wrap());
     }
     c
+}
+
+fn short(id: &str) -> &str {
+    id.get(..7).unwrap_or(id)
 }

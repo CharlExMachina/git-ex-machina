@@ -69,8 +69,8 @@ impl World {
         }
         let now: Timestamp = NOW.parse().unwrap_or_else(|e| fail("read NOW", e));
         // Every world has its own GitHub, empty until a fixture adds pull requests to it.
-        let hub = hub::Hub::start(now);
         let mut env = Env::sandbox(&home, now);
+        let hub = hub::Hub::start(env.clone(), root.join("remotes"));
         env.forge = ForgeAccess { github_api: hub.url(), github_token: Some(hub::TOKEN.to_owned()) };
         let mut cfg = String::from(
             // The person at the keyboard is Ana, who owns the demo workspace: what the app

@@ -61,6 +61,15 @@ pub enum Sending {
     Failed { number: u64, message: String },
 }
 
+/// Merging a pull request on the provider.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Merging {
+    Idle,
+    Merging { attempt: Attempt, number: u64 },
+    Merged { number: u64 },
+    Failed { number: u64, message: String },
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Machine {
     seq: Seq,
@@ -69,6 +78,7 @@ pub struct Machine {
     /// The pull request `details` is about.
     pub details_for: Option<u64>,
     pub sending: Sending,
+    pub merging: Merging,
 }
 
 impl Default for Machine {
@@ -79,6 +89,7 @@ impl Default for Machine {
             details: Fetch::Idle,
             details_for: None,
             sending: Sending::Idle,
+            merging: Merging::Idle,
         }
     }
 }
@@ -93,6 +104,10 @@ pub enum Event {
     DetailsLanded(Attempt, u64, Result<Box<Details>, String>),
     Submit(u64, Verdict),
     Submitted(Attempt, u64, Result<(), String>),
+    /// Read the index again, keeping what's known (after a fetch brought new commits).
+    Refresh,
+    Merge(u64),
+    MergeLanded(Attempt, u64, Result<(), String>),
 }
 
 #[derive(Debug)]
@@ -104,6 +119,9 @@ pub enum Effect {
     KeepDetails(u64, Box<Details>),
     /// The review is with the provider: its drafts can go.
     ClearDrafts(u64),
+    Merge(Attempt, u64),
+    /// The provider merged it: fetch, so the merge reaches the history.
+    FetchRemote(u64),
 }
 
 pub fn step(m: &mut Machine, event: Event) -> Effects<Effect> {
@@ -169,6 +187,33 @@ pub fn step(m: &mut Machine, event: Event) -> Effects<Effect> {
             },
             _ => Effects::none(),
         },
+        Event::Refresh if matches!(m.index, Fetch::Loading(_)) => Effects::none(),
+        Event::Refresh => {
+            let a = m.seq.next();
+            m.index = Fetch::Loading(a);
+            Effects::one(Effect::FetchIndex(a))
+        }
+        Event::Merge(_) if matches!(m.merging, Merging::Merging { .. }) => Effects::none(),
+        Event::Merge(number) => {
+            let attempt = m.seq.next();
+            m.merging = Merging::Merging { attempt, number };
+            Effects::one(Effect::Merge(attempt, number))
+        }
+        Event::MergeLanded(a, n, result) => match m.merging {
+            Merging::Merging { attempt, number } if attempt == a && number == n => match result {
+                Ok(()) => {
+                    m.merging = Merging::Merged { number: n };
+                    let b = m.seq.next();
+                    (m.details, m.details_for) = (Fetch::Loading(b), Some(n));
+                    Effects::two(Effect::FetchDetails(b, n), Effect::FetchRemote(n))
+                }
+                Err(message) => {
+                    m.merging = Merging::Failed { number: n, message };
+                    Effects::none()
+                }
+            },
+            _ => Effects::none(),
+        },
         // An answer to a question no longer asked.
         Event::IndexLanded(..) | Event::DetailsLanded(..) => Effects::none(),
     }
@@ -183,6 +228,23 @@ pub struct Pulls {
     index_job: Latest<(Attempt, Result<Index, String>)>,
     details_job: Latest<(Attempt, u64, Result<Box<Details>, String>)>,
     send_job: Latest<(Attempt, u64, Result<(), String>)>,
+    merge_job: Latest<(Attempt, u64, Result<(), String>)>,
+}
+
+/// What a write asks of the provider, carried to the effect that sends it.
+pub enum Payload {
+    Review(Submission),
+    Headline(String),
+}
+
+/// What landing answers means for the rest of the app.
+#[derive(Debug, Default)]
+pub struct Landed {
+    pub changed: bool,
+    /// Pull requests whose review the provider has: their drafts can go.
+    pub sent: Vec<u64>,
+    /// Pull requests the provider merged: fetch.
+    pub merged: Vec<u64>,
 }
 
 impl Default for Pulls {
@@ -195,6 +257,7 @@ impl Default for Pulls {
             index_job: Latest::default(),
             details_job: Latest::default(),
             send_job: Latest::default(),
+            merge_job: Latest::default(),
         }
     }
 }
@@ -204,6 +267,7 @@ impl Pulls {
         self.index_job.set_waker(waker.clone());
         self.details_job.set_waker(waker.clone());
         self.send_job.set_waker(waker.clone());
+        self.merge_job.set_waker(waker.clone());
     }
 
     /// Connects to `repo`'s provider and reads its index, showing the cached one meanwhile.
@@ -248,12 +312,25 @@ impl Pulls {
     pub fn submit(&mut self, env: &Env, n: u64, submission: Submission) {
         let verdict = submission.verdict;
         let effects = step(&mut self.machine, Event::Submit(n, verdict));
-        self.apply(env, effects, Some(submission));
+        self.apply(env, effects, Some(Payload::Review(submission)));
     }
 
-    /// Takes the answers that landed. Returns the pull requests whose drafts were sent, and
-    /// whether anything changed.
-    pub fn land(&mut self, env: &Env) -> (Vec<u64>, bool) {
+    /// Squash-merges pull request `n` with `headline` as its commit's message.
+    pub fn merge(&mut self, env: &Env, n: u64, headline: String) {
+        let effects = step(&mut self.machine, Event::Merge(n));
+        self.apply(env, effects, Some(Payload::Headline(headline)));
+    }
+
+    /// Reads the index again, keeping the pull requests already read.
+    pub fn refresh(&mut self, env: &Env) {
+        if matches!(self.link, Link::Connected { .. }) {
+            let effects = step(&mut self.machine, Event::Refresh);
+            self.apply(env, effects, None);
+        }
+    }
+
+    /// Takes the answers that landed.
+    pub fn land(&mut self, env: &Env) -> Landed {
         let mut events = Vec::new();
         if let Some((a, r)) = self.index_job.take() {
             events.push(Event::IndexLanded(a, r));
@@ -264,24 +341,31 @@ impl Pulls {
         if let Some((a, n, r)) = self.send_job.take() {
             events.push(Event::Submitted(a, n, r));
         }
-        let changed = !events.is_empty();
-        let mut sent = Vec::new();
+        if let Some((a, n, r)) = self.merge_job.take() {
+            events.push(Event::MergeLanded(a, n, r));
+        }
+        let mut landed = Landed { changed: !events.is_empty(), ..Landed::default() };
         for e in events {
-            let effects = step(&mut self.machine, e);
-            sent.extend(effects.into_iter().filter_map(|e| self.carry_out(env, e, None)));
+            for effect in step(&mut self.machine, e) {
+                match effect {
+                    Effect::ClearDrafts(n) => landed.sent.push(n),
+                    Effect::FetchRemote(n) => landed.merged.push(n),
+                    other => self.carry_out(env, other, None),
+                }
+            }
         }
-        (sent, changed)
+        landed
     }
 
-    fn apply(&mut self, env: &Env, effects: Effects<Effect>, mut submission: Option<Submission>) {
+    fn apply(&mut self, env: &Env, effects: Effects<Effect>, mut payload: Option<Payload>) {
         for e in effects {
-            self.carry_out(env, e, submission.take());
+            self.carry_out(env, e, payload.take());
         }
     }
 
-    /// Carries out one effect; returns the pull request whose drafts can go.
-    fn carry_out(&mut self, env: &Env, effect: Effect, submission: Option<Submission>) -> Option<u64> {
-        let Link::Connected { forge, key, repo } = &self.link else { return None };
+    /// Carries out one effect.
+    fn carry_out(&mut self, env: &Env, effect: Effect, payload: Option<Payload>) {
+        let Link::Connected { forge, key, repo } = &self.link else { return };
         let (forge, key, repo, env) = (Arc::clone(forge), key.clone(), repo.clone(), env.clone());
         match effect {
             Effect::FetchIndex(a) => self.index_job.request((), move |()| (a, fetch_index(&env, &*forge, &key, &repo))),
@@ -291,21 +375,36 @@ impl Pulls {
             Effect::Send(a, n) => {
                 let pull = self.details.get(&n).map(|d| d.pull.clone());
                 let job = move |()| {
-                    let result = match (pull, submission) {
-                        (Some(pull), Some(review)) => forge.submit(&pull, &review).map_err(|e| e.to_string()),
+                    let result = match (pull, payload) {
+                        (Some(pull), Some(Payload::Review(review))) => {
+                            forge.submit(&pull, &review).map_err(|e| e.to_string())
+                        }
                         _ => Err("the pull request isn't loaded yet".to_owned()),
                     };
                     (a, n, result)
                 };
                 self.send_job.request((), job);
             }
+            Effect::Merge(a, n) => {
+                let pull = self.details.get(&n).map(|d| d.pull.clone());
+                let job = move |()| {
+                    let result = match (pull, payload) {
+                        (Some(pull), Some(Payload::Headline(h))) => {
+                            forge.squash_merge(&pull, &h).map_err(|e| e.to_string())
+                        }
+                        _ => Err("the pull request isn't loaded yet".to_owned()),
+                    };
+                    (a, n, result)
+                };
+                self.merge_job.request((), job);
+            }
             Effect::KeepIndex(index) => self.index = Some(index),
             Effect::KeepDetails(n, d) => {
                 self.details.insert(n, *d);
             }
-            Effect::ClearDrafts(n) => return Some(n),
+            // The app carries these out (see `land`).
+            Effect::ClearDrafts(_) | Effect::FetchRemote(_) => {}
         }
-        None
     }
 
     /// The pull request commit `id` belongs to.

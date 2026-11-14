@@ -83,6 +83,27 @@ def not_connected_panel():
             f'<p class="muted" style="margin:0;font-size:12px">With no token (and no sign-in yet), the row says so instead of a pull request. '
             f'GitLab and Bitbucket say "Pull requests on GitLab are coming next."</p></div></aside>')
 
+def merge_panels():
+    """The merge box once nothing is in the way, then confirming the squash commit's message."""
+    facts = (f'<div class="row" style="gap:10px;align-items:flex-start"><span class="ok" style="margin-top:1px">{icon("check", 16)}</span>'
+             f'<div class="col grow"><span style="font-weight:600">All checks passed</span><span class="muted" style="font-size:12px">2 checks</span></div></div>'
+             f'<div class="row" style="gap:10px;align-items:flex-start;margin-top:10px"><span class="ok" style="margin-top:1px">{icon("check", 16)}</span>'
+             f'<div class="col grow"><span style="font-weight:600">No conflicts with main</span><span class="muted" style="font-size:12px">No approvals yet · ready to merge</span></div></div>')
+    ready = (f'<div class="card" style="padding:14px 14px 12px;width:320px">{facts}'
+             f'<div class="row" style="margin-top:12px">{btn("Squash and merge", "merge", "primary")}{btn("", "chevron", "secondary", extra="disabled")}</div></div>')
+    confirm = (f'<div class="card" style="padding:14px 14px 12px;width:320px">{facts}'
+               f'<div class="composer" style="margin-top:12px;min-height:0;padding:5px 10px;color:var(--ink)">Shorter zsh prompt (#12)</div>'
+               f'<div class="row" style="margin-top:10px">{btn("Confirm squash and merge", "merge", "primary")}{btn("Cancel", None, "ghost")}</div></div>')
+    return f'<div class="row" style="gap:24px;align-items:flex-start">{ready}{confirm}</div>'
+
+def commit_filter_panel():
+    """The cockpit's Commits with one commit picked: its id in the accent, and the way back to all."""
+    return (f'<aside class="side" style="height:auto;padding-bottom:14px">'
+            f'<div class="row" style="padding:16px 16px 8px;justify-content:space-between"><span class="label">Commits</span>'
+            f'<span class="monosm" style="color:var(--accent)">8f566f4 · show all</span></div>'
+            f'<div class="col" style="padding:0 16px;gap:6px;font-size:12px"><div class="row"><span class="monosm" style="color:var(--accent)">8f566f4</span><span>Measure avatar cache…</span></div>'
+            f'<div class="row"><span class="monosm faint">1cabd07</span><span class="muted">Evict avatars by last…</span></div></div></aside>')
+
 def page_extras():
     panel = lambda title, body, w=740: f'<div class="col" style="gap:8px;width:{w}px"><span class="label">{title}</span>{body}</div>'
     return (BASE.replace('width:1552px;', 'width:1552px;') +
@@ -90,7 +111,9 @@ def page_extras():
             f'{panel("Draft comments, a pending reply, the composer", drafts_panel())}'
             f'<div class="col" style="gap:24px">{panel("Split", split_panel())}{panel("Viewed, then ticked", viewed_panel())}</div>'
             f'{panel("Inspector: Checks", checks_panel(), 361)}{panel("Inspector: Conversation", conversation_panel(), 361)}'
-            f'{panel("Inspector: provider not connected", not_connected_panel(), 361)}</div>' + END)
+            f'{panel("Inspector: provider not connected", not_connected_panel(), 361)}'
+            f'{panel("Merge box: ready, then confirming the squash commit", merge_panels())}'
+            f'{panel("Cockpit: one commit picked", commit_filter_panel(), 248)}</div>' + END)
 
 if __name__ == '__main__':
     open(f'{OUT}/extras.html', 'w').write(page_extras())

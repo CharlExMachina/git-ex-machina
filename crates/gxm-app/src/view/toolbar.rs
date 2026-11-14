@@ -190,12 +190,19 @@ impl Buttons<'_> {
             }
             None => ui::button_disabled(t, Some(&icons::BRANCH), "Check out").key(keys::CHECK_OUT_PULL),
         };
-        let failing = s.open_pull_full().is_some_and(|p| p.failing().next().is_some());
-        let why = if failing { "Waits until every check passes" } else { "Coming next: merge from here" };
+        let squash = match s.open_pull_full() {
+            Some(p) if super::pull_parts::ready_to_merge(p) => {
+                ui::button(t, Variant::Secondary, Some(&icons::MERGE), "Squash and merge", None)
+                    .on_press(|s: &mut App| s.start_merge())
+            }
+            Some(p) => ui::button_disabled(t, Some(&icons::MERGE), "Squash and merge")
+                .help(super::pull_parts::why_not_merge(p)),
+            None => ui::button_disabled(t, Some(&icons::MERGE), "Squash and merge"),
+        };
         vec![
             review.key(keys::REVIEW).on_press(|s: &mut App| s.open_cockpit()),
             check_out,
-            ui::button_disabled(t, Some(&icons::MERGE), "Squash and merge").key(keys::SQUASH_AND_MERGE).help(why),
+            squash.key(keys::SQUASH_AND_MERGE),
             rune::el().grow(1.0),
             ui::button(t, Variant::Ghost, Some(&icons::X), "Close pull request", None)
                 .key(keys::CLOSE_PULL_REQUEST)

@@ -39,6 +39,7 @@ pub(super) fn answer(s: &mut State, body: &str) -> Value {
         "AddReview" => add_review(s, vars),
         "ReplyToThread" => reply(s, vars),
         "SubmitReview" => submit(s, vars),
+        "MergePull" => merge(s, vars),
         other => error(&format!("the world's GitHub doesn't answer {other:?}")),
     }
 }
@@ -222,4 +223,47 @@ fn submit(s: &mut State, vars: &Value) -> Value {
         }
     }
     error("Could not resolve to a pending PullRequestReview")
+}
+
+/// `mergePullRequest` with `SQUASH`: the branch's changes become one commit on the base, in the
+/// world's bare repository, by real git, as GitHub does on its own copy.
+fn merge(s: &mut State, vars: &Value) -> Value {
+    let id = vars["pullRequestId"].as_str().unwrap_or_default().to_owned();
+    let (remotes, env) = (s.remotes.clone(), s.env.clone());
+    let Some((owner, name)) = s
+        .repos
+        .iter()
+        .find_map(|(o, n, pulls)| pulls.iter().any(|p| node_id(o, n, p.number) == id).then(|| (o.clone(), n.clone())))
+    else {
+        return error("Could not resolve to a PullRequest");
+    };
+    let Some(p) = pull_mut(s, &id) else { return error("Could not resolve to a PullRequest") };
+    if p.merged {
+        return error("Pull request is already merged");
+    }
+    if vars["expectedHeadOid"].as_str() != Some(&p.head_sha) {
+        return error("Head branch was modified. Review and try the merge again.");
+    }
+    if !p.checks.iter().all(|c| c.passed) {
+        return error("Required status checks have not passed");
+    }
+    let bare = remotes.join("github.com").join(&owner).join(format!("{name}.git"));
+    let git = |args: &[&str]| gxm_core::git::run(&env, &bare, args).map(|o| o.trim().to_owned());
+    let headline = vars["commitHeadline"].as_str().unwrap_or(&p.title).to_owned();
+    let made = (|| {
+        let base = git(&["rev-parse", &format!("refs/heads/{}", p.base_ref)])?;
+        let tree = git(&["merge-tree", "--write-tree", &base, &p.head_sha])?;
+        let tree = tree.lines().next().unwrap_or_default().to_owned();
+        let commit = git(&["commit-tree", &tree, "-p", &base, "-m", &headline])?;
+        git(&["update-ref", &format!("refs/heads/{}", p.base_ref), &commit, &base])?;
+        Ok::<_, gxm_core::git::GitError>(commit)
+    })();
+    match made {
+        Ok(commit) => {
+            p.merged = true;
+            p.merge_commit = Some(commit);
+            json!({ "data": { "mergePullRequest": { "pullRequest": { "state": "MERGED" } } } })
+        }
+        Err(e) => error(&format!("Merge conflict: {e}")),
+    }
 }

@@ -13,7 +13,7 @@ The goal is that a person never needs a provider's PR page (GitHub, GitLab, Bitb
 
 `inspector.*` shows the inspector for a commit in an open PR and for a merge commit from a merged PR.
 
-`extras.*` (`python3 extras.py`) proposes the states the flow needs that the frames don't draw, built with the first slice and **awaiting sign-off**: draft comments and a pending reply in the cockpit (a `Pending` pill, the composer under a pressed line), Split, Viewed ticked, the inspector's Checks and Conversation tabs (after `a`'s checks list and timeline), and a repository whose provider isn't connected.
+`extras.*` (`python3 extras.py`) proposes the states the flow needs that the frames don't draw, built with the first slice and **awaiting sign-off**: draft comments and a pending reply in the cockpit (a `Pending` pill, the composer under a pressed line), Split, Viewed ticked, the inspector's Checks and Conversation tabs (after `a`'s checks list and timeline), a repository whose provider isn't connected, the merge box once a pull request is ready and while confirming the squash commit's message, and the cockpit with one commit picked.
 
 ## Decisions still open
 

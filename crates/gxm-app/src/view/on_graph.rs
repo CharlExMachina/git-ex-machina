@@ -57,7 +57,13 @@ pub fn summary(s: &App, v: &PullView, t: &Theme) -> El {
                 .truncate()
                 .help(message.clone()),
         ),
-        _ => None,
+        _ => match &s.pulls.machine.merging {
+            crate::pulls::Merging::Merged { number } if *number == v.number => {
+                let base = p.map_or("its base", |p| p.base_ref.as_str());
+                Some(ui::signal(&icons::CHECK, t.added, format!("Squashed and merged into {base}")))
+            }
+            _ => None,
+        },
     };
     if note.is_none() {
         what.push_str(" · its commits are lit, the rest of the history dims");
