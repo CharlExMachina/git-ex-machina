@@ -1,6 +1,6 @@
 # Pull requests: the chosen flow
 
-The goal is that a person never needs a provider's PR page (GitHub, GitLab, Bitbucket) again. These mockups are the spec for the first slice of that. They're built from `design/system/components.css` with the app's fonts. Regenerate them with `python3 pages.py && python3 flow.py`, and open the HTML from this folder.
+The goal is that a person never needs a provider's PR page (GitHub, GitLab, Bitbucket) again. These mockups are the spec for the first slice of that. They're built from this folder's `components.css` (kept from the retired design system) with the app's fonts. Regenerate them with `python3 pages.py && python3 flow.py`, and open the HTML from this folder.
 
 **Chosen: C + B.** The person approved this flow on 2026-11-14. A and the standalone B and C are kept for reference.
 
