@@ -60,6 +60,25 @@ fn dimmed(t: &Theme, c: Color) -> Color {
     crate::theme::mix(c, DIM, t.canvas)
 }
 
+/// Strokes the cubic `[p0, c1, c2, p3]` in short pieces, its colour easing from `start` to
+/// `end` along it (Rune strokes in one colour). The colours are solid, so the pieces' round caps
+/// overlap without a seam.
+fn fading(mut shape: Shape, [p0, c1, c2, p3]: [[f32; 2]; 4], start: Color, end: Color) -> Shape {
+    const PIECES: usize = 16;
+    let at = |u: f32| {
+        let v = 1.0 - u;
+        let (a, b, c, d) = (v * v * v, 3.0 * v * v * u, 3.0 * v * u * u, u * u * u);
+        [a * p0[0] + b * c1[0] + c * c2[0] + d * p3[0], a * p0[1] + b * c1[1] + c * c2[1] + d * p3[1]]
+    };
+    for i in 0..PIECES {
+        let (u0, u1) = (i as f32 / PIECES as f32, (i + 1) as f32 / PIECES as f32);
+        let mid = (u0 + u1) / 2.0;
+        let ease = mid * mid * (3.0 - 2.0 * mid);
+        shape = shape.line(at(u0), at(u1), STROKE, LineCap::Round, crate::theme::mix(end, ease, start));
+    }
+    shape
+}
+
 /// The selected node's ring, and the cut-out of background under it that stops the rails a
 /// little outside the ring.
 const SELECTED_RING: f32 = 8.0;
@@ -69,6 +88,10 @@ pub fn row(t: &Theme, g: &GraphRow, cols: usize, look: &RowLook<'_>) -> El {
     let nx = x(g.lane);
     let lit = |k: usize| look.light.is_none_or(|l| l.edges.get(k).copied().unwrap_or(false));
     let ink_of = |c: Color, on: bool| if on { c } else { dimmed(t, c) };
+    // A lane running dimmed through the row: a lit curve meeting it fades into it.
+    let joins_dimmed = |lane: usize| {
+        g.edges.iter().enumerate().any(|(k, e)| matches!(*e, Edge::Pass { lane: l, .. } if l == lane) && !lit(k))
+    };
     let mut shape = Shape::new();
     let (mut up, mut down) = (None, None);
     // What dims is drawn first, so the pull request's lines run over it.
@@ -83,14 +106,26 @@ pub fn row(t: &Theme, g: &GraphRow, cols: usize, look: &RowLook<'_>) -> El {
             Edge::In { from, .. } if from == g.lane => up = Some(on || up == Some(true)),
             Edge::In { from, color: c } => {
                 let xc = x(from);
-                let p = Path::new().move_to([xc, 0.0]).cubic_to([xc, 10.0], [nx, 6.0], [nx, MID]);
-                shape = shape.stroke_path(&p, STROKE, LineCap::Round, ink_of(color(t, c), on));
+                let curve = [[xc, 0.0], [xc, 10.0], [nx, 6.0], [nx, MID]];
+                // Out of a dimmed lane into the pull request, the line brightens as it comes.
+                if on && joins_dimmed(from) {
+                    shape = fading(shape, curve, dimmed(t, color(t, c)), color(t, c));
+                } else {
+                    let p = Path::new().move_to(curve[0]).cubic_to(curve[1], curve[2], curve[3]);
+                    shape = shape.stroke_path(&p, STROKE, LineCap::Round, ink_of(color(t, c), on));
+                }
             }
             Edge::Out { to, .. } if to == g.lane => down = Some(on),
             Edge::Out { to, color: c } => {
                 let xc = x(to);
-                let p = Path::new().move_to([nx, MID]).cubic_to([nx, 24.0], [xc, 20.0], [xc, H]);
-                shape = shape.stroke_path(&p, STROKE, LineCap::Round, ink_of(color(t, c), on));
+                let curve = [[nx, MID], [nx, 24.0], [xc, 20.0], [xc, H]];
+                // From the pull request into a dimmed lane (its base), the line fades as it goes.
+                if on && joins_dimmed(to) {
+                    shape = fading(shape, curve, color(t, c), dimmed(t, color(t, c)));
+                } else {
+                    let p = Path::new().move_to(curve[0]).cubic_to(curve[1], curve[2], curve[3]);
+                    shape = shape.stroke_path(&p, STROKE, LineCap::Round, ink_of(color(t, c), on));
+                }
             }
         }
     }
