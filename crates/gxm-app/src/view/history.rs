@@ -144,13 +144,14 @@ fn rows(h: &History, t: &Theme) -> El {
         |s: &App, i| s.history.as_ref().and_then(|h| h.rows.get(i)).map_or("".into(), |r| r.id().into()),
         move |s: &App, i| history_row(s, i, &theme),
     );
+    // The padding sits inside the scroll viewport, which clips: a selected row's outline and
+    // shadow reach past the row, and need that room to draw.
     col()
         .w_full()
         .grow(1.0)
         .min_h(0.0)
-        .pt(6.0)
-        .px(8.0)
-        .child(col().w_full().grow(1.0).min_h(0.0).scroll(ScrollSpec { stick_bottom: false }).child(list))
+        .scroll(ScrollSpec { stick_bottom: false })
+        .child(col().w_full().pt(6.0).px(8.0).child(list))
 }
 
 fn history_row(s: &App, i: usize, t: &Theme) -> El {
