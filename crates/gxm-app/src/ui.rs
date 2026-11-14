@@ -1,6 +1,5 @@
-//! The design system's components (`design/system/components.js` and `components.css`), one
-//! function each, named after the component. Sizes, paddings, radii and shadows are the CSS's;
-//! keep the comment beside each value pointing at the rule it comes from.
+//! The app's components, one function each: buttons, fields, segmented controls, badges, tiles.
+//! New UI composes these rather than styling elements inline, so the app keeps one look.
 
 use rune::{Color, El, Icon, TextEdit, icon, row, text, text_input};
 

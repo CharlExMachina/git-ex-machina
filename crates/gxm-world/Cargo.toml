@@ -3,6 +3,7 @@ name = "gxm-world"
 description = "Hermetic test worlds: deterministic fixture repos, local remotes and a sandboxed home."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [dependencies]

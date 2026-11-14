@@ -17,13 +17,6 @@ pub fn verify(fast: bool) -> Result<(), String> {
     step("clippy", || run(cargo().arg("clippy").args(clippy_targets).args(["--quiet", "--", "-D", "warnings"])))?;
     step("tests", || run(cargo().args(["test", "--workspace", "--quiet"])))?;
     if !fast {
-        // The budgets are measured against Chrome and Rune on macOS; other platforms render
-        // glyphs differently, so they'd measure fonts, not drift.
-        if cfg!(target_os = "macos") {
-            step("design fidelity", crate::visual::compare)?;
-        } else {
-            println!("verify: design fidelity skipped (its budgets are measured on macOS)");
-        }
         optional("cargo-deny", "cargo-deny", &["deny", "check"])?;
         optional("typos", "typos", &[])?;
         optional("cargo-machete", "cargo-machete", &["machete"])?;

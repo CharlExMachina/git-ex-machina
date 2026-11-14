@@ -1,6 +1,5 @@
-//! The window, laid out as the design's AppShell (`design/system/appshell-markup.html`): the
-//! repository sidebar (248 + its border), the history, and the inspector (360 + its border),
-//! each under its own 48-point bar.
+//! The window: the repository sidebar (248 + its border), the history, and the inspector
+//! (360 + its border), each under its own 48-point bar.
 
 mod graph;
 mod history;

@@ -68,7 +68,7 @@ impl World {
         let now: Timestamp = NOW.parse().unwrap_or_else(|e| fail("read NOW", e));
         let env = Env::sandbox(&home, now);
         let mut cfg = String::from(
-            // The person at the keyboard is Ana, who owns the design's workspace: what the app
+            // The person at the keyboard is Ana, who owns the demo workspace: what the app
             // commits in a world is hers.
             "[user]\n\tname = Ana Ruiz\n\temail = ana@example.com\n[init]\n\tdefaultBranch = main\n\
              [commit]\n\tgpgsign = false\n[tag]\n\tgpgsign = false\n[advice]\n\tdetachedHead = false\n\

@@ -3,7 +3,6 @@
 
 #![expect(clippy::print_stdout, clippy::print_stderr, reason = "xtask is a terminal tool")]
 
-mod fidelity;
 mod journey;
 mod verify;
 mod visual;
@@ -27,7 +26,6 @@ Worlds (hermetic fixture workspaces in target/worlds/)
 
 Seeing it
   snap [NAME] [--theme dark|light] [--size WxH]   Render the app headless to target/proof/snap-NAME-THEME.png (+ tree JSON)
-  compare [--theme light]   Render the design mockup and the app on the mockup world, side by side, and score it
   journey NAME [--video]    Run a journey headless, then render its marks (and a keycapped video) to target/proof/NAME/
   journeys                  List the journeys
 ";
@@ -42,7 +40,6 @@ fn main() -> ExitCode {
         Some("gxm") => in_world("gxm", rest),
         Some("app") => in_world("app", rest),
         Some("snap") => visual::snap(rest),
-        Some("compare") => visual::compare_cmd(&args[1..]),
         Some("journey") => journey::journey(rest),
         Some("journeys") => journey::list(),
         Some("help" | "--help" | "-h") | None => {

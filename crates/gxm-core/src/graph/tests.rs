@@ -4,7 +4,7 @@ fn rows(commits: &[(&'static str, &[&'static str])]) -> Vec<GraphRow> {
     layout(commits.iter().map(|(id, ps)| (*id, ps.iter().copied())))
 }
 
-/// The history in the design mockup: a feature branch merged into main, and a fix branch that
+/// The demo workspace's history: a feature branch merged into main, and a fix branch that
 /// forked from a tagged commit and is still open.
 #[test]
 fn branches_keep_their_rail_and_colour_and_rejoin_where_they_forked() {

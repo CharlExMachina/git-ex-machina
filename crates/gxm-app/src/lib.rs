@@ -19,9 +19,9 @@ use rune_kit::shell;
 use crate::state::{App, Load};
 
 pub const TITLE: &str = "git-ex-machina";
-/// The design's window size, so renders compare one to one with `design/mockup-appshell.html`.
+/// The window's size, and the size headless renders and journeys use.
 pub const SIZE: (f32, f32) = (1552.0, 852.0);
-/// The design's traffic lights sit 12 in from the left, centred in the 48-point bar.
+/// The traffic lights sit 12 in from the left, centred in the 48-point bar.
 pub const CHROME: Chrome = Chrome { full_size_content: true, traffic_lights: Some((12.0, 18.0)), drag_regions: true };
 
 fn init() -> App {
@@ -78,6 +78,6 @@ pub fn app() -> rune::App<App> {
         ..AppSpec::new(TITLE, SIZE, init, view::view)
     })
     .chrome(CHROME)
-    // The design sets `-webkit-font-smoothing: antialiased`: CoreText without outline dilation.
+    // CoreText without outline dilation (what browsers call `antialiased`): lighter, crisper text.
     .font_smoothing(rune::FontSmoothing::Off)
 }

@@ -1,8 +1,7 @@
 //! Ready-made worlds.
 //!
-//! [`mockup`] rebuilds the workspace in `design/mockup-appshell.html` with real repositories, so
-//! a render of the app can be put side by side with the design and compared like for like.
-//! The design's data lives in `design/system/appshell-data.js`.
+//! [`mockup`] is the demo workspace: seven repositories across GitHub, GitLab and Bitbucket in
+//! different states, built with real git. Screenshots, journeys and the README use it.
 
 use std::path::PathBuf;
 
@@ -31,7 +30,7 @@ pub struct Mockup {
     pub infra_terraform: PathBuf,
 }
 
-/// The design mockup's workspace: atlas-web with its branches, tag and uncommitted work, and
+/// The demo workspace: atlas-web with its branches, tag and uncommitted work, and
 /// six more repositories across GitHub, GitLab and Bitbucket in different states.
 pub fn mockup(w: &World) -> Mockup {
     let atlas_web = atlas_web(w);

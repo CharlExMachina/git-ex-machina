@@ -76,7 +76,7 @@ impl Row {
     }
 }
 
-/// What the history has selected, as the design's `pick` keeps it: a click selects one row
+/// What the history has selected: a click selects one row
 /// (or clears it when it was the only one), ⌘-click toggles a row, ⇧-click selects the range
 /// from the anchor. Pressing the uncommitted row shows the working tree instead.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -301,7 +301,7 @@ impl App {
         Some(found)
     }
 
-    /// What a multi-selection is, as the design reads it: `linear` when every commit is on one
+    /// What a multi-selection is: `linear` when every commit is on one
     /// lane with no other commit of that lane between them, and whether any is a merge.
     pub fn shape(&self, ids: &[String]) -> Shape {
         let Some(h) = &self.history else { return Shape { linear: false, merge: false } };

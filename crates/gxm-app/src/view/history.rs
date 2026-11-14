@@ -161,7 +161,7 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
     let ground = if selected { t.raised } else { t.canvas };
     let mut el = match r {
         Row::Worktree { changed } => {
-            // Everything staged: a filled mark and a note, as the design's staged state.
+            // Everything staged: a filled mark and a note.
             let staged = s.all_staged();
             let mut r = row()
                 .gap(6.0)
@@ -204,7 +204,7 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
     }
     // Neighbouring selected rows merge into one block: the first keeps its top, a middle row
     // only its sides, the last its bottom and drop. A row with a selected row below paints over
-    // it, so the drop beneath can't cut across the block (the design's `z-index: 2`).
+    // it, so the drop beneath can't cut across the block.
     let picked = |k: Option<usize>| k.and_then(|k| h.rows.get(k)).is_some_and(|r| s.is_selected(r.id()));
     let (above, below) = (picked(i.checked_sub(1)), picked(Some(i + 1)));
     let r = size::RADIUS_SM;

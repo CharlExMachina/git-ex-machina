@@ -1,4 +1,4 @@
-//! One row of the commit graph, drawn as the design's `CommitGraphRow` draws it: lanes 14 apart,
+//! One row of the commit graph: lanes 14 apart,
 //! 12 in from the edge, rails stroked 2 with round caps, a 6.5 ring of background around each
 //! node, a 4.5 node (3.25 for a merge), and HEAD as a ring with a centre dot.
 
@@ -13,8 +13,8 @@ const H: f32 = size::ROW_COMMIT;
 const MID: f32 = H / 2.0;
 const STROKE: f32 = 2.0;
 
-/// The graph's lane palette: the order lanes take the design's `--lane-n` colours in, so the
-/// first branch is amber, the second teal and the third rose, as the design's history draws them.
+/// The graph's lane palette: the order lanes take the `--lane-n` colours in, so the first branch
+/// is amber, the second teal and the third rose.
 const ORDER: [usize; 6] = [1, 2, 4, 3, 5, 6];
 
 /// The colour of graph colour index `c`.

@@ -1,11 +1,10 @@
-//! The design system's tokens, transcribed from `design/system/components.css` (generated from
-//! the design's `tokens.json`). Every colour, shadow, radius and type style the app draws comes
-//! from here, under the name the CSS gives it, so a value can be checked against the design by
-//! searching for that name. Change a value only when the design changes.
+//! The app's design tokens: every colour, shadow, radius and type style it draws comes from
+//! here, by name (the names follow CSS custom properties: `--accent`, `--shadow-raised`). New UI
+//! uses these names; a new look starts as a new token here, never a literal in a view.
 
 use rune::{Color, Shadow, TextStyle};
 
-/// The design's colour tokens, dark or light (`[data-theme]`).
+/// The colour tokens, dark or light.
 #[derive(Clone, Copy, Debug)]
 pub struct Theme {
     pub dark: bool,
@@ -181,7 +180,7 @@ impl Theme {
         self.accent
     }
 
-    /// The design's `lane(n)`: `--lane-((n - 1) % 6 + 1)` for a 1-based `n`.
+    /// Lane `n`'s colour, 1-based: `--lane-((n - 1) % 6 + 1)`.
     pub fn lane(&self, n: usize) -> Color {
         self.lanes[(n.max(1) - 1) % 6]
     }
@@ -285,13 +284,13 @@ pub mod size {
 pub const SANS: &str = "Hanken Grotesk";
 pub const MONO: &str = "Geist Mono";
 
-/// The font files the design names, bundled so every machine renders the same glyphs.
+/// The app's fonts, bundled so every machine renders the same glyphs.
 pub const FONTS: &[&[u8]] = &[
     include_bytes!("../assets/fonts/HankenGrotesk-Variable.ttf"),
     include_bytes!("../assets/fonts/GeistMono-Variable.ttf"),
 ];
 
-/// The design's type styles (`--text-*` and the components' own sizes), by role.
+/// The type styles, by role.
 pub mod ty {
     use super::TextStyle;
 
@@ -306,8 +305,7 @@ pub mod ty {
     pub const BODY: TextStyle = sans(13.0, 400.0, 18.0);
     /// `--text-body-strong`: 500 13px/18px.
     pub const BODY_STRONG: TextStyle = sans(13.0, 500.0, 18.0);
-    /// 400 12px on the body's inherited 18px line (the design sets `font-size: 12px` and
-    /// keeps `body`'s `line-height: 18px`).
+    /// 400 12px on the app's 18px line, which every small text shares.
     pub const CAPTION: TextStyle = sans(12.0, 400.0, 18.0);
     /// 500 12px/16px: the branch in the summary, the inspector's author.
     pub const CAPTION_STRONG: TextStyle = sans(12.0, 500.0, 18.0);

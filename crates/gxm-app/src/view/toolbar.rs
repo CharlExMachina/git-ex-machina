@@ -1,5 +1,4 @@
-//! The action bar over the history (`role="toolbar"` in the design): what it offers follows
-//! the selection, as the design's toolbar states do.
+//! The action bar over the history: what it offers follows the selection.
 //!
 //! - nothing selected: Fetch, Pull, Push
 //! - the uncommitted row: Stage all, Discard all; with everything staged, Commit, Unstage all,
@@ -153,7 +152,7 @@ impl Buttons<'_> {
             .help("Sets every change aside in a stash, so nothing is lost")
     }
 
-    /// A control the design shows whose workflow isn't built yet: disabled, saying what's next.
+    /// A control whose workflow isn't built yet: disabled, saying what's next.
     fn soon(&self, variant: Variant, glyph: Option<&'static Icon>, key: &str, label: &str, next: &str) -> El {
         ui::button(self.t, variant, glyph, label, None).key(key).help(next.to_owned()).disabled(true)
     }

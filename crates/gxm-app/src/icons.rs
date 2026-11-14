@@ -1,6 +1,5 @@
-//! The design's icons (`P` in `design/system/components.js`): a 16-point grid, stroked 1.5 in
-//! the current colour with round caps and joins. The paths are copied from the design; draw a
-//! new icon there first.
+//! The app's icons: a 16-point grid, stroked 1.5 in the current colour with round caps and
+//! joins. Draw a new icon on the same grid and stroke.
 
 use rune::Icon;
 

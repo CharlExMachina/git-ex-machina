@@ -3,6 +3,7 @@ name = "gxm-cli"
 description = "gxm: git-ex-machina on the command line."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [[bin]]

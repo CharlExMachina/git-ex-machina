@@ -3,6 +3,7 @@ name = "gxm-journeys"
 description = "Journeys: long, user-shaped workflows that are the app's tests, demo videos and PR proof at once."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [dependencies]

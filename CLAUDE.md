@@ -9,7 +9,7 @@ A native git client in Rust: a Rune GUI (`gxm-app`) and a CLI (`gxm`) over one d
 - `crates/gxm-world`: hermetic **worlds** (sandboxed home, fixture repositories, local remotes).
 - `crates/gxm-journeys`: **journeys**, which are the tests, the demo videos and the PR proof.
 - `xtask`: every check and render. `cargo xtask help` lists them.
-- `design/mockup-appshell.html`: the visual target. `design/system/` holds what it's made of, extracted: tokens and component CSS (`components.css`), component code with icon paths and graph geometry (`components.js`), the shell's markup (`appshell-markup.html`) and its data (`appshell-data.js`).
+- `design/pr-flow/`: the approved mockups for the pull-request viewer, until it ships.
 
 Rust comes from `rust-toolchain.toml` through rustup. Rune is pinned in `Cargo.toml`: its `rev` and the four `[patch.crates-io]` entries move together, in a PR of their own that re-runs every journey and golden.
 
@@ -19,19 +19,17 @@ Every change goes through these steps, in order:
 
 1. **Journey first.** Extend the journey for the workflow you're changing (or start one, if the person's goal is new). Run it with `cargo test -p gxm-journeys` and watch it go red for the reason you expect.
 2. **Make it green.** Put logic in `gxm-core`, where the CLI and the app can both verify it.
-3. **See it.** `cargo xtask journey <name>`, then open every mark PNG in `target/proof/<name>/`. For UI work, also run `cargo xtask compare`, read its scores, and look at `compare.png` and `compare-diff.png` zoomed in, region by region. This step is done when you've looked at every mark and each one shows what the journey claims.
+3. **See it.** `cargo xtask journey <name>`, then open every mark PNG in `target/proof/<name>/`. For a visual change, render the same mark before and after (the base branch too) and look at both zoomed in. This step is done when you've looked at every mark and each one shows what the journey claims.
 4. **Verify.** `cargo xtask verify` is green.
 5. **Proof.** Open the PR with its proof (see "Pull requests").
 
 How to drive the app headless (snapshots, element trees, scripts, video): `.claude/skills/drive-app/SKILL.md`.
 
-## The design is the spec
+## Look and feel
 
-The UI matches `design/` exactly: colours, shadows, radii, sizes, type, spacing, icons. Read the value in `design/system/` and transcribe it, keeping the CSS name beside it (`gxm-app/src/theme.rs`, `ui.rs`). Don't approximate a value or invent a component the design already draws.
-
-- When the design's data contradicts git (a count git can't produce, made-up commit ids), keep real git and change only that, and list it in the PR. Every other difference needs the person's sign-off before the PR.
-- `cargo xtask compare` scores each region of the window against the design (pixels that differ, and colour that's off) and fails over budget; `verify` runs it on macOS. Budgets only go down. A deliberate difference becomes a mask in `xtask/src/fidelity.rs`, with its reason.
-- Translating CSS to Rune: `body`'s `line-height: 18px` is inherited by every element that doesn't set its own; a CSS border adds to the box (`.border_layout()`); Rune paints later shadows on top, the reverse of CSS; the design's `-webkit-font-smoothing: antialiased` is `FontSmoothing::Off`.
+- `gxm-app/src/theme.rs` holds every colour, shadow, radius and type style, by token name; `ui.rs` holds the components (buttons, fields, segmented controls, badges, tiles). New UI composes these. A new look starts as a token in `theme.rs`, never a literal in a view.
+- Visual feedback goes straight into code. Show the result as before-and-after renders.
+- Rune details that bite: Rune paints later shadows on top (the reverse of CSS); a border takes layout space only with `.border_layout()`; `.paint_order(n)` is `z-index`; text is drawn with `FontSmoothing::Off`.
 
 ## Journeys: write fewer, longer tests
 

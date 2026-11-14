@@ -16,7 +16,7 @@ env:
 jobs:
   verify:
     # Linux with Mesa's software Vulkan (lavapipe): Rune renders headless without a GPU, the
-    # same pixels on every run. macOS runs are a separate, opt-in job (cost).
+    # same pixels on every run.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +40,33 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: proof
+          path: target/proof/
+          retention-days: 30
+
+  macos:
+    # The app's home platform: everything `verify` checks, and the journeys rendered with macOS
+    # text, as people will see them. GitHub-hosted, so no machine of ours runs a stranger's PR;
+    # free for a public repository.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: ffmpeg
+        run: brew install ffmpeg
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,typos-cli,cargo-machete
+      - name: cargo xtask verify
+        run: cargo xtask verify
+      - name: Render every journey (proof)
+        run: |
+          for j in $(cargo xtask journeys | awk '{print $1}'); do
+            cargo xtask journey "$j" --video
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: proof-macos
           path: target/proof/
           retention-days: 30
 

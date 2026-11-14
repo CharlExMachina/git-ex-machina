@@ -1,15 +1,11 @@
-//! `atlas-web`, the repository the design shows open (`design/system/appshell-data.js`).
+//! `atlas-web`, the repository the demo workspace opens on.
 //!
-//! Every commit the design lists is here with its author, time and message body, on the
-//! design's topology: `feature/graph-virtualization` merged into `main`, `fix/avatar-cache`
-//! forked from the `v0.4.0` commit and still open, 1,284 commits in all. Files change by exact
-//! line counts, so the merge reads `4 files · +232 −93` and its `rows.rs` hunk shows the
-//! design's lines.
-//!
-//! One deliberate difference: the design puts `origin/main` on HEAD while showing `main ↑2`,
-//! which git can't do (on HEAD, `main` is level with its upstream), and no commit in this
-//! topology is exactly two behind. `origin/main` is on `Spring the sidebar collapse` instead,
-//! leaving `main` four ahead: the merge and the three feature commits it brought.
+//! Each listed commit has its author, time and message body, on a small but complete topology:
+//! `feature/graph-virtualization` merged into `main`, `fix/avatar-cache` forked from the
+//! `v0.4.0` commit and still open, 1,284 commits in all. Files change by exact line counts, so
+//! the merge reads `4 files · +232 −93` and its `rows.rs` hunk is short and readable.
+//! `origin/main` is on `Spring the sidebar collapse`, leaving `main` four ahead: the merge and
+//! the three feature commits it brought.
 
 use std::path::PathBuf;
 
@@ -18,7 +14,7 @@ use jiff::{SignedDuration, Timestamp};
 use super::{ANA, KENJI, LEA, t};
 use crate::{Author, RepoBuilder, World};
 
-/// Commits before the ones the design lists, so the summary reads `1,284 commits`.
+/// Commits before the listed ones, so the summary reads `1,284 commits`.
 const OLDER: usize = 1260;
 
 pub fn atlas_web(w: &World) -> PathBuf {
@@ -214,7 +210,7 @@ fn numbered(prefix: &str, from: usize, n: usize) -> String {
     (from..from + n).map(|i| format!("{prefix} {i}\n")).collect()
 }
 
-/// The files the design's commits edit, as they stood before the listed history.
+/// The files the listed commits edit, as they stood before them.
 fn base_files() -> Vec<(&'static str, String)> {
     let mut rows = numbered("// rows", 1, 39);
     rows.push_str(
@@ -236,7 +232,7 @@ fn base_files() -> Vec<(&'static str, String)> {
     ]
 }
 
-/// The history before the design's first listed commit, as a `git fast-import` stream: the
+/// The history before the first listed commit, as a `git fast-import` stream: the
 /// base files first, then commits six hours apart, each rewriting one of twenty notes.
 fn older_history() -> String {
     const VERBS: [&str; 10] =

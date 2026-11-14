@@ -148,7 +148,7 @@ fn heading(s: &App, d: &Details, t: &Theme) -> El {
     }
 }
 
-/// What a multi-selection allows, as the design words it.
+/// What a multi-selection allows.
 fn selection_note(s: &App, ids: &[String]) -> &'static str {
     if s.can_bisect(ids) {
         "A linear range: bisect or squash"
