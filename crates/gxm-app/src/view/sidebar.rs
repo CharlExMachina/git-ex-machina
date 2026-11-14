@@ -100,7 +100,7 @@ fn repo_row(s: &App, i: usize, r: &RepoEntry, t: &Theme) -> El {
         );
     }
     if st.changed > 0 {
-        side = side.child(ui::count(t, st.changed).help(format!("{} uncommitted changes", st.changed)));
+        side = side.child(ui::changes(t, st.changed));
     }
     let mut row_el = row()
         .key(keys::repo(&r.summary.name))

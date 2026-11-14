@@ -139,16 +139,25 @@ pub fn label(t: &Theme, s: &str) -> El {
     text(s.to_uppercase()).font(ty::LABEL).color(t.ink_muted)
 }
 
-/// `.gu-count`: an 18-tall pill, mono 11, accent on accent-soft.
-pub fn count(t: &Theme, n: u32) -> El {
+/// How many files have uncommitted changes: a ± and the count in an 18-tall pill, accent on
+/// accent-soft, so it reads as "changes" before the number is read. Says it in full on hover.
+pub fn changes(t: &Theme, n: u32) -> El {
     row()
         .h(18.0)
-        .min_w(18.0)
-        .px(5.0)
+        .pl(5.0)
+        .pr(6.0)
+        .gap(3.0)
         .radius(size::PILL)
         .center()
         .fill(t.accent_soft)
+        .child(icon(&icons::CHANGES, 11.0).color(t.accent))
         .child(text(n.to_string()).font(ty::MONO_11).color(t.accent))
+        .help(files_with_changes(n))
+}
+
+/// "1 file with uncommitted changes", "12 files with uncommitted changes".
+fn files_with_changes(n: u32) -> String {
+    if n == 1 { "1 file with uncommitted changes".to_owned() } else { format!("{n} files with uncommitted changes") }
 }
 
 /// `.gu-avatar`: a 16 circle in the person's lane colour, initial 600 9px.

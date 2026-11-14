@@ -164,15 +164,15 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
     // covered or cut by a selection.
     let (graph_el, content) = match r {
         Row::Worktree { changed } => {
-            // Everything staged: a filled mark and a note.
+            // There's room here to say it in words; everything staged also fills the mark.
             let staged = s.all_staged();
-            let mut c = row()
+            let files = if *changed == 1 { "1 file".to_owned() } else { format!("{changed} files") };
+            let note = format!("{files} {}", if staged { "staged" } else { "changed" });
+            let c = row()
                 .gap(6.0)
-                .child(row().grow(1.0).child(text("Uncommitted changes").font(ty::BODY_STRONG).color(t.ink)));
-            if staged {
-                c = c.child(text("Staged").font(ty::CAPTION).color(t.ink_muted));
-            }
-            (graph::worktree(t, staged, lane, h.cols), c.child(ui::count(t, *changed)))
+                .child(row().grow(1.0).child(text("Uncommitted changes").font(ty::BODY_STRONG).color(t.ink)))
+                .child(text(note).font(ty::CAPTION).color(t.ink_muted));
+            (graph::worktree(t, staged, lane, h.cols), c)
         }
         Row::Commit(c) => {
             let node = if c.refs.iter().any(|r| r.kind == RefKind::Head) {

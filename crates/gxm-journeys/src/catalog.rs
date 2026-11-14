@@ -35,6 +35,7 @@ pub fn first_look() -> Journey {
     .see_in(keys::BRANCH_SUMMARY, "main ↑4 · 1,284 commits · fetched 2 minutes ago")
     .see_in(keys::PUSH, "Push 4")
     .see("Uncommitted changes")
+    .see_in(keys::HISTORY, "3 files changed")
     .see("fix/avatar-cache")
     .see("origin/") // the remote badge: a muted `origin/` prefix, then `main`
     .see("v0.4.0")
@@ -179,7 +180,7 @@ pub fn shape_history() -> Journey {
     .tap(keys::STAGE_ALL)
     .wait_for(keys::INSPECTOR, "All 3 files staged, ready to commit")
     .see_in(keys::INSPECTOR_FILES, "STAGED")
-    .see_in(keys::HISTORY, "Staged")
+    .see_in(keys::HISTORY, "3 files staged")
     .mark("staged")
     .tap(keys::UNSTAGE_ALL)
     .wait_for(keys::INSPECTOR, "3 files changed, nothing staged")

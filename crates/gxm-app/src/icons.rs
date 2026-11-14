@@ -40,3 +40,4 @@ icon!(
     "gxm-merge",
     r#"<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="10" r="1.5"/><path d="M4.5 5v6"/><path d="M4.5 5c0 3 3 5 5.5 5"/>"#
 );
+icon!(CHANGES, "gxm-changes", r#"<path d="M8 2.5v6M5 5.5h6M5 12.5h6"/>"#);
