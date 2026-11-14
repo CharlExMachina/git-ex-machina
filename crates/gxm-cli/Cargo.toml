@@ -1,0 +1,20 @@
+[package]
+name = "gxm-cli"
+description = "gxm: git-ex-machina on the command line."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "gxm"
+path = "src/main.rs"
+
+[dependencies]
+gxm-core.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+gxm-world.workspace = true
+
+[lints]
+workspace = true

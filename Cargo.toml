@@ -1,0 +1,70 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+default-members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+publish = false
+
+[workspace.dependencies]
+gxm-core = { path = "crates/gxm-core" }
+gxm-world = { path = "crates/gxm-world" }
+
+# Rune is pre-release and doesn't take pull requests. Pin a `dev` rev (never rewritten) and bump it
+# in its own PR that re-runs every journey and golden. The four patches below must come from the
+# same rev: they are the `[patch.crates-io]` table in Rune's root Cargo.toml.
+rune = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749" }
+
+jiff = { version = "0.2", default-features = false, features = ["std", "alloc", "tz-system", "tzdb-bundle-platform", "tzdb-zoneinfo"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+
+[patch.crates-io]
+winit = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+missing_debug_implementations = "allow"
+
+[workspace.lints.clippy]
+# Weeds we never let take root. Tests may unwrap (see clippy.toml).
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"
+expect_used = "warn"
+print_stdout = "deny"
+print_stderr = "deny"
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+disallowed_methods = "deny"
+await_holding_lock = "deny"
+let_underscore_must_use = "deny"
+large_futures = "warn"
+needless_pass_by_value = "warn"
+redundant_clone = "warn"
+semicolon_if_nothing_returned = "warn"
+uninlined_format_args = "warn"
+
+# Workspace crates keep line tables only: full debug info balloons test builds with Rune.
+[profile.dev]
+debug = "line-tables-only"
+
+# Dependencies (wgpu, Taffy, Parley) are optimised even in debug so headless journeys and proof
+# videos render at a usable speed. Our own crates stay unoptimised for fast rebuilds.
+[profile.dev.package."*"]
+debug = false
+opt-level = 2
+
+[profile.release]
+codegen-units = 16
+incremental = true

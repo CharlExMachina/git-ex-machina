@@ -1,0 +1,6 @@
+[files]
+extend-exclude = ["design/*.html", "target", "*.lock"]
+
+[default.extend-words]
+# Short commit ids and fixture text that look like typos.
+ba = "ba"

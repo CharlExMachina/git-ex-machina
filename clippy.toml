@@ -1,0 +1,12 @@
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-dbg-in-tests = true
+allow-print-in-tests = true
+disallowed-methods = [
+  { path = "std::env::var", reason = "read the environment once, in gxm_core::env::Env, so tests can sandbox it" },
+  { path = "std::env::home_dir", reason = "take paths from gxm_core::env::Env so tests never touch the real home" },
+  { path = "std::time::SystemTime::now", reason = "take the time from gxm_core::env::Env::now so renders are deterministic" },
+  { path = "jiff::Timestamp::now", reason = "take the time from gxm_core::env::Env::now so renders are deterministic" },
+  { path = "jiff::Zoned::now", reason = "take the time from gxm_core::env::Env::now so renders are deterministic" },
+]

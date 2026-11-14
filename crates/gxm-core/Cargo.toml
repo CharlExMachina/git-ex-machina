@@ -1,0 +1,17 @@
+[package]
+name = "gxm-core"
+description = "git-ex-machina's domain: repositories, history, the commit graph and git operations. No UI."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+gxm-world.workspace = true
+
+[lints]
+workspace = true
