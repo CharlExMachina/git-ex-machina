@@ -50,7 +50,7 @@ pub struct RowLook<'a> {
     pub light: Option<&'a Lit>,
 }
 
-/// How far what isn't the pull request's dims (`.dim { opacity: .38 }` in `design/pr-flow`).
+/// How far what isn't the open pull request's dims, as an opacity.
 pub const DIM: f32 = 0.38;
 
 /// A dimmed line's colour: solid, as the lane at [`DIM`] over the canvas the graph sits on.

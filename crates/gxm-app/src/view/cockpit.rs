@@ -1,4 +1,4 @@
-//! The review cockpit's middle (`design/pr-flow/flow3`): Unified or Split, the file's header
+//! The review cockpit's middle: Unified or Split, the file's header
 //! with Viewed, and its diff with the threads, replies and draft comments inline. A line takes a
 //! comment when pressed; Return keeps it as a draft.
 

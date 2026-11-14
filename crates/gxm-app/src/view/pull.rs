@@ -1,4 +1,4 @@
-//! The inspector as the open pull request (`design/pr-flow/flow2`): Overview (its header,
+//! The inspector as the open pull request: Overview (its header,
 //! description, merge box and reviewers), Checks, and Conversation.
 
 use gxm_core::forge::model::{CheckState, Event, Pull, ReviewStatus, Thread};
@@ -164,7 +164,7 @@ fn checks(p: &Pull, t: &Theme) -> El {
     col().w_full().padding(20.0).child(list)
 }
 
-/// Reviews, comments and threads, oldest first, after `design/pr-flow/a`'s timeline.
+/// Reviews, comments and threads, oldest first, as a timeline.
 fn conversation(s: &App, p: &Pull, t: &Theme) -> El {
     enum Item<'a> {
         Event(&'a Event),

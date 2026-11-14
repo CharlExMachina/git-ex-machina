@@ -1,4 +1,4 @@
-//! A pull request on the graph (`design/pr-flow/flow2`): the line under the toolbar naming it,
+//! A pull request on the graph: the line under the toolbar naming it,
 //! and its row above its newest commit, with its checks and approvals.
 
 use gxm_core::forge::model::Verdict;

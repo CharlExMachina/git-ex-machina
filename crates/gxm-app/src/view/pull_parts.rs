@@ -1,5 +1,5 @@
 //! Pieces of a pull request the graph, the inspector and the review cockpit share: people,
-//! the description, reviewers, the merge box (`design/pr-flow/pages.py`).
+//! the description, reviewers, the merge box.
 
 use gxm_core::forge::model::{CheckState, Mergeable, Pull, PullState, ReviewStatus, User};
 use rune::text::Span;

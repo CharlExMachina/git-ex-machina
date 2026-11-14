@@ -234,7 +234,7 @@ fn message_details(s: &App, c: &Commit, info: &CommitInfo, t: &Theme) -> El {
 }
 
 /// The pull request the commit belongs to (its state, number and title) with See pull request
-/// under it, as `design/pr-flow/flow1` draws it; or why pull requests can't be shown.
+/// under it; or why pull requests can't be shown.
 fn pull_request(s: &App, c: &Commit, t: &Theme) -> Option<El> {
     let Some(p) = s.pulls.of_commit(&c.id) else {
         let problem = s.pulls.problem().filter(|_| s.pulls.index.is_none())?;

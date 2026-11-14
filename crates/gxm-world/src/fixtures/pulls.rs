@@ -1,4 +1,4 @@
-//! atlas-web's pull requests on the world's GitHub, as `design/pr-flow` shows them: Lea's
+//! atlas-web's pull requests on the world's GitHub: Lea's
 //! `fix/avatar-cache` open as #131 (one failing check, Kenji's approval, Ana's review
 //! requested) and Kenji's `feature/graph-virtualization`, merged as #128 by HEAD's merge commit.
 //! The commits they point at are the repository's own.

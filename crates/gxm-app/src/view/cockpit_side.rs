@@ -1,5 +1,5 @@
-//! The review cockpit's sides (`design/pr-flow/flow3`): on the left the pull request's files
-//! (with how many are viewed) and commits, and the way back; on the right the review: what the
+//! The review cockpit's sides: on the left the pull request's files (with how many are
+//! viewed, and a shelf for those that are) and commits, and the way back; on the right the review: what the
 //! pull request is, its checks and reviewers, and the verdict to send.
 
 use gxm_core::forge::model::{CheckState, Verdict};
