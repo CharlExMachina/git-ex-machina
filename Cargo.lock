@@ -1069,8 +1069,6 @@ dependencies = [
  "gxm-core",
  "rune",
  "rune-kit",
- "serde",
- "serde_json",
 ]
 
 [[package]]

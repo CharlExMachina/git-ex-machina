@@ -17,9 +17,9 @@ pub fn verify(fast: bool) -> Result<(), String> {
     step("clippy", || run(cargo().arg("clippy").args(clippy_targets).args(["--quiet", "--", "-D", "warnings"])))?;
     step("tests", || run(cargo().args(["test", "--workspace", "--quiet"])))?;
     if !fast {
-        optional("cargo-deny", "cargo-deny", &["deny", "check"])?;
+        optional("cargo-deny", "cargo-deny", &["check"])?;
         optional("typos", "typos", &[])?;
-        optional("cargo-machete", "cargo-machete", &["machete"])?;
+        optional("cargo-machete", "cargo-machete", &[])?;
     }
     println!("verify: all green");
     Ok(())
@@ -43,8 +43,9 @@ fn step(name: &str, f: impl FnOnce() -> Result<(), String>) -> Result<(), String
 }
 
 /// Tools CI installs. Locally a missing one is a warning; on CI (`CI=true`) it's a failure.
+/// Each runs as its own binary, not as `cargo <tool>`: under `cargo xtask`, cargo-machete
+/// takes the subcommand's name for a folder to scan.
 fn optional(name: &str, bin: &str, args: &[&str]) -> Result<(), String> {
-    let program = if bin.starts_with("cargo-") { "cargo" } else { bin };
     let found = Command::new(bin).arg("--version").output().is_ok_and(|o| o.status.success());
     if !found {
         #[expect(clippy::disallowed_methods, reason = "xtask reads CI's own flag")]
@@ -55,7 +56,7 @@ fn optional(name: &str, bin: &str, args: &[&str]) -> Result<(), String> {
         println!("verify: {name} skipped (not installed; CI runs it: cargo install {bin})");
         return Ok(());
     }
-    step(name, || run(Command::new(program).args(args).current_dir(root())))
+    step(name, || run(Command::new(bin).args(args).current_dir(root())))
 }
 
 /// Checks no linter does: file sizes, folder shapes, and that every journey has a test.

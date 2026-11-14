@@ -207,21 +207,21 @@ pub fn status_color(t: &Theme, letter: char) -> Color {
     }
 }
 
-/// `.gu-pips`: five 5-point squares (radius 1.5, gap 2), split between added and removed in
-/// proportion, as `FileChangeRow` rounds them.
+/// Five 5-point squares (radius 1.5, gap 2), split between added and removed lines in
+/// proportion.
 pub fn pips(t: &Theme, added: u32, removed: u32) -> El {
     let total = added + removed;
-    let (na, nd) = if total == 0 {
+    let (green, red) = if total == 0 {
         (0, 0)
     } else {
-        let na = (5.0 * added as f32 / total as f32).round() as u32;
-        (na, (5 - na).min((5.0 * removed as f32 / total as f32).round() as u32))
+        let green = (5.0 * added as f32 / total as f32).round() as u32;
+        (green, (5 - green).min((5.0 * removed as f32 / total as f32).round() as u32))
     };
     let mut r = row().gap(2.0);
     for i in 0..5 {
-        let c = if i < na {
+        let c = if i < green {
             t.added
-        } else if i < na + nd {
+        } else if i < green + red {
             t.removed
         } else {
             t.line

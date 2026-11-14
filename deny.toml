@@ -4,6 +4,10 @@ all-features = false
 
 [advisories]
 yanked = "deny"
+# Flag unmaintained crates we depend on ourselves. Ones deep in a dependency's tree (Rune's
+# Linux accessibility stack pulls in zvariant) are for that dependency to replace; security
+# vulnerabilities fail wherever they are.
+unmaintained = "workspace"
 
 [licenses]
 allow = [
@@ -15,6 +19,9 @@ confidence-threshold = 0.9
 [bans]
 multiple-versions = "allow"
 wildcards = "deny"
+# Our crates depend on each other by path and are never published, so a path without a
+# version isn't a wildcard. A registry dependency still needs one.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

@@ -1,6 +1,11 @@
 [files]
-extend-exclude = ["design/**/*.html", "target", "*.lock"]
+extend-exclude = ["design", "target", "*.lock"]
 
 [default.extend-words]
 # Short commit ids and fixture text that look like typos.
 ba = "ba"
+
+[default.extend-identifiers]
+# Plural of PNG, which typos splits into "PN" + "Gs".
+PNGs = "PNGs"
+

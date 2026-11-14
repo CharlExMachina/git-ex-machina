@@ -17,8 +17,8 @@ gxm-world = { path = "crates/gxm-world" }
 # Rune is pre-release and doesn't take pull requests. Pin a `dev` rev (never rewritten) and bump it
 # in its own PR that re-runs every journey and golden. The four patches below must come from the
 # same rev: they are the `[patch.crates-io]` table in Rune's root Cargo.toml.
-rune = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749" }
-rune-kit = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749" }
+rune = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749", version = "0.0.1" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749", version = "0.0.1" }
 
 jiff = { version = "0.2", default-features = false, features = ["std", "alloc", "tz-system", "tzdb-bundle-platform", "tzdb-zoneinfo"] }
 serde = { version = "1", features = ["derive"] }
