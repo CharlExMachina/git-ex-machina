@@ -76,7 +76,8 @@ pub fn summary(s: &App, v: &PullView, t: &Theme) -> El {
 }
 
 /// The `#131` row: 30 tall with 2 above and below, radius 6, tinted 12% with the pull
-/// request's colour and ringed at 40%; the lanes running past it show through.
+/// request's colour and ringed at 40%. Like a selected row, it sits beside the graph, and the
+/// lanes run past it uncovered.
 pub fn banner(s: &App, g: &GraphRow, cols: usize, light: Option<&Lit>, t: &Theme) -> El {
     let ink = lane_color(s, t);
     let fill = mix(ink, 0.12, t.canvas);
@@ -117,18 +118,17 @@ pub fn banner(s: &App, g: &GraphRow, cols: usize, light: Option<&Lit>, t: &Theme
             content = content.child(approved.ml(10.0));
         }
     }
-    // The lanes run on through the 2-point margins, over the tint; the text starts where the
-    // rows' subjects do.
-    let gutter = graph::width(cols);
+    // The text starts where the rows' subjects do.
     let tinted = row()
         .key(keys::PULL_BANNER)
-        .w_full()
+        .grow(1.0)
+        .min_w(0.0)
         .h(30.0)
         .my(2.0)
+        .pl(6.0)
         .radius(crate::theme::size::RADIUS_SM)
         .fill(fill)
         .box_shadow(Theme::ring(1.0, mix(ink, 0.4, fill)))
-        .child(row().w(gutter))
         .child(content);
-    row().w_full().h(34.0).child(tinted).child(graph::passing(t, g, cols, light, 34.0).absolute(0.0, 0.0))
+    row().w_full().h(34.0).child(graph::passing(t, g, cols, light, 34.0)).child(tinted)
 }
