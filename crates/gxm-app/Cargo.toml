@@ -22,6 +22,7 @@ tooling = ["rune/keys-overlay"]
 gxm-core.workspace = true
 rune.workspace = true
 rune-kit.workspace = true
+serde.workspace = true
 
 [lints]
 workspace = true

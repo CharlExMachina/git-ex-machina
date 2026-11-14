@@ -68,7 +68,6 @@ pub const SQUASH_AND_MERGE: &str = "squash-and-merge";
 pub const CLOSE_PULL_REQUEST: &str = "close-pull-request";
 pub const OPEN_ON_PROVIDER: &str = "open-on-provider";
 pub const PULL_INSPECTOR: &str = "pull-inspector";
-pub const TAB_OVERVIEW: &str = "tab-overview";
 pub const TAB_CHECKS: &str = "tab-checks";
 pub const TAB_CONVERSATION: &str = "tab-conversation";
 pub const MERGE_BOX: &str = "merge-box";

@@ -19,7 +19,13 @@ pub fn pane(s: &App, t: &Theme) -> El {
         // Still reading: a blank canvas, not a claim that there's nothing to show.
         None => col().w_full().grow(1.0),
         Some(History { error: Some(e), .. }) => empty(t, e),
-        Some(h) => col().w_full().grow(1.0).min_h(0.0).child(summary(s, h, t)).child(header(t)).child(rows(h, t)),
+        Some(h) => {
+            let top = match s.pull_view() {
+                Some(v) => super::on_graph::summary(s, v, t),
+                None => summary(s, h, t),
+            };
+            col().w_full().grow(1.0).min_h(0.0).child(top).child(header(t)).child(rows(h, t))
+        }
     };
     col().fill(t.canvas).child(super::toolbar::toolbar(s, t)).child(body)
 }
@@ -165,6 +171,10 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
     let id = r.id().to_owned();
     let selected = s.is_selected(&id);
     let lane = graph::color(t, g.color);
+    // With a pull request open, what isn't its dims: the content as a whole, the graph part by
+    // part, so the pull request's lane runs on bright through a dimmed row.
+    let light = h.lit.as_ref().and_then(|l| l.get(i));
+    let dim = light.is_some_and(|l| !l.node);
     // The graph sits beside the row's content, never under its highlight, so no rail is ever
     // covered or cut by a selection.
     let (graph_el, content) = match r {
@@ -177,7 +187,8 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
                 .gap(6.0)
                 .child(row().grow(1.0).child(text("Uncommitted changes").font(ty::BODY_STRONG).color(t.ink)))
                 .child(text(note).font(ty::CAPTION).color(t.ink_muted));
-            (graph::worktree(t, staged, lane, h.cols), c)
+            let mark = graph::worktree(t, staged, lane, h.cols);
+            (if dim { mark.opacity(graph::DIM) } else { mark }, c)
         }
         Row::Commit(c) => {
             let node = if c.refs.iter().any(|r| r.kind == RefKind::Head) {
@@ -188,12 +199,19 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
                 Node::Commit
             };
             let under_worktree = i > 0 && matches!(h.rows[i - 1], Row::Worktree { .. });
-            let look = RowLook { node, under_worktree, selected };
+            let look = RowLook { node, under_worktree, selected, light };
             (graph::row(t, g, h.cols, &look), commit_content(s, c, lane, selected, t))
         }
     };
+    let content = if dim { content.opacity(graph::DIM) } else { content };
     let mut card = content.grow(1.0).min_w(0.0).h(size::ROW_COMMIT).pl(6.0).pr(12.0).center_y().radius(size::RADIUS_SM);
-    let mut el = row().key(id.clone()).h(size::ROW_COMMIT).center_y();
+    // The pull request's row sits above its newest commit, in the same virtual row.
+    let banner = (s.pull_tip() == Some(i)).then(|| super::on_graph::banner(s, g, h.cols, light, t));
+    let mut el = row().h(size::ROW_COMMIT).center_y();
+    if banner.is_none() {
+        el = el.key(id.clone());
+    }
+    let key = id.clone();
     if selected {
         // Neighbouring selected rows merge into one block: the first keeps its top, a middle
         // row only its sides, the last its bottom and drop. A row with a selected row below
@@ -217,7 +235,7 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
     } else {
         card = card.hover(t.control_hover);
     }
-    el.child(graph_el).child(card).on_press_tx(move |s: &mut App, tx| {
+    let el = el.child(graph_el).child(card).on_press_tx(move |s: &mut App, tx| {
         let m = tx.mods();
         let how = if m.shift {
             Pick::Range
@@ -227,7 +245,11 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
             Pick::Plain
         };
         s.pick(&id, how);
-    })
+    });
+    match banner {
+        Some(b) => col().key(key).w_full().child(b).child(el),
+        None => el,
+    }
 }
 
 /// A commit's row content: refs and subject, author, date, short id.

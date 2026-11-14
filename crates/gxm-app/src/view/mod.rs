@@ -3,7 +3,6 @@
 
 mod cockpit;
 mod cockpit_side;
-mod facts;
 mod graph;
 mod history;
 mod inspector;

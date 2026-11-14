@@ -22,6 +22,7 @@ pub fn merge_pull_request() -> Journey {
     // The branch's tip belongs to #12, which is ready: every check green, no conflicts.
     .tap(keys::repo("dotfiles"))
     .tap_text("Add the branch to the right prompt")
+    .tap(keys::TAB_OVERVIEW)
     .wait_for(keys::PULL_REQUEST_ROW, "#12 Shorter zsh prompt")
     .tap(keys::SEE_PULL_REQUEST)
     .wait_for(keys::MERGE_BOX, "All checks passed")

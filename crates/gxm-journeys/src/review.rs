@@ -37,12 +37,14 @@ pub fn review_pull_request() -> Journey {
         "Someone sees that a commit belongs to a pull request, opens it on the graph, reviews its diff with comments, approves it and sees the approval land, without opening GitHub.",
         mockup_world,
     )
-    // A commit in an open pull request: labelled rows, then the pull request once GitHub answers.
+    // A commit in an open pull request: its Overview's details name the pull request once
+    // GitHub answers.
     .tap(TIP)
+    .tap(keys::TAB_OVERVIEW)
     .see_in(keys::INSPECTOR, "COMMIT")
-    .see_in(keys::INSPECTOR, "Author")
-    .see_in(keys::INSPECTOR, "Nov 11, 2026, 10:00 · 5 hours ago")
-    .see_in(keys::INSPECTOR, "1cabd07c")
+    .see_in(keys::INSPECTOR, "DETAILS")
+    .see_in(keys::INSPECTOR, "Nov 11, 2026, 10:00 · 5h")
+    .see_in(keys::INSPECTOR, "Commit 1cabd07c")
     .see_in(keys::INSPECTOR, "Parent 8f566f4")
     .wait_for(keys::PULL_REQUEST_ROW, "#131")
     .see_in(keys::PULL_REQUEST_ROW, "Open")
@@ -52,7 +54,7 @@ pub fn review_pull_request() -> Journey {
     // HEAD is the merge commit that merged #128.
     .tap(TIP)
     .see_in(keys::INSPECTOR, "HEAD OF MAIN")
-    .see_in(keys::INSPECTOR, "Parents bd3b72a · c0e8db2")
+    .see_in(keys::INSPECTOR, "Parents a52c1c2 · c0e8db2")
     .wait_for(keys::PULL_REQUEST_ROW, "#128")
     .see_in(keys::PULL_REQUEST_ROW, "Merged")
     .see_in(keys::PULL_REQUEST_ROW, "Virtualize commit rows past 10k")
