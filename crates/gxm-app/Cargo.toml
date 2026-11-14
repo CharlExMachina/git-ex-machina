@@ -1,0 +1,27 @@
+[package]
+name = "gxm-app"
+description = "git-ex-machina, the native app (Rune)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "git-ex-machina"
+path = "src/main.rs"
+
+[features]
+# Headless agent tooling (--snap, --tree, --script, --video, keycaps) in release builds.
+# Debug builds always have it.
+tooling = ["rune/keys-overlay"]
+
+[dependencies]
+gxm-core.workspace = true
+rune.workspace = true
+rune-kit.workspace = true
+
+[lints]
+workspace = true

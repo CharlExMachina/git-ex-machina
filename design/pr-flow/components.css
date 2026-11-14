@@ -1,0 +1,287 @@
+/* Git Client Design System — generated from tokens.json */
+:root, [data-theme="dark"] {
+  --chrome: #121110; --canvas: #191817; --raised: #201e1c; --control: #2a2725; --control-bottom: #2a2725; --control-hover: #322f2c; --well: #0e0d0c;
+  --line: #2b2826; --edge: #7a736b; --ink: #f1ede8; --ink-muted: #a8a199; --ink-faint: #7d766f;
+  --accent: #e2ad62; --accent-top: #ecbe7c; --accent-soft: #3a2d1b; --on-accent: #1c1307; --focus: #eab872;
+  --added: #7ccfa8; --added-soft: #1c2e25; --removed: #ec7e6b; --removed-soft: #35201c; --modified: var(--accent);
+  --lane-1: #e2ad62; --lane-2: #6fc2b4; --lane-3: #86ade8; --lane-4: #e88fa4; --lane-5: #b3c56e; --lane-6: #bba4e8; --on-lane: #121110;
+  --shadow-raised: inset 0 1px 0 rgba(255,255,255,0.07), 0 0 0 1px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.5); --shadow-primary: inset 0 1px 0 rgba(255,246,225,0.6), inset 0 -1px 0 rgba(90,50,0,0.3), 0 0 0 1px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.5); --shadow-badge: inset 0 1px 1px rgba(0,0,0,0.6);
+  --shadow-pressed: inset 0 1px 2px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.55);
+  --shadow-lifted: inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.35); --shadow-lifted-first: inset 0 1px 0 rgba(255,255,255,0.06), -1px 0 0 rgba(0,0,0,0.45), 1px 0 0 rgba(0,0,0,0.45), 0 -1px 0 rgba(0,0,0,0.45); --shadow-lifted-middle: -1px 0 0 rgba(0,0,0,0.45), 1px 0 0 rgba(0,0,0,0.45); --shadow-lifted-last: -1px 0 0 rgba(0,0,0,0.45), 1px 0 0 rgba(0,0,0,0.45), 0 1px 0 rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.35);
+  --shadow-well: inset 0 1px 2px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.03);
+  --shadow-popover: 0 0 0 1px rgba(0,0,0,0.6), 0 12px 32px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.3);
+  --shadow-focus: 0 0 0 2px #191817, 0 0 0 4px #eab872;
+}
+
+[data-theme="light"] {
+  --chrome: #eceae6; --canvas: #f7f5f2; --raised: #ffffff; --control: #ffffff; --control-bottom: #faf8f5; --control-hover: #f3f0ec; --well: #e6e2dc;
+  --line: #e2ddd6; --edge: #877f75; --ink: #1d1b19; --ink-muted: #665f57; --ink-faint: #8a8278;
+  --accent: #8f5a12; --accent-top: #b07628; --accent-soft: #f4e5ca; --on-accent: #ffffff; --focus: #8a560f;
+  --added: #1d7650; --added-soft: #e3f2e9; --removed: #b23d28; --removed-soft: #f9e4df; --modified: var(--accent);
+  --lane-1: #8f5c17; --lane-2: #1f7768; --lane-3: #2f62b0; --lane-4: #b03d5b; --lane-5: #5b6f1c; --lane-6: #6c4fb5; --on-lane: #ffffff;
+  --shadow-raised: inset 0 1px 0 #ffffff, 0 0 0 1px rgba(46,34,20,0.15), 0 1px 1px rgba(46,34,20,0.12), 0 2px 4px -2px rgba(46,34,20,0.22); --shadow-primary: inset 0 1px 0 rgba(255,232,190,0.38), inset 0 -1px 0 rgba(60,30,0,0.22), 0 0 0 1px #774a0c, 0 1px 1px rgba(46,34,20,0.20), 0 2px 4px -2px rgba(46,34,20,0.34); --shadow-badge: inset 0 1px 1px rgba(46,34,20,0.28);
+  --shadow-pressed: inset 0 1px 2px rgba(46,34,20,0.18), 0 0 0 1px rgba(46,34,20,0.15);
+  --shadow-lifted: inset 0 1px 0 rgba(255,255,255,1), 0 0 0 1px rgba(46,34,20,0.08), 0 2px 6px rgba(46,34,20,0.08); --shadow-lifted-first: inset 0 1px 0 rgba(255,255,255,1), -1px 0 0 rgba(46,34,20,0.08), 1px 0 0 rgba(46,34,20,0.08), 0 -1px 0 rgba(46,34,20,0.08); --shadow-lifted-middle: -1px 0 0 rgba(46,34,20,0.08), 1px 0 0 rgba(46,34,20,0.08); --shadow-lifted-last: -1px 0 0 rgba(46,34,20,0.08), 1px 0 0 rgba(46,34,20,0.08), 0 1px 0 rgba(46,34,20,0.08), 0 2px 6px rgba(46,34,20,0.08);
+  --shadow-well: inset 0 1px 2px rgba(46,34,20,0.10), inset 0 0 0 1px rgba(46,34,20,0.06);
+  --shadow-popover: 0 0 0 1px rgba(46,34,20,0.10), 0 12px 32px rgba(46,34,20,0.16), 0 2px 6px rgba(46,34,20,0.06);
+  --shadow-focus: 0 0 0 2px #f7f5f2, 0 0 0 4px #8a560f;
+}
+
+:root {
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-12: 48px;
+  --radius-xs: 4px; --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 14px; --radius-pill: 999px;
+  --size-sidebar: 248px; --size-inspector: 360px; --size-toolbar: 48px; --size-row-repo: 36px; --size-row-commit: 30px; --size-row-file: 28px; --size-lane: 14px; --size-node: 9px;
+  --font-sans: "Hanken Grotesk", "SF Pro Text", system-ui, sans-serif;
+  --font-serif: "Instrument Serif", "New York", Georgia, serif;
+  --font-mono: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+.display { font-family: var(--font-serif); font-size: 30px; line-height: 34px; font-weight: 400; letter-spacing: -0.01em; }
+
+.display-sm { font-family: var(--font-sans); font-size: 18px; line-height: 24px; font-weight: 600; letter-spacing: -0.01em; }
+
+.title { font-family: var(--font-sans); font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: -0.005em; }
+
+.body-strong { font-family: var(--font-sans); font-size: 13px; line-height: 18px; font-weight: 500; }
+
+.body { font-family: var(--font-sans); font-size: 13px; line-height: 18px; font-weight: 400; }
+
+.caption { font-family: var(--font-sans); font-size: 12px; line-height: 16px; font-weight: 400; }
+
+.label { font-family: var(--font-sans); font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; }
+
+.mono { font-family: var(--font-mono); font-size: 12px; line-height: 18px; font-weight: 400; }
+
+.mono-sm { font-family: var(--font-mono); font-size: 11px; line-height: 16px; font-weight: 500; }
+
+/* ---------- base ---------- */
+body { margin: 0; font-family: var(--font-sans); font-size: 13px; line-height: 18px; background: var(--canvas); color: var(--ink); -webkit-font-smoothing: antialiased; }
+
+.gu-icon { flex: none; display: block; }
+
+.gu-stage { padding: var(--space-4); display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+
+.gu-stage-col { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+
+.gu-on-chrome { background: var(--chrome); }
+
+.gu-on-raised { background: var(--raised); }
+
+.gu-mono { font-family: var(--font-mono); }
+
+
+/* ---------- Button ---------- */
+.gu-btn { font: inherit; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; border: 0; cursor: default; color: var(--ink); background: linear-gradient(var(--control), var(--control-bottom)); box-shadow: var(--shadow-raised); border-radius: var(--radius-md); height: 30px; padding: 0 var(--space-3); white-space: nowrap; transition: background-color 120ms, box-shadow 120ms, transform 120ms; }
+
+.gu-btn-sm { height: 24px; padding: 0 var(--space-2); font-size: 12px; border-radius: var(--radius-sm); }
+
+.gu-btn-icononly { padding: 0; width: 30px; justify-content: center; }
+
+.gu-btn-sm.gu-btn-icononly { width: 24px; }
+
+.gu-btn:hover { background: var(--control-hover); }
+
+.gu-btn:active, .gu-btn[data-pressed] { box-shadow: var(--shadow-pressed); transform: translateY(0.5px); }
+
+.gu-btn:focus-visible { outline: none; box-shadow: var(--shadow-raised), var(--shadow-focus); }
+
+.gu-btn-primary { color: var(--on-accent); background: linear-gradient(var(--accent-top), var(--accent)); box-shadow: var(--shadow-primary); }
+
+.gu-btn-primary:hover { background: linear-gradient(var(--accent-top), var(--accent-top)); }
+
+.gu-btn-ghost { background: transparent; box-shadow: none; color: var(--ink-muted); }
+
+.gu-btn-ghost:hover { background: var(--control-hover); color: var(--ink); }
+
+.gu-btn-ghost:active { box-shadow: var(--shadow-pressed); }
+
+.gu-btn:disabled { color: var(--ink-faint); background: var(--control); box-shadow: var(--shadow-raised); opacity: .6; }
+
+.gu-btn-badge { font-family: var(--font-mono); font-size: 11px; line-height: 16px; padding: 0 5px; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent); }
+
+.gu-btn-primary .gu-btn-badge { background: var(--on-accent); color: var(--accent-top); box-shadow: var(--shadow-badge); }
+
+
+/* ---------- SegmentedControl ---------- */
+.gu-seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--radius-md); background: var(--well); box-shadow: var(--shadow-well); }
+
+.gu-seg-opt { font: inherit; font-size: 12px; font-weight: 500; border: 0; background: transparent; color: var(--ink-muted); height: 24px; padding: 0 var(--space-3); border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 6px; cursor: default; transition: color 120ms, background-color 160ms, box-shadow 160ms; }
+
+.gu-seg-opt:hover { color: var(--ink); }
+
+.gu-seg-opt[aria-selected="true"] { background: var(--control); color: var(--ink); box-shadow: var(--shadow-raised); }
+
+.gu-seg-opt:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+
+/* ---------- SearchField ---------- */
+.gu-search { display: flex; align-items: center; gap: var(--space-2); height: 28px; padding: 0 var(--space-2) 0 var(--space-2); border-radius: var(--radius-sm); background: var(--well); box-shadow: var(--shadow-well); color: var(--ink-faint); }
+
+.gu-search:focus-within { box-shadow: var(--shadow-well), var(--shadow-focus); }
+
+.gu-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; color: var(--ink); }
+
+.gu-search input::placeholder { color: var(--ink-faint); }
+
+.gu-kbd { font-family: var(--font-mono); font-size: 11px; line-height: 16px; padding: 0 5px; border-radius: var(--radius-xs); color: var(--ink-muted); background: var(--control); box-shadow: var(--shadow-raised); }
+
+
+/* ---------- RefBadge ---------- */
+.gu-ref { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px 0 6px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: 500; line-height: 20px; color: var(--ink); background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; }
+
+.gu-ref-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lane); flex: none; }
+
+.gu-ref-remote { color: var(--ink-muted); background: transparent; }
+
+.gu-ref-remote .gu-ref-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--lane); }
+
+.gu-ref-prefix { color: var(--ink-muted); font-weight: 400; }
+
+.gu-ref-tag { padding-left: 7px; color: var(--ink-muted); background: transparent; }
+
+.gu-ref-head { background: var(--accent-soft); box-shadow: none; color: var(--ink); }
+
+.gu-ref-head .gu-ref-dot { background: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 3px var(--accent); width: 5px; height: 5px; margin: 0 2px 0 1px; }
+
+
+/* ---------- RepoRow ---------- */
+.gu-repo { display: flex; align-items: center; gap: 10px; height: var(--size-row-repo); padding: 0 var(--space-2); border-radius: var(--radius-sm); color: var(--ink); cursor: default; transition: background-color 120ms, box-shadow 160ms; }
+
+.gu-repo:hover { background: var(--control-hover); }
+
+.gu-repo[aria-selected="true"] { background: var(--raised); box-shadow: var(--shadow-lifted); }
+
+.gu-repo-tile { width: 22px; height: 22px; border-radius: var(--radius-sm); background: var(--lane); color: var(--on-lane); font-weight: 600; font-size: 12px; display: grid; place-items: center; flex: none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.15); }
+
+.gu-repo-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.gu-repo-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 16px; }
+
+.gu-repo-meta { font-size: 11.5px; line-height: 14px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 4px; align-items: center; }
+
+.gu-repo-side { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted); }
+
+.gu-count { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent); font-family: var(--font-mono); font-size: 11px; line-height: 18px; text-align: center; }
+
+
+/* ---------- CommitGraphRow ---------- */
+.gu-commit { display: flex; align-items: center; height: var(--size-row-commit); padding-right: var(--space-3); border-radius: var(--radius-sm); cursor: default; transition: background-color 120ms, box-shadow 160ms; }
+
+.gu-commit:hover { background: var(--control-hover); }
+
+.gu-commit[aria-selected="true"] { background: var(--raised); box-shadow: var(--shadow-lifted); position: relative; z-index: 1; }
+
+/* Neighbouring selected rows merge into one block (each row sits in a display: contents host). */
+.sc-host-x:has(> .gu-commit[aria-selected="true"]):has(+ .sc-host-x > .gu-commit[aria-selected="true"]) > .gu-commit[aria-selected="true"] { border-bottom-left-radius: 0; border-bottom-right-radius: 0; box-shadow: var(--shadow-lifted-first); z-index: 2; }
+
+.sc-host-x:has(> .gu-commit[aria-selected="true"]) + .sc-host-x > .gu-commit[aria-selected="true"] { border-top-left-radius: 0; border-top-right-radius: 0; box-shadow: var(--shadow-lifted-last); }
+
+.sc-host-x:has(> .gu-commit[aria-selected="true"]) + .sc-host-x:has(+ .sc-host-x > .gu-commit[aria-selected="true"]) > .gu-commit[aria-selected="true"] { box-shadow: var(--shadow-lifted-middle); }
+
+.gu-commit-graph { flex: none; display: block; }
+
+.gu-commit-graph .rail { fill: none; stroke-width: 2; stroke-linecap: round; }
+
+.gu-commit-graph .node-ring { fill: var(--canvas); }
+
+.gu-commit[aria-selected="true"] .node-ring { fill: var(--raised); }
+
+.gu-commit-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+
+.gu-commit-subject { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.gu-commit-merge .gu-commit-subject { color: var(--ink-muted); font-weight: 400; }
+
+.gu-commit-author { width: 128px; flex: none; display: flex; align-items: center; gap: 6px; color: var(--ink-muted); font-size: 12px; white-space: nowrap; overflow: hidden; }
+
+.gu-avatar { width: 16px; height: 16px; border-radius: 50%; flex: none; background: var(--lane); color: var(--on-lane); font-size: 9px; font-weight: 600; display: grid; place-items: center; }
+
+.gu-commit-date { width: 64px; flex: none; text-align: right; color: var(--ink-muted); font-size: 12px; white-space: nowrap; }
+
+.gu-commit-sha { width: 60px; flex: none; text-align: right; font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+
+.gu-commit[aria-selected="true"] .gu-commit-sha { color: var(--ink-muted); }
+
+
+/* ---------- FileChangeRow ---------- */
+.gu-file { display: flex; align-items: center; gap: var(--space-2); height: var(--size-row-file); padding: 0 var(--space-2); border-radius: var(--radius-sm); cursor: default; }
+
+.gu-file:hover { background: var(--control-hover); }
+
+.gu-file[aria-selected="true"] { background: var(--raised); box-shadow: var(--shadow-lifted); }
+
+.gu-status { width: 16px; height: 16px; border-radius: var(--radius-xs); font-family: var(--font-mono); font-size: 10px; font-weight: 500; line-height: 16px; text-align: center; flex: none; box-shadow: inset 0 0 0 1px currentColor; }
+
+.gu-status-A { color: var(--added); }
+
+.gu-status-M { color: var(--modified); }
+
+.gu-status-D { color: var(--removed); }
+
+.gu-status-R { color: var(--lane-3); }
+
+.gu-file-path { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: ltr; }
+
+.gu-file-dir { color: var(--ink-muted); }
+
+.gu-file-name { color: var(--ink); font-weight: 500; }
+
+.gu-file-stat { font-family: var(--font-mono); font-size: 11px; display: flex; gap: 6px; align-items: center; }
+
+.gu-file-stat .add { color: var(--added); }
+
+.gu-file-stat .del { color: var(--removed); }
+
+.gu-pips { display: flex; gap: 2px; }
+
+.gu-pip { width: 5px; height: 5px; border-radius: 1.5px; background: var(--line); }
+
+.gu-pip.add { background: var(--added); }
+
+.gu-pip.del { background: var(--removed); }
+
+
+/* ---------- DiffHunk ---------- */
+.gu-hunk { border-radius: var(--radius-lg); overflow: hidden; background: var(--canvas); box-shadow: inset 0 0 0 1px var(--line); font-family: var(--font-mono); font-size: 12px; line-height: 18px; }
+
+.gu-hunk-head { padding: 6px var(--space-3); color: var(--ink-muted); background: var(--chrome); border-bottom: 1px solid var(--line); font-size: 11px; }
+
+.gu-hunk-line { display: grid; grid-template-columns: 36px 36px 16px 1fr; white-space: pre; }
+
+.gu-hunk-no { color: var(--ink-faint); text-align: right; padding-right: 8px; font-size: 11px; user-select: none; }
+
+.gu-hunk-sign { color: var(--ink-faint); text-align: center; user-select: none; }
+
+.gu-hunk-text { overflow: hidden; text-overflow: ellipsis; padding-right: var(--space-3); }
+
+.gu-hunk-add { background: var(--added-soft); }
+
+.gu-hunk-add .gu-hunk-sign, .gu-hunk-add .gu-hunk-no { color: var(--added); }
+
+.gu-hunk-del { background: var(--removed-soft); }
+
+.gu-hunk-del .gu-hunk-sign, .gu-hunk-del .gu-hunk-no { color: var(--removed); }
+
+
+/* ---------- AppShell ---------- */
+.gu-shell { display: grid; grid-template-columns: var(--size-sidebar) 1fr var(--size-inspector); grid-template-rows: var(--size-toolbar) 1fr; height: 100%; min-height: 0; background: var(--chrome); border-radius: var(--radius-xl); overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+
+.gu-shell-bar { grid-column: 1 / -1; display: grid; grid-template-columns: var(--size-sidebar) 1fr var(--size-inspector); align-items: center; border-bottom: 1px solid var(--line); background: var(--chrome); }
+
+.gu-shell-bar > * { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); min-width: 0; }
+
+.gu-shell-side { background: var(--chrome); border-right: 1px solid var(--line); min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+.gu-shell-main { background: var(--canvas); min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+.gu-shell-inspector { background: var(--raised); border-left: 1px solid var(--line); min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+.gu-traffic { display: flex; gap: 8px; padding-right: var(--space-2); }
+
+.gu-traffic i { width: 12px; height: 12px; border-radius: 50%; background: var(--control-hover); box-shadow: inset 0 0 0 1px var(--line); display: block; }
+
+.gu-section-label { font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); padding: var(--space-4) var(--space-3) var(--space-2); }
+
+.gu-display { font-family: var(--font-serif); font-size: 30px; line-height: 34px; letter-spacing: -0.01em; font-weight: 400; }
+
+.gu-display-sm { font-family: var(--font-serif); font-size: 22px; line-height: 26px; font-weight: 400; }

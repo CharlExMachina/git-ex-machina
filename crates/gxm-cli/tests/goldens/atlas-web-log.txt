@@ -1,0 +1,12 @@
+◉─╮     1faa4ce  (HEAD → main) Merge feature/graph-virtualization  · Ana Ruiz · 2h
+│ ●     c0e8db2  (feature/graph-virtualization) Virtualize commit rows past 10k  · Kenji Mori · 3h
+│ │ ●   1cabd07  (fix/avatar-cache) Evict avatars by last paint, not insert  · Lea Brandt · 5h
+● │ │   a52c1c2  (origin/main) Spring the sidebar collapse  · Ana Ruiz · Yesterday
+│ ● │   4f7549e  Draw lanes with cubic joins  · Kenji Mori · Mon
+├─┼─●   8f566f4  Measure avatar cache pressure  · Lea Brandt · Mon
+● │     76245e5  (tag v0.4.0) Fix avatar cache eviction  · Lea Brandt · Mon
+├─●     9c902d7  Start graph virtualization  · Kenji Mori · Nov 8
+●       5b906db  Bump rune to 0.9  · Ana Ruiz · Nov 7
+●       4166440  Tune brass for the light theme  · Kenji Mori · Nov 6
+●       6572a47  Split view remembers column widths  · Ana Ruiz · Nov 5
+●       8c1088a  Read refs with gix instead of shelling out  · Lea Brandt · Nov 4

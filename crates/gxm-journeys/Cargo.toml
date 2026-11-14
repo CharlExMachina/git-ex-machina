@@ -1,0 +1,17 @@
+[package]
+name = "gxm-journeys"
+description = "Journeys: long, user-shaped workflows that are the app's tests, demo videos and PR proof at once."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gxm-app = { path = "../gxm-app" }
+gxm-core.workspace = true
+gxm-world.workspace = true
+rune.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
