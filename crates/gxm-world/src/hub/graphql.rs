@@ -53,9 +53,10 @@ fn node_id(owner: &str, name: &str, number: u64) -> String {
 }
 
 fn pull_mut<'a>(s: &'a mut State, id: &str) -> Option<&'a mut PullData> {
-    s.repos.iter_mut().flat_map(|(o, n, pulls)| pulls.iter_mut().map(move |p| (o.clone(), n.clone(), p))).find_map(
-        |(o, n, p)| (node_id(&o, &n, p.number) == id).then_some(p),
-    )
+    s.repos
+        .iter_mut()
+        .flat_map(|(o, n, pulls)| pulls.iter_mut().map(move |p| (o.clone(), n.clone(), p)))
+        .find_map(|(o, n, p)| (node_id(&o, &n, p.number) == id).then_some(p))
 }
 
 fn summary(owner: &str, name: &str, p: &PullData) -> Value {
@@ -136,8 +137,7 @@ fn pull(owner: &str, name: &str, p: &PullData) -> Value {
     v["reviews"] = json!({ "nodes": submitted.into_iter().map(review_json).collect::<Vec<_>>() });
     v["comments"] = json!({ "nodes": p.comments.iter().map(comment_json).collect::<Vec<_>>() });
     v["reviewThreads"] = json!({ "nodes": threads });
-    v["lastCommit"] =
-        json!({ "nodes": [{ "commit": { "statusCheckRollup": { "contexts": { "nodes": checks } } } }] });
+    v["lastCommit"] = json!({ "nodes": [{ "commit": { "statusCheckRollup": { "contexts": { "nodes": checks } } } }] });
     v
 }
 
@@ -178,7 +178,8 @@ fn add_review(s: &mut State, vars: &Value) -> Value {
 /// `addPullRequestReviewThreadReply`: a reply, held in the pending review.
 fn reply(s: &mut State, vars: &Value) -> Value {
     let (viewer, now) = (s.viewer.clone(), s.now);
-    let (review, thread) = (vars["reviewId"].as_str().unwrap_or_default(), vars["threadId"].as_str().unwrap_or_default());
+    let (review, thread) =
+        (vars["reviewId"].as_str().unwrap_or_default(), vars["threadId"].as_str().unwrap_or_default());
     let body = vars["body"].as_str().unwrap_or_default().to_owned();
     for (_, _, pulls) in &mut s.repos {
         for p in pulls {
@@ -186,7 +187,12 @@ fn reply(s: &mut State, vars: &Value) -> Value {
             let Some(t) = p.threads.iter_mut().find(|t| t.id == thread) else {
                 return error("Could not resolve to a PullRequestReviewThread");
             };
-            t.comments.push(CommentData { author: viewer, body: body.clone(), at: now, review: Some(review.to_owned()) });
+            t.comments.push(CommentData {
+                author: viewer,
+                body: body.clone(),
+                at: now,
+                review: Some(review.to_owned()),
+            });
             let path = t.path.clone();
             p.reviews[r].sent.push(SentComment { path, line: None, body, thread: Some(thread.to_owned()) });
             return json!({ "data": { "addPullRequestReviewThreadReply": { "comment": { "id": format!("C_{}", now.as_second()) } } } });

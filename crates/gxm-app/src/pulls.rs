@@ -73,7 +73,13 @@ pub struct Machine {
 
 impl Default for Machine {
     fn default() -> Self {
-        Machine { seq: Seq::default(), index: Fetch::Idle, details: Fetch::Idle, details_for: None, sending: Sending::Idle }
+        Machine {
+            seq: Seq::default(),
+            index: Fetch::Idle,
+            details: Fetch::Idle,
+            details_for: None,
+            sending: Sending::Idle,
+        }
     }
 }
 
@@ -84,7 +90,7 @@ pub enum Event {
     IndexLanded(Attempt, Result<Index, String>),
     /// Read this pull request in full.
     Want(u64),
-    DetailsLanded(Attempt, u64, Result<Details, String>),
+    DetailsLanded(Attempt, u64, Result<Box<Details>, String>),
     Submit(u64, Verdict),
     Submitted(Attempt, u64, Result<(), String>),
 }
@@ -95,7 +101,7 @@ pub enum Effect {
     FetchDetails(Attempt, u64),
     Send(Attempt, u64),
     KeepIndex(Index),
-    KeepDetails(u64, Details),
+    KeepDetails(u64, Box<Details>),
     /// The review is with the provider: its drafts can go.
     ClearDrafts(u64),
 }
@@ -175,7 +181,7 @@ pub struct Pulls {
     pub details: HashMap<u64, Details>,
     pub machine: Machine,
     index_job: Latest<(Attempt, Result<Index, String>)>,
-    details_job: Latest<(Attempt, u64, Result<Details, String>)>,
+    details_job: Latest<(Attempt, u64, Result<Box<Details>, String>)>,
     send_job: Latest<(Attempt, u64, Result<(), String>)>,
 }
 
@@ -295,7 +301,7 @@ impl Pulls {
             }
             Effect::KeepIndex(index) => self.index = Some(index),
             Effect::KeepDetails(n, d) => {
-                self.details.insert(n, d);
+                self.details.insert(n, *d);
             }
             Effect::ClearDrafts(n) => return Some(n),
         }
@@ -341,11 +347,11 @@ fn fetch_details(
     key: &RepoKey,
     repo: &std::path::Path,
     n: u64,
-) -> Result<Details, String> {
+) -> Result<Box<Details>, String> {
     let pull = forge.pull(n).map_err(|e| e.to_string())?;
     cache::save(env, key, &format!("pull-{n}"), &pull);
     let changes = local::changes(env, repo, &pull.summary).map_err(|e| e.to_string());
-    Ok(Details { pull, changes: Some(changes) })
+    Ok(Box::new(Details { pull, changes: Some(changes) }))
 }
 
 #[cfg(test)]
@@ -376,7 +382,9 @@ mod tests {
         };
         assert!(step(&mut m, Event::Submit(131, Verdict::Approve)).is_empty(), "one review at a time");
         let effects: Vec<Effect> = step(&mut m, Event::Submitted(a, 131, Ok(()))).into_iter().collect();
-        let [Effect::ClearDrafts(131), Effect::FetchDetails(b, 131)] = effects.as_slice() else { panic!("{effects:?}") };
+        let [Effect::ClearDrafts(131), Effect::FetchDetails(b, 131)] = effects.as_slice() else {
+            panic!("{effects:?}")
+        };
         assert!(matches!(m.sending, Sending::Refreshing { .. }));
         step(&mut m, Event::DetailsLanded(*b, 131, Err("offline".to_owned())));
         assert_eq!(m.sending, Sending::Sent { number: 131, verdict: Verdict::Approve });

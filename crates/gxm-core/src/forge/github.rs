@@ -19,12 +19,12 @@ pub struct GitHub {
 }
 
 impl GitHub {
-    pub fn new(api: String, token: String, owner: String, name: String) -> GitHub {
+    pub fn new(api: &str, token: String, owner: String, name: String) -> GitHub {
         GitHub { endpoint: format!("{}/graphql", api.trim_end_matches('/')), token, owner, name }
     }
 
     /// Runs one operation; GraphQL reports failures in `errors`, beside or instead of `data`.
-    fn run(&self, operation: &str, query: &str, variables: Value) -> Result<Value, ForgeError> {
+    fn run(&self, operation: &str, query: &str, variables: &Value) -> Result<Value, ForgeError> {
         let body = json!({ "operationName": operation, "query": query, "variables": variables });
         let mut answer = http::post_json(&self.endpoint, &self.token, &body)?;
         if let Some(e) = answer.get("errors").and_then(Value::as_array).and_then(|e| e.first()) {
@@ -52,7 +52,7 @@ impl Forge for GitHub {
     }
 
     fn viewer(&self) -> Result<User, ForgeError> {
-        let data = self.run("Viewer", "query Viewer { viewer { login name } }", json!({}))?;
+        let data = self.run("Viewer", "query Viewer { viewer { login name } }", &json!({}))?;
         user(&data["viewer"])
     }
 
@@ -66,7 +66,7 @@ impl Forge for GitHub {
 }}
 {SUMMARY}"
         );
-        let data = self.run("Pulls", &query, self.repo_vars())?;
+        let data = self.run("Pulls", &query, &self.repo_vars())?;
         let repo = &data["repository"];
         nodes(&repo["open"]).iter().chain(nodes(&repo["merged"]).iter()).map(summary).collect()
     }
@@ -97,7 +97,7 @@ impl Forge for GitHub {
         );
         let mut vars = self.repo_vars();
         vars["number"] = json!(number);
-        let data = self.run("Pull", &query, vars)?;
+        let data = self.run("Pull", &query, &vars)?;
         let pr = &data["repository"]["pullRequest"];
         if pr.is_null() {
             return Err(ForgeError::Api(format!("there's no pull request #{number}")));
@@ -116,7 +116,7 @@ impl Forge for GitHub {
             "mutation AddReview($pullRequestId: ID!, $commitOID: GitObjectID!, $threads: [DraftPullRequestReviewThread]) {
   addPullRequestReview(input: {pullRequestId: $pullRequestId, commitOID: $commitOID, threads: $threads}) { pullRequestReview { id } }
 }",
-            json!({ "pullRequestId": pull.id, "commitOID": pull.summary.head_sha, "threads": threads }),
+            &json!({ "pullRequestId": pull.id, "commitOID": pull.summary.head_sha, "threads": threads }),
         )?;
         let review_id = text(&added["addPullRequestReview"]["pullRequestReview"]["id"])?;
         for reply in &review.replies {
@@ -125,7 +125,7 @@ impl Forge for GitHub {
                 "mutation ReplyToThread($reviewId: ID!, $threadId: ID!, $body: String!) {
   addPullRequestReviewThreadReply(input: {pullRequestReviewId: $reviewId, pullRequestReviewThreadId: $threadId, body: $body}) { comment { id } }
 }",
-                json!({ "reviewId": review_id, "threadId": reply.thread, "body": reply.body }),
+                &json!({ "reviewId": review_id, "threadId": reply.thread, "body": reply.body }),
             )?;
         }
         let event = match review.verdict {
@@ -138,7 +138,7 @@ impl Forge for GitHub {
             "mutation SubmitReview($reviewId: ID!, $event: PullRequestReviewEvent!, $body: String) {
   submitPullRequestReview(input: {pullRequestReviewId: $reviewId, event: $event, body: $body}) { pullRequestReview { id state } }
 }",
-            json!({ "reviewId": review_id, "event": event, "body": review.body }),
+            &json!({ "reviewId": review_id, "event": event, "body": review.body }),
         )?;
         Ok(())
     }
@@ -208,10 +208,15 @@ fn status(state: &str) -> Option<ReviewStatus> {
 }
 
 fn pull(v: &Value) -> Result<Pull, ForgeError> {
+    let author = user(&v["author"])?;
     let mut reviewers = Vec::new();
     for r in nodes(&v["latestReviews"]) {
-        if let Some(status) = r["state"].as_str().and_then(status) {
-            reviewers.push(Reviewer { user: user(&r["author"])?, status });
+        // The author answering a thread files a review too; they aren't their own reviewer.
+        if let Some(status) = r["state"].as_str().and_then(status)
+            && let who = user(&r["author"])?
+            && who.login != author.login
+        {
+            reviewers.push(Reviewer { user: who, status });
         }
     }
     for r in nodes(&v["reviewRequests"]) {

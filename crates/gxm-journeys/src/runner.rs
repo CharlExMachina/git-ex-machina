@@ -128,12 +128,11 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
             Step::Wait(s) => d.advance_to(t + s),
             Step::ScrollTo(key) => {
                 for _ in 0..80 {
-                    let e = d
-                        .rt
-                        .elements()
-                        .into_iter()
-                        .find(|e| e.key.as_deref() == Some(key.as_str()) && !e.exiting)
-                        .ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
+                    let e =
+                        d.rt.elements()
+                            .into_iter()
+                            .find(|e| e.key.as_deref() == Some(key.as_str()) && !e.exiting)
+                            .ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
                     if e.visible[3] >= e.rect[3] - 0.5 {
                         break;
                     }

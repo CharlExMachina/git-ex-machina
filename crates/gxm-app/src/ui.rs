@@ -285,7 +285,11 @@ pub fn card(t: &Theme) -> El {
 
 /// `.count` beside a tab's label: mono 10.5/14, 5 a side, a pill of control-hover.
 pub fn tab_count(t: &Theme, n: usize) -> El {
-    row().px(5.0).radius(size::PILL).fill(t.control_hover).child(text(n.to_string()).font(ty::TAB_COUNT).color(t.ink_muted))
+    row()
+        .px(5.0)
+        .radius(size::PILL)
+        .fill(t.control_hover)
+        .child(text(n.to_string()).font(ty::TAB_COUNT).color(t.ink_muted))
 }
 
 /// `.composer`: a well, radius 8, with the well's inner shade.
@@ -310,5 +314,9 @@ pub fn checkbox(t: &Theme, on: bool) -> El {
 
 /// An icon and a word in one colour, 4 apart, 12px: `✓ Approved`, `× 1 failing`.
 pub fn signal(glyph: &'static Icon, color: Color, label: impl Into<String>) -> El {
-    row().gap(4.0).center_y().child(icon(glyph, 12.0).color(color)).child(text(label.into()).font(ty::CAPTION).color(color))
+    row()
+        .gap(4.0)
+        .center_y()
+        .child(icon(glyph, 12.0).color(color))
+        .child(text(label.into()).font(ty::CAPTION).color(color))
 }

@@ -181,9 +181,11 @@ fn conversation(s: &App, p: &Pull, t: &Theme) -> El {
             }
             Item::Thread(th) => {
                 let place = th.line.map_or_else(|| th.path.clone(), |l| format!("{}:{l}", th.path));
-                let mut card = ui::card(t).w_full().padding(12.0).gap(10.0).child(
-                    text(place).font(ty::MONO_11).color(t.ink_muted).truncate(),
-                );
+                let mut card = ui::card(t)
+                    .w_full()
+                    .padding(12.0)
+                    .gap(10.0)
+                    .child(text(place).font(ty::MONO_11).color(t.ink_muted).truncate());
                 for cm in &th.comments {
                     card = card.child(entry(s, t, &cm.author, time::relative(cm.at, now, &s.env.tz), &cm.body));
                 }
@@ -196,16 +198,13 @@ fn conversation(s: &App, p: &Pull, t: &Theme) -> El {
 
 /// Someone did something, and what they wrote.
 fn entry(s: &App, t: &Theme, who: &gxm_core::forge::model::User, did: String, body: &str) -> El {
-    let mut c = col()
-        .w_full()
-        .gap(2.0)
-        .child(
-            row()
-                .gap(6.0)
-                .center_y()
-                .child(pull_parts::person(s, t, who, ty::CAPTION_STRONG))
-                .child(text(did).font(ty::CAPTION).color(t.ink_muted)),
-        );
+    let mut c = col().w_full().gap(2.0).child(
+        row()
+            .gap(6.0)
+            .center_y()
+            .child(pull_parts::person(s, t, who, ty::CAPTION_STRONG))
+            .child(text(did).font(ty::CAPTION).color(t.ink_muted)),
+    );
     if !body.trim().is_empty() {
         let (body, spans) = pull_parts::inline(t, body.trim(), false);
         c = c.child(rich(body, spans).font(ty::BODY).color(t.ink).pl(22.0).w_full());

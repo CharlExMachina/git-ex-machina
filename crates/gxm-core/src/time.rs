@@ -85,12 +85,12 @@ pub fn ago(at: Timestamp, now: Timestamp) -> String {
     let say = |n: i64, unit: &str| if n == 1 { format!("1 {unit} ago") } else { format!("{n} {unit}s ago") };
     match secs {
         ..60 => "just now".to_owned(),
-        ..3600 => say(n(60), "minute"),
-        ..86_400 => say(n(3600), "hour"),
-        ..172_800 => "yesterday".to_owned(),
-        ..1_209_600 => say(n(86_400), "day"),
-        ..5_184_000 => say(n(604_800), "week"),
-        ..31_536_000 => say(n(2_592_000), "month"),
+        60..3600 => say(n(60), "minute"),
+        3600..86_400 => say(n(3600), "hour"),
+        86_400..172_800 => "yesterday".to_owned(),
+        172_800..1_209_600 => say(n(86_400), "day"),
+        1_209_600..5_184_000 => say(n(604_800), "week"),
+        5_184_000..31_536_000 => say(n(2_592_000), "month"),
         _ => say(n(31_536_000), "year"),
     }
 }

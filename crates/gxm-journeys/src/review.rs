@@ -88,6 +88,7 @@ pub fn review_pull_request() -> Journey {
     .see_in(keys::reviewer("ana-ruiz"), "Ana Ruiz (you)")
     .see_in(keys::reviewer("ana-ruiz"), "Requested")
     .see_in(keys::TAB_CONVERSATION, "Conversation 4")
+    .gone(keys::reviewer("lea-brandt")) // the author isn't her own reviewer
     .mark("pull-request")
     // Checks and the conversation, without a browser.
     .tap(keys::TAB_CHECKS)
@@ -120,7 +121,14 @@ pub fn review_pull_request() -> Journey {
     .see_in(keys::COCKPIT_FILES, "1 of 2 viewed")
     .tap(keys::pull_file(CACHE))
     .tap(keys::VERDICT_APPROVE)
+    .gone(keys::reviewer("lea-brandt"))
     .mark("cockpit")
+    // Split shows the lines as they were beside the lines as they are.
+    .tap(keys::DIFF_SPLIT)
+    .see_in(keys::diff_line(CACHE, false, 5), "// avatar cache 5")
+    .see_in(keys::diff_line(CACHE, true, 5), "let oldest = self.by_last_paint.pop_min(); // 1")
+    .mark("split")
+    .tap(keys::DIFF_UNIFIED)
     // A reply and a new comment, kept as drafts on this machine until the review goes.
     .scroll_to(keys::reply("PRRT_1"))
     .tap(keys::reply("PRRT_1"))

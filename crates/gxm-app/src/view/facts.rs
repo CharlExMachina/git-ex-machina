@@ -42,7 +42,8 @@ pub fn facts(s: &App, c: &Commit, t: &Theme) -> El {
             .box_shadow(Theme::ring(1.0, t.line))
             .child(text(c.id.get(..8).unwrap_or(&c.id).to_owned()).font(ty::MONO_SM).color(t.ink)),
     );
-    let mut rows = col().w_full().gap(10.0).child(fact("Author", author)).child(fact("Date", date)).child(fact("Commit", chip));
+    let mut rows =
+        col().w_full().gap(10.0).child(fact("Author", author)).child(fact("Date", date)).child(fact("Commit", chip));
     if !c.parents.is_empty() {
         let parents: Vec<&str> = c.parents.iter().map(|p| p.get(..7).unwrap_or(p)).collect();
         let label = if parents.len() == 1 { "Parent" } else { "Parents" };
@@ -55,7 +56,8 @@ pub fn facts(s: &App, c: &Commit, t: &Theme) -> El {
             .font(ty::CAPTION)
             .color(t.ink)
             .truncate();
-        let value = row().gap(8.0).center_y().child(ui::state_pill(t, p.state, t.raised)).child(title.grow(1.0).min_w(0.0));
+        let value =
+            row().gap(8.0).center_y().child(ui::state_pill(t, p.state, t.raised)).child(title.grow(1.0).min_w(0.0));
         rows = rows.child(fact("Pull request", value).key(keys::PULL_REQUEST_ROW));
     } else if let Some(problem) = s.pulls.problem().filter(|_| s.pulls.index.is_none()) {
         rows = rows.child(

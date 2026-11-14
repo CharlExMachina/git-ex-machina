@@ -132,18 +132,13 @@ pub fn reviewers(s: &App, p: &Pull, t: &Theme) -> El {
 /// The merge box: the checks, conflicts and approvals, then Squash and merge, which waits.
 pub fn merge_box(s: &App, p: &Pull, t: &Theme) -> El {
     let fact = |glyph, color, title: String, detail: String| {
-        row()
-            .w_full()
-            .gap(10.0)
-            .items_start()
-            .child(row().mt(1.0).child(icon(glyph, 16.0).color(color)))
-            .child(
-                col()
-                    .grow(1.0)
-                    .min_w(0.0)
-                    .child(text(title).font(ty::BODY_SEMI).color(t.ink))
-                    .child(text(detail).font(ty::CAPTION).color(t.ink_muted).wrap()),
-            )
+        row().w_full().gap(10.0).items_start().child(row().mt(1.0).child(icon(glyph, 16.0).color(color))).child(
+            col()
+                .grow(1.0)
+                .min_w(0.0)
+                .child(text(title).font(ty::BODY_SEMI).color(t.ink))
+                .child(text(detail).font(ty::CAPTION).color(t.ink_muted).wrap()),
+        )
     };
     let base = p.summary.base_ref.clone();
     let mut card = ui::card(t).key(keys::MERGE_BOX).w_full().pt(14.0).px(14.0).pb(12.0).gap(10.0);
@@ -156,11 +151,18 @@ pub fn merge_box(s: &App, p: &Pull, t: &Theme) -> El {
     if let Some(first) = failing.first() {
         let detail = format!("{} {}", first.name, first.title).trim().to_owned();
         let more = if failing.len() > 1 { format!(" and {} more", failing.len() - 1) } else { String::new() };
-        card = card.child(fact(&icons::X, t.removed, format!("{} failing", plural(failing.len(), "check")), detail + &more));
+        card = card.child(fact(
+            &icons::X,
+            t.removed,
+            format!("{} failing", plural(failing.len(), "check")),
+            detail + &more,
+        ));
     } else if running > 0 {
-        card = card.child(fact(&icons::CLOCK, t.accent, format!("{} running", plural(running, "check")), String::new()));
+        card =
+            card.child(fact(&icons::CLOCK, t.accent, format!("{} running", plural(running, "check")), String::new()));
     } else if !p.checks.is_empty() {
-        card = card.child(fact(&icons::CHECK, t.added, "All checks passed".to_owned(), plural(p.checks.len(), "check")));
+        card =
+            card.child(fact(&icons::CHECK, t.added, "All checks passed".to_owned(), plural(p.checks.len(), "check")));
     }
     let approvals = p.approvals();
     let me = s.pulls.viewer().map(|v| v.login.as_str()).unwrap_or_default();

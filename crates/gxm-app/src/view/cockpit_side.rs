@@ -18,16 +18,12 @@ use crate::ui::{self, Variant};
 const INNER_W: f32 = 248.0 - 32.0;
 
 pub fn sidebar(s: &App, t: &Theme) -> El {
-    let top = bar(t)
-        .px(12.0)
-        .child(rune::el().w(super::sidebar::LIGHTS_W).h(12.0))
-        .child(rune::el().grow(1.0))
-        .child(
-            ui::button(t, Variant::Ghost, Some(&icons::SIDEBAR), "", None)
-                .key(keys::SIDEBAR_TOGGLE)
-                .help("Hide the sidebar (⌃⌘S)")
-                .on_press(|s: &mut App| s.sidebar_open = false),
-        );
+    let top = bar(t).px(12.0).child(rune::el().w(super::sidebar::LIGHTS_W).h(12.0)).child(rune::el().grow(1.0)).child(
+        ui::button(t, Variant::Ghost, Some(&icons::SIDEBAR), "", None)
+            .key(keys::SIDEBAR_TOGGLE)
+            .help("Hide the sidebar (⌃⌘S)")
+            .on_press(|s: &mut App| s.sidebar_open = false),
+    );
     let Some(v) = s.pull_view() else { return col() };
     let back = row().pt(14.0).px(16.0).pb(10.0).child(
         ui::button(t, Variant::Ghost, Some(&icons::BACK), &format!("Pull request #{}", v.number), None)
@@ -72,7 +68,12 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
             )
             .child(row().px(16.0).pb(12.0).child({
                 let done = if total == 0 { 0.0 } else { INNER_W * viewed as f32 / total as f32 };
-                row().w(INNER_W).h(4.0).radius(2.0).fill(t.well).child(rune::el().w(done).h(4.0).radius(2.0).fill(t.added))
+                row()
+                    .w(INNER_W)
+                    .h(4.0)
+                    .radius(2.0)
+                    .fill(t.well)
+                    .child(rune::el().w(done).h(4.0).radius(2.0).fill(t.added))
             }));
         let shown = s.cockpit_file();
         let mut rows = col().px(8.0);

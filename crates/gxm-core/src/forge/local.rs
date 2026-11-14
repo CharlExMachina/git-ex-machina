@@ -71,7 +71,8 @@ pub fn changes(env: &Env, repo: &Path, p: &PullSummary) -> Result<Changes, GitEr
     };
     let base = git::run(env, repo, &["merge-base", &from, &to])?.trim().to_owned();
     let log = git::run(env, repo, &["log", "--reverse", "--format=%H%x1f%s", &format!("{base}..{to}")])?;
-    let commits = log.lines().filter_map(|l| l.split_once('\u{1f}')).map(|(a, b)| (a.to_owned(), b.to_owned())).collect();
+    let commits =
+        log.lines().filter_map(|l| l.split_once('\u{1f}')).map(|(a, b)| (a.to_owned(), b.to_owned())).collect();
     let files = history::range_changes(env, repo, &base, &to)?;
     let mut diffs = HashMap::new();
     for f in &files {

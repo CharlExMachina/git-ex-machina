@@ -34,9 +34,11 @@ pub fn atlas_pulls(w: &World, atlas: &Path) {
         title: title.to_owned(),
         seconds,
     };
-    let mut kenjis = comment(KENJI, "2026-11-11T12:00:00Z", "Does `pop_min` stay O(log n) once the heap holds 10k avatars?");
+    let mut kenjis =
+        comment(KENJI, "2026-11-11T12:00:00Z", "Does `pop_min` stay O(log n) once the heap holds 10k avatars?");
     kenjis.review = Some("PRR_kenji".to_owned());
-    let mut leas = comment(LEA, "2026-11-11T13:00:00Z", "Yes, a binary heap keyed by paint time. There's a bench in metrics.rs.");
+    let mut leas =
+        comment(LEA, "2026-11-11T13:00:00Z", "Yes, a binary heap keyed by paint time. There's a bench in metrics.rs.");
     leas.review = Some("PRR_lea".to_owned());
     w.hub().add_pull(
         "studio",
@@ -54,7 +56,10 @@ pub fn atlas_pulls(w: &World, atlas: &Path) {
             created: t("2026-11-11T10:00:00Z"),
             commits: 2,
             requested: vec![ANA],
-            reviews: vec![review("PRR_kenji", KENJI, "2026-11-11T12:00:00Z"), review("PRR_lea", LEA, "2026-11-11T13:00:00Z")],
+            reviews: vec![
+                review("PRR_kenji", KENJI, "2026-11-11T12:00:00Z"),
+                review("PRR_lea", LEA, "2026-11-11T13:00:00Z"),
+            ],
             comments: vec![
                 comment(LEA, "2026-11-11T10:02:00Z", "Ready for review: this is the flicker from #117."),
                 comment(KENJI, "2026-11-11T12:01:00Z", "Approving. One question about the heap, inline."),

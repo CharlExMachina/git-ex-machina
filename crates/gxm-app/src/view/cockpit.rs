@@ -48,7 +48,8 @@ fn top(s: &App, t: &Theme) -> El {
         b = b.child(text(talk).font(ty::HINT).color(t.ink_faint));
         let branch = p.summary.head_ref.clone();
         let busy = s.ops.running().is_some();
-        let check_out = ui::button(t, Variant::Secondary, Some(&icons::BRANCH), "Check out", None).key(keys::CHECK_OUT_PULL);
+        let check_out =
+            ui::button(t, Variant::Secondary, Some(&icons::BRANCH), "Check out", None).key(keys::CHECK_OUT_PULL);
         b = b.child(if busy {
             check_out.disabled(true).opacity(0.6)
         } else {
@@ -129,7 +130,8 @@ fn diff(s: &App, t: &Theme) -> El {
 /// Every hunk of the file, 12 apart, with what's said about its lines under them.
 fn file_diff(s: &App, path: &str, hunks: &[Hunk], t: &Theme) -> El {
     let split = s.cockpit().is_some_and(|c| c.split);
-    let threads: Vec<&Thread> = s.open_pull_full().map(|p| p.threads.iter().filter(|th| th.path == path).collect()).unwrap_or_default();
+    let threads: Vec<&Thread> =
+        s.open_pull_full().map(|p| p.threads.iter().filter(|th| th.path == path).collect()).unwrap_or_default();
     let mut placed = vec![false; threads.len()];
     let mut c = col().key(keys::DIFF).w_full().px(16.0).py(14.0).gap(12.0);
     for (k, h) in hunks.iter().enumerate() {
@@ -151,7 +153,11 @@ fn file_diff(s: &App, path: &str, hunks: &[Hunk], t: &Theme) -> El {
             .child(head);
         let rows = if split { pairs(&h.lines) } else { h.lines.iter().map(|l| (Some(l), None)).collect() };
         for (a, b) in rows {
-            card = card.child(if split { split_row(path, a, b, t) } else { a.map_or_else(rune::el, |l| line(path, l, t)) });
+            card = card.child(if split {
+                split_row(path, a, b, t)
+            } else {
+                a.map_or_else(rune::el, |l| line(path, l, t))
+            });
             // A context line is on both sides of a split row; what's said about it shows once.
             let same = matches!((a, b), (Some(x), Some(y)) if std::ptr::eq(x, y));
             for side in [a, if same { None } else { b }].into_iter().flatten() {
@@ -259,10 +265,9 @@ fn split_row(path: &str, a: Option<&HunkLine>, b: Option<&HunkLine>, t: &Theme) 
         let Some(l) = l else { return h };
         let (bg, mark, sign) = tone(l, t);
         let n = if new { l.new } else { l.old };
-        h = h
-            .child(number(n, mark))
-            .child(row().w(16.0).center().child(text(sign).font(ty::MONO).color(mark)))
-            .child(row().grow(1.0).min_w(0.0).pr(12.0).child(text(l.text.clone()).font(ty::MONO).color(t.ink).truncate()));
+        h = h.child(number(n, mark)).child(row().w(16.0).center().child(text(sign).font(ty::MONO).color(mark))).child(
+            row().grow(1.0).min_w(0.0).pr(12.0).child(text(l.text.clone()).font(ty::MONO).color(t.ink).truncate()),
+        );
         if let Some(bg) = bg {
             h = h.fill(bg);
         }
@@ -379,7 +384,10 @@ fn said(s: &App, t: &Theme, who: &User, meta: String, pill: Option<&str>, body: 
         );
     }
     let (words, spans) = pull_parts::inline(t, body, true);
-    row().w_full().gap(8.0).items_start().child(ui::avatar(t, &who.name, pull_parts::person_color(s, t, who)).mt(1.0)).child(
-        col().grow(1.0).min_w(0.0).child(head).child(rich(words, spans).font(ty::MONO).color(t.ink).w_full()),
-    )
+    row()
+        .w_full()
+        .gap(8.0)
+        .items_start()
+        .child(ui::avatar(t, &who.name, pull_parts::person_color(s, t, who)).mt(1.0))
+        .child(col().grow(1.0).min_w(0.0).child(head).child(rich(words, spans).font(ty::MONO).color(t.ink).w_full()))
 }

@@ -76,6 +76,8 @@ fn a_pull_request_lights_its_commits_and_its_own_lane_but_not_the_base() {
         assert_eq!(*on, lane == pr_lane && matches!(e, Edge::Pass { .. }), "{e:?} in row 2");
     }
     // mid's line down to base is lit; base's own lane, which it joins, isn't.
-    assert!(lit[3].edges.iter().zip(&rows[3].edges).all(|(on, e)| *on == matches!(e, Edge::Out { .. } | Edge::In { .. })));
+    assert!(
+        lit[3].edges.iter().zip(&rows[3].edges).all(|(on, e)| *on == matches!(e, Edge::Out { .. } | Edge::In { .. }))
+    );
     assert!(lit[4].edges.iter().all(|on| !on), "base's row: {:?}", rows[4].edges);
 }

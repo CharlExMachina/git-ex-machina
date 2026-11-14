@@ -111,7 +111,7 @@ pub fn connect(env: &Env, remote: &Remote) -> Result<Arc<dyn Forge>, NotConnecte
             } else {
                 format!("https://{}/api", remote.host)
             };
-            Ok(Arc::new(github::GitHub::new(api, token, remote.owner.clone(), remote.name.clone())))
+            Ok(Arc::new(github::GitHub::new(&api, token, remote.owner.clone(), remote.name.clone())))
         }
         Provider::GitLab | Provider::Bitbucket => Err(NotConnected::NotYet(remote.provider)),
         Provider::Other => Err(NotConnected::NoProvider),
