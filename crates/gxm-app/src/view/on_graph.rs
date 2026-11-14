@@ -75,12 +75,11 @@ pub fn summary(s: &App, v: &PullView, t: &Theme) -> El {
     }
 }
 
-/// The `#131` row: 30 tall with 2 above and below, radius 6, tinted 12% with the pull
-/// request's colour and ringed at 40%. Like a selected row, it sits beside the graph, and the
-/// lanes run past it uncovered.
+/// The `#131` row: 30 tall with 2 above and below, radius 6, lifted like a selected row (its
+/// top highlight, edge and drop) and tinted 10% with the pull request's colour. Like a selected
+/// row, it sits beside the graph, and the lanes run past it uncovered.
 pub fn banner(s: &App, g: &GraphRow, cols: usize, light: Option<&Lit>, t: &Theme) -> El {
     let ink = lane_color(s, t);
-    let fill = mix(ink, 0.12, t.canvas);
     let Some(v) = s.pull_view() else { return rune::el() };
     let summary = s.pulls.index.as_ref().and_then(|i| i.pulls.iter().find(|p| p.number == v.number));
     let full = s.open_pull_full();
@@ -119,7 +118,7 @@ pub fn banner(s: &App, g: &GraphRow, cols: usize, light: Option<&Lit>, t: &Theme
         }
     }
     // The text starts where the rows' subjects do.
-    let tinted = row()
+    let mut card = row()
         .key(keys::PULL_BANNER)
         .grow(1.0)
         .min_w(0.0)
@@ -127,8 +126,9 @@ pub fn banner(s: &App, g: &GraphRow, cols: usize, light: Option<&Lit>, t: &Theme
         .my(2.0)
         .pl(6.0)
         .radius(crate::theme::size::RADIUS_SM)
-        .fill(fill)
-        .box_shadow(Theme::ring(1.0, mix(ink, 0.4, fill)))
-        .child(content);
-    row().w_full().h(34.0).child(graph::passing(t, g, cols, light, 34.0)).child(tinted)
+        .fill(mix(ink, 0.10, t.raised));
+    for sh in t.shadow_lifted() {
+        card = card.box_shadow(sh);
+    }
+    row().w_full().h(34.0).child(graph::passing(t, g, cols, light, 34.0)).child(card.child(content))
 }
