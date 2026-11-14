@@ -57,16 +57,9 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
     if let Some(changes) = s.pull_changes() {
         let total = changes.files.len();
         let viewed = changes.files.iter().filter(|f| v.draft.is_viewed(&f.path)).count();
+        let header = row().w_full().px(16.0).pb(8.0).justify_between().child(ui::label(t, "Files"));
         files = files
-            .child(
-                row()
-                    .w_full()
-                    .px(16.0)
-                    .pb(8.0)
-                    .justify_between()
-                    .child(ui::label(t, "Files"))
-                    .child(text(format!("{viewed} of {total} viewed")).font(ty::MONO_SM).color(t.ink_muted)),
-            )
+            .child(header.child(text(format!("{viewed} of {total} viewed")).font(ty::MONO_SM).color(t.ink_muted)))
             .child(row().px(16.0).pb(12.0).child({
                 let done = if total == 0 { 0.0 } else { INNER_W * viewed as f32 / total as f32 };
                 row()
@@ -77,16 +70,46 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
                     .child(rune::el().w(done).h(4.0).radius(2.0).fill(t.added))
             }));
         let shown = s.cockpit_file();
-        let mut rows = col().px(8.0);
+        let open = s.cockpit().is_some_and(|c| c.viewed_open);
+        let (mut rows, mut shelved) = (col().px(8.0), col().px(8.0));
+        let mut on_shelf = 0;
         // With one commit picked, its files; else the pull request's.
         let listed = s.shown_changes().unwrap_or(changes);
         for f in &listed.files {
             let talk: usize = s
                 .open_pull_full()
                 .map_or(0, |p| p.threads.iter().filter(|th| th.path == f.path).map(|th| th.comments.len()).sum());
-            rows = rows.child(file_row(f, talk, v.draft.is_viewed(&f.path), shown == Some(f.path.as_str()), t));
+            let is_viewed = v.draft.is_viewed(&f.path);
+            let el = file_row(f, talk, is_viewed, shown == Some(f.path.as_str()), t);
+            if is_viewed {
+                on_shelf += 1;
+                shelved = shelved.child(el);
+            } else {
+                rows = rows.child(el);
+            }
         }
-        files = files.child(rows).child(
+        if on_shelf == listed.files.len() && on_shelf > 0 {
+            rows = rows.child(
+                row()
+                    .h(size::ROW_FILE)
+                    .px(8.0)
+                    .gap(8.0)
+                    .center_y()
+                    .child(icon(&icons::CHECK, 13.0).color(t.added))
+                    .child(text("Every file viewed").font(ty::CAPTION).color(t.ink_muted)),
+            );
+        }
+        files = files.child(rows);
+        // Viewed files leave the list for a shelf beneath it, folded until asked for, as T3 Code
+        // keeps settled threads.
+        if on_shelf > 0 {
+            let mut shelf = col().w_full().pt(4.0).child(shelf_header(t, on_shelf, open));
+            if open {
+                shelf = shelf.child(shelved);
+            }
+            files = files.child(shelf);
+        }
+        files = files.child(
             row().w_full().pt(16.0).px(16.0).pb(8.0).justify_between().child(ui::label(t, "Commits")).child(
                 match &picked {
                     None => text("all").font(ty::MONO_SM).color(t.ink_muted),
@@ -132,6 +155,27 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
     col().fill(t.chrome).border_sides([0.0, 1.0, 0.0, 0.0], t.line).border_layout().child(list).child(footer)
 }
 
+/// The viewed shelf's header, after T3 Code's: the label, a rule, the count, and a chevron that
+/// turns down when the shelf is open.
+fn shelf_header(t: &Theme, count: usize, open: bool) -> El {
+    let chevron = if open { &icons::CHEVRON } else { &icons::CHEVRON_RIGHT };
+    row()
+        .key(keys::VIEWED_SHELF)
+        .mx(8.0)
+        .h(32.0)
+        .px(8.0)
+        .gap(8.0)
+        .center_y()
+        .radius(size::RADIUS_SM)
+        .hover(t.control_hover)
+        .help(if open { "Fold the viewed files away" } else { "Show the viewed files" })
+        .child(text("Viewed").font(ty::LABEL).color(t.ink_muted))
+        .child(rune::el().grow(1.0).min_w(8.0).h(1.0).fill(t.line))
+        .child(text(count.to_string()).font(ty::MONO_SM).color(t.ink_muted))
+        .child(icon(chevron, 12.0).color(t.ink_muted))
+        .on_press(|s: &mut App| s.toggle_viewed_shelf())
+}
+
 /// `.gu-file` with the name alone, and on the right its comment count or a viewed check.
 fn file_row(f: &gxm_core::history::FileChange, talk: usize, viewed: bool, selected: bool, t: &Theme) -> El {
     let letter = match f.status {
@@ -164,7 +208,14 @@ fn file_row(f: &gxm_core::history::FileChange, talk: usize, viewed: bool, select
         .radius(size::RADIUS_SM)
         .help(f.path.clone())
         .child(ui::status(t, letter))
-        .child(text(name).font(ty::BODY_STRONG).color(t.ink).truncate().grow(1.0).min_w(0.0))
+        .child(
+            text(name)
+                .font(ty::BODY_STRONG)
+                .color(if viewed && !selected { t.ink_muted } else { t.ink })
+                .truncate()
+                .grow(1.0)
+                .min_w(0.0),
+        )
         .child(side)
         .on_press(move |s: &mut App| s.select_pull_file(&path));
     if selected {

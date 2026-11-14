@@ -80,6 +80,8 @@ pub const DIFF_UNIFIED: &str = "diff-unified";
 pub const DIFF_SPLIT: &str = "diff-split";
 pub const FILE_HEADER: &str = "file-header";
 pub const VIEWED: &str = "viewed";
+/// The cockpit's shelf of viewed files: its header folds it open and shut.
+pub const VIEWED_SHELF: &str = "viewed-shelf";
 /// The composer for a new comment on a line.
 pub const LINE_COMMENT: &str = "line-comment";
 pub const REVIEW_SUMMARY: &str = "review-summary";

@@ -66,3 +66,4 @@ icon!(
     r#"<path d="M9 2.5h4.5V7"/><path d="M13.5 2.5 7.5 8.5"/><path d="M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"/>"#
 );
 icon!(CHEVRON, "gxm-chevron", r#"<path d="M4.5 6.5 8 10l3.5-3.5"/>"#);
+icon!(CHEVRON_RIGHT, "gxm-chevron-right", r#"<path d="M6.5 4.5 10 8l-3.5 3.5"/>"#);

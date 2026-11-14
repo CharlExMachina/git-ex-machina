@@ -50,6 +50,8 @@ pub struct Cockpit {
     /// One commit shown alone, with its changes; None shows the whole pull request.
     /// Its id at once; its changes once they're read.
     pub commit: Option<(String, Option<Changes>)>,
+    /// The shelf of viewed files is open.
+    pub viewed_open: bool,
 }
 
 /// A comment being written.
@@ -143,7 +145,8 @@ impl App {
 
     pub fn open_cockpit(&mut self) {
         if let Some(v) = self.pull_view_mut() {
-            v.cockpit = Some(Cockpit { file: None, split: false, composer: None, change: 0, commit: None });
+            v.cockpit =
+                Some(Cockpit { file: None, split: false, composer: None, change: 0, commit: None, viewed_open: false });
         }
     }
 
@@ -185,7 +188,23 @@ impl App {
         if let Some(v) = self.pull_view_mut() {
             v.draft.toggle_viewed(&path);
         }
+        // A file just viewed goes to the shelf, and the next one still to view opens.
+        let next = self.pull_view().filter(|v| v.draft.is_viewed(&path)).and_then(|v| {
+            let files = &self.shown_changes()?.files;
+            let at = files.iter().position(|f| f.path == path)?;
+            let after = files[at + 1..].iter().chain(&files[..at]);
+            after.map(|f| f.path.clone()).find(|p| !v.draft.is_viewed(p))
+        });
+        if let Some(next) = next {
+            self.select_pull_file(&next);
+        }
         self.save_draft();
+    }
+
+    pub fn toggle_viewed_shelf(&mut self) {
+        if let Some(c) = self.cockpit_mut() {
+            c.viewed_open = !c.viewed_open;
+        }
     }
 
     /// Starts writing a reply or a comment on a line.
