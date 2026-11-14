@@ -91,8 +91,14 @@ fn public(p: &PullData, c: &CommentData) -> bool {
 fn pull(owner: &str, name: &str, p: &PullData) -> Value {
     let mut v = summary(owner, name, p);
     let submitted: Vec<&ReviewData> = p.reviews.iter().filter(|r| r.verdict.is_some()).collect();
+    // Each reviewer's standing is their latest review, except that a comment-only review
+    // doesn't replace an approval or a request for changes, as on GitHub.
     let mut latest: Vec<&ReviewData> = Vec::new();
     for r in &submitted {
+        let decided = |l: &&ReviewData| l.author == r.author && l.verdict != Some(Verdict::Comment);
+        if r.verdict == Some(Verdict::Comment) && latest.iter().any(decided) {
+            continue;
+        }
         latest.retain(|l| l.author != r.author);
         latest.push(r);
     }

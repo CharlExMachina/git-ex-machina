@@ -20,12 +20,20 @@ const TIP: &str = "1cabd07cdeb1ce14a0568eb597113c22513572bc";
 const CACHE: &str = "src/avatars/cache.rs";
 const METRICS: &str = "src/avatars/metrics.rs";
 const REPLY: &str = "Thanks, the bench in metrics.rs settles it.";
-const COMMENT: &str = "Could this flush the metrics too?";
+const CHANGE: &str = "Flush the metrics here too, or the eviction counts drift.";
+const CHANGES_SUMMARY: &str = "One change before this goes in: flush the metrics on eviction.";
+const NOTE: &str = "Nit: this loop could stop at the budget.";
+const NOTES_SUMMARY: &str = "Two notes, nothing blocking.";
 const SUMMARY: &str = "Evicting by last paint fixes the flicker. Ship it once first_look is green.";
 
 /// The drafts file for #131, where the review waits until it's submitted.
 fn draft_file(w: &World) -> std::path::PathBuf {
     drafts::path(w.env(), "github.com", "studio", "atlas-web", 131)
+}
+
+/// The reviews Ana sent, oldest first.
+fn ana_reviews(w: &World) -> Vec<gxm_world::hub::SentReview> {
+    Hub::of(w).reviews("studio", "atlas-web", 131).into_iter().filter(|r| r.author == "ana-ruiz").collect()
 }
 
 /// Lea's pull request, reviewed from the history: the person sees which pull request a commit
@@ -142,37 +150,98 @@ pub fn review_pull_request() -> Journey {
     .tap(keys::PULL_COMMITS_ALL)
     .see_in(keys::FILE_HEADER, "+30 −32")
     .see_in(keys::thread("PRRT_1"), "Kenji Mori")
-    // A reply and a new comment, kept as drafts on this machine until the review goes.
-    .scroll_to(keys::reply("PRRT_1"))
-    .tap(keys::reply("PRRT_1"))
-    .type_text(REPLY)
-    .press(Press::ENTER)
-    .see_in(keys::thread("PRRT_1"), REPLY)
-    .see_in(keys::thread("PRRT_1"), "Pending")
+    // First review: changes requested, with a comment on line 6, kept as a draft on this
+    // machine until the review goes.
     .scroll_to(keys::diff_line(CACHE, true, 6))
     .tap(keys::diff_line(CACHE, true, 6))
-    .type_text(COMMENT)
+    .type_text(CHANGE)
     .press(Press::ENTER)
-    .see_in(keys::DIFF, COMMENT)
-    .see_in(keys::REVIEW_SUMMARY, "(2 pending comments will be sent with it)")
-    .world_check("the drafts are saved locally, not sent", |w| {
+    .see_in(keys::DIFF, "Ana Ruiz · line 6 · Pending")
+    .see_in(keys::DIFF, CHANGE)
+    .see_in(keys::REVIEW_SUMMARY, "(1 pending comment will be sent with it)")
+    .world_check("the draft is saved locally, not sent", |w| {
         let saved = std::fs::read_to_string(draft_file(w)).map_err(|e| format!("no drafts file: {e}"))?;
-        if !saved.contains(REPLY) || !saved.contains(COMMENT) {
+        if !saved.contains(CHANGE) {
             return Err(format!("drafts file: {saved}"));
         }
         let sent = Hub::of(w).reviews("studio", "atlas-web", 131);
         if sent.iter().any(|r| r.author == "ana-ruiz") { Err("a review was sent already".to_owned()) } else { Ok(()) }
     })
     .mark("drafts")
-    // Leaving the cockpit keeps the drafts.
+    // Leaving the cockpit keeps the draft.
     .tap(keys::COCKPIT_BACK)
     .see_in(keys::PULL_SUMMARY, "Pull request #131")
     .tap(keys::REVIEW)
-    .see_in(keys::DIFF, COMMENT)
+    .see_in(keys::DIFF, CHANGE)
     .see_in(keys::COCKPIT_FILES, "1 of 2 viewed")
-    // The verdict and the summary, sent as one review.
+    .tap(keys::REVIEW_SUMMARY)
+    .type_text(CHANGES_SUMMARY)
+    .tap(keys::VERDICT_REQUEST_CHANGES)
+    .mark("request-changes")
+    .tap(keys::SUBMIT_REVIEW)
+    .wait_for(keys::PULL_SUMMARY, "Your request for changes was sent to GitHub")
+    .see_in(keys::PULL_BANNER, "2 commits · Lea Brandt · you requested changes")
+    .see_in(keys::PULL_BANNER, "1 approval")
+    .see_in(keys::reviewer("ana-ruiz"), "Changes requested")
+    .see_in(keys::TAB_CONVERSATION, "Conversation 5")
+    .see_in(keys::REVIEW, "Reviewed")
+    .world_check("GitHub got a request for changes with the line comment", |w| {
+        let sent = ana_reviews(w);
+        let [review] = sent.as_slice() else { return Err(format!("{} reviews from Ana", sent.len())) };
+        let on_line = review.comments.iter().any(|c| c.body == CHANGE && c.path == CACHE && c.line == Some(6));
+        if review.verdict == Verdict::RequestChanges && review.body == CHANGES_SUMMARY && on_line {
+            Ok(())
+        } else {
+            Err(format!("{review:?}"))
+        }
+    })
+    .world_check("the sent draft is gone, the files marked viewed stay", |w| {
+        let saved = std::fs::read_to_string(draft_file(w)).unwrap_or_default();
+        if saved.contains(CHANGE) || !saved.contains(METRICS) { Err(format!("drafts file: {saved}")) } else { Ok(()) }
+    })
+    .mark("changes-requested")
+    // Second review, a comment only: Ana's line comment is on its line now, sent; she replies to
+    // Kenji and notes something on line 10.
+    .tap(keys::REVIEW)
+    .scroll_to(keys::thread("PRRT_2"))
+    .see_in(keys::thread("PRRT_2"), "Ana Ruiz · line 6 · now")
+    .see_in(keys::thread("PRRT_2"), CHANGE)
+    .not_see("Pending")
+    .see("3 comments · 2 unresolved")
+    .mark("line-comment")
+    .scroll_to(keys::reply("PRRT_1"))
+    .tap(keys::reply("PRRT_1"))
+    .type_text(REPLY)
+    .press(Press::ENTER)
+    .see_in(keys::thread("PRRT_1"), REPLY)
+    .see_in(keys::thread("PRRT_1"), "Pending")
+    .scroll_to(keys::diff_line(CACHE, true, 10))
+    .tap(keys::diff_line(CACHE, true, 10))
+    .type_text(NOTE)
+    .press(Press::ENTER)
+    .see_in(keys::DIFF, NOTE)
+    .see_in(keys::REVIEW_SUMMARY, "(2 pending comments will be sent with it)")
+    .tap(keys::REVIEW_SUMMARY)
+    .type_text(NOTES_SUMMARY)
+    .tap(keys::VERDICT_COMMENT)
+    .mark("comment")
+    .tap(keys::SUBMIT_REVIEW)
+    .wait_for(keys::PULL_SUMMARY, "Your review was sent to GitHub")
+    .see_in(keys::reviewer("ana-ruiz"), "Changes requested") // a comment doesn't undo a request
+    .see_in(keys::TAB_CONVERSATION, "Conversation 6")
+    .world_check("GitHub got a comment review with the reply and the line 10 comment", |w| {
+        let sent = ana_reviews(w);
+        let Some(review) = sent.get(1) else { return Err(format!("{} reviews from Ana", sent.len())) };
+        let on_line = review.comments.iter().any(|c| c.body == NOTE && c.line == Some(10));
+        let reply = review.comments.iter().any(|c| c.body == REPLY && c.thread.as_deref() == Some("PRRT_1"));
+        if review.verdict == Verdict::Comment && on_line && reply { Ok(()) } else { Err(format!("{review:?}")) }
+    })
+    .mark("commented")
+    // Third review: Lea's answers are in, so Ana approves.
+    .tap(keys::REVIEW)
     .tap(keys::REVIEW_SUMMARY)
     .type_text(SUMMARY)
+    .tap(keys::VERDICT_APPROVE)
     .mark("verdict")
     .tap(keys::SUBMIT_REVIEW)
     .wait_for(keys::PULL_SUMMARY, "Your approval was sent to GitHub")
@@ -180,28 +249,23 @@ pub fn review_pull_request() -> Journey {
     .see_in(keys::PULL_BANNER, "2 approvals")
     .see_in(keys::reviewer("ana-ruiz"), "Approved")
     .see_in(keys::MERGE_BOX, "2 approvals · ready once checks pass")
-    .see_in(keys::TAB_CONVERSATION, "Conversation 5")
-    .see_in(keys::REVIEW, "Reviewed")
-    .world_check("GitHub got one approving review with the summary, the comment and the reply", |w| {
-        let sent: Vec<_> =
-            Hub::of(w).reviews("studio", "atlas-web", 131).into_iter().filter(|r| r.author == "ana-ruiz").collect();
-        let [review] = sent.as_slice() else { return Err(format!("{} reviews from Ana", sent.len())) };
-        let comment = review.comments.iter().any(|c| c.body == COMMENT && c.path == CACHE && c.line == Some(6));
-        let reply = review.comments.iter().any(|c| c.body == REPLY && c.thread.as_deref() == Some("PRRT_1"));
-        if review.verdict == Verdict::Approve && review.body == SUMMARY && comment && reply {
-            Ok(())
-        } else {
-            Err(format!("{review:?}"))
+    .see_in(keys::TAB_CONVERSATION, "Conversation 7")
+    .world_check("GitHub got the approval with its summary", |w| {
+        let sent = ana_reviews(w);
+        match sent.last() {
+            Some(r) if sent.len() == 3 && r.verdict == Verdict::Approve && r.body == SUMMARY => Ok(()),
+            other => Err(format!("{} reviews from Ana, the last {other:?}", sent.len())),
         }
-    })
-    .world_check("the sent drafts are gone, the files marked viewed stay", |w| {
-        let saved = std::fs::read_to_string(draft_file(w)).unwrap_or_default();
-        if saved.contains(REPLY) || saved.contains(COMMENT) || !saved.contains(METRICS) {
-            return Err(format!("drafts file: {saved}"));
-        }
-        Ok(())
     })
     .mark("reviewed")
+    // The conversation has all three reviews, and the comments on their lines.
+    .tap(keys::TAB_CONVERSATION)
+    .see_in(keys::PULL_INSPECTOR, "Ana Ruiz requested changes")
+    .see_in(keys::PULL_INSPECTOR, "src/avatars/cache.rs:6")
+    .see_in(keys::PULL_INSPECTOR, "src/avatars/cache.rs:10")
+    .see_in(keys::PULL_INSPECTOR, "Ana Ruiz approved")
+    .mark("conversation-after")
+    .tap(keys::TAB_OVERVIEW)
     // Back to the plain history.
     .tap(keys::CLOSE_PULL_REQUEST)
     .gone(keys::PULL_BANNER)
