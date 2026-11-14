@@ -27,6 +27,9 @@ pub struct Env {
     pub isolated: bool,
     /// Variables every git invocation gets.
     pub git_vars: Vec<(OsString, OsString)>,
+    /// The thread that draws a window, set by [`Env::claim_ui_thread`]. Git and file reads on
+    /// it would stall frames, so debug builds panic there (see [`Env::off_ui_thread`]).
+    ui_thread: Option<std::thread::ThreadId>,
 }
 
 /// The source of "now".
@@ -55,7 +58,7 @@ impl Env {
         let isolated = var(ISOLATED_VAR).is_some_and(|v| v == "1");
         let config_dir = var(CONFIG_DIR_VAR).map(PathBuf::from).unwrap_or_else(|| default_config_dir(&home));
         let git_vars = if isolated { sandbox_git_vars(&home) } else { Vec::new() };
-        Env { home, config_dir, clock, tz, isolated, git_vars }
+        Env { home, config_dir, clock, tz, isolated, git_vars, ui_thread: None }
     }
 
     /// A sandboxed environment rooted at `home`, at a fixed time, in UTC.
@@ -67,6 +70,21 @@ impl Env {
             tz: TimeZone::UTC,
             isolated: true,
             git_vars: sandbox_git_vars(home),
+            ui_thread: None,
+        }
+    }
+
+    /// Marks the calling thread as the one that draws the window. From then on, debug builds
+    /// panic when this environment runs git or reads a file there.
+    pub fn claim_ui_thread(&mut self) {
+        self.ui_thread = Some(std::thread::current().id());
+    }
+
+    /// Fails loudly (in debug builds) when `what` would block the UI thread: slow work belongs
+    /// on a background job, or the window drops frames on a big repository.
+    pub fn off_ui_thread(&self, what: &dyn std::fmt::Display) {
+        if cfg!(debug_assertions) && self.ui_thread == Some(std::thread::current().id()) {
+            panic!("{what} on the UI thread; run it on a background job (see gxm-app's load.rs)");
         }
     }
 

@@ -52,7 +52,7 @@ Follow Kent C. Dodds' [Write fewer, longer tests](https://kentcdodds.com/blog/wr
 ## Architecture
 
 - Behaviour with phases (network operations, wizard steps, loading) is a state machine: one `enum State`, and one `step` function that returns effects (`rune::machine`).
-- Slow work runs off the UI thread (`rune::Latest`). Nothing is read before the first frame.
+- Git and file reads run off the UI thread, as latest-wins jobs (`rune::Latest`, in `gxm-app/src/load.rs`), and the window keeps showing what it had until they land. Nothing is read before the first frame. Debug builds panic when git or a workspace read runs on the UI thread (`Env::off_ui_thread`), so every journey guards this.
 - The UI shows only what works. An unfinished control is disabled, with a tooltip saying what's coming.
 - Tests and worlds read only their sandbox. The real `~/.ssh` and `~/.gitconfig` belong to the person.
 

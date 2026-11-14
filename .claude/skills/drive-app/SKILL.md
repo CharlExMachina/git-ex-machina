@@ -11,7 +11,7 @@ The app runs headless with Rune's real renderer, on a fixed virtual clock, insid
 
 - `cargo xtask snap [WORLD] [--theme light] [--size 1200x800]` writes `target/proof/snap-WORLD-THEME.png`, plus the element tree beside it as `.json`. Open the PNG with Read. The default world, `mockup`, is the demo workspace.
 - To check a visual change, render the same moment before and after (`cargo xtask snap`, or a journey's marks on both branches) and compare them zoomed in (`ffmpeg -vf crop=W:H:X:Y,scale=iw*6:ih*6:flags=neighbor`). To find a layout offset, scan a pixel column of both renders for where colours change: rules and row edges land on exact pixels, so a one-point difference shows as a number.
-- `cargo xtask app WORLD -- <rune flags>` passes any of Rune's flags through: `--snap`, `--tree`, `--script`, `--video`, `--at`, `--scene`, `--list-scenes`. Rune documents them in its README, under "Agent tooling".
+- `cargo xtask app WORLD -- <rune flags>` passes any of Rune's flags through: `--snap`, `--tree`, `--script`, `--video`, `--at`, `--scene`, `--list-scenes`. Rune documents them in its README, under "Agent tooling". The app reads git off its UI thread in real time, so pass `--realtime` with `--at`, or the render can catch it before its reads land (`xtask snap` and `xtask journey` already do).
 - `cargo xtask gxm WORLD -- repos | log atlas-web` shows the same data as text.
 
 ## Journeys

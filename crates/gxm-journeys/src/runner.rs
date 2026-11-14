@@ -13,6 +13,9 @@ use crate::{Journey, Press, Step};
 const DT: f64 = 1.0 / 60.0;
 /// When the first step happens: after the workspace loads and the first frame settles.
 const START: f64 = 0.8;
+/// How long the runner sleeps between frames while a background read is in flight, so the read
+/// gets real time to finish.
+const POLL: std::time::Duration = std::time::Duration::from_millis(1);
 /// Time after each kind of step, so animations land and a viewer can follow the video.
 const AFTER_TAP: f64 = 0.7;
 const PER_CHAR: f64 = 0.07;
@@ -74,6 +77,8 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
             why,
             screen: d.screen(),
         };
+        // Whatever the last step asked to read lands before this one acts or looks.
+        d.settle().map_err(|why| fail(why, &d))?;
         let t = d.now;
         match step {
             Step::Tap(key) => {
@@ -127,7 +132,7 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                         return Err(fail(format!("after {:?}, [{key}] shows {shown:?}", crate::WAIT_LIMIT), &d));
                     }
                     d.advance_to(d.now + DT);
-                    std::thread::sleep(std::time::Duration::from_millis(2));
+                    std::thread::sleep(POLL);
                 }
                 d.advance_to(d.now + AFTER_PRESS);
             }
@@ -180,6 +185,31 @@ impl Driver {
             self.rt.frame(DT);
             self.now += DT;
         }
+    }
+
+    /// Runs frames until no background read is in flight and none has an answer waiting. Reads
+    /// run in real time, so a replay keeps pace with the wall clock (`--realtime`) to land them
+    /// at the same moments.
+    fn settle(&mut self) -> Result<(), String> {
+        let started = std::time::Instant::now();
+        // Not pending can still mean landed but not yet taken: only a frame that takes every
+        // answer without asking for more, after a check that found nothing running, is settled.
+        let mut quiet = 0;
+        while quiet < 2 {
+            if started.elapsed() > crate::WAIT_LIMIT {
+                return Err(format!("a background read was still running after {:?}", crate::WAIT_LIMIT));
+            }
+            if self.rt.state.loads.busy() {
+                quiet = 0;
+                std::thread::sleep(POLL);
+            } else {
+                quiet += 1;
+            }
+            if quiet < 2 {
+                self.advance_to(self.now + DT);
+            }
+        }
+        Ok(())
     }
 
     fn tap(&mut self, x: f32, y: f32) {

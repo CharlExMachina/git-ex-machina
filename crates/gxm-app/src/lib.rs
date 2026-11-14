@@ -6,6 +6,7 @@
 
 pub mod icons;
 pub mod keys;
+pub mod load;
 pub mod ops;
 pub mod state;
 pub mod theme;
@@ -28,13 +29,15 @@ fn init() -> App {
     App::new(Env::from_process())
 }
 
-/// Nothing is read before the first frame; the workspace loads on the first poll.
+/// Nothing is read before the first frame; the workspace starts loading on the first poll, off
+/// the UI thread, and every read lands here.
 fn poll(s: &mut App, _t: f64, tx: &mut Tx) -> bool {
     if s.load == Load::NotStarted {
         s.load_workspace();
         return true;
     }
-    s.land(tx)
+    let landed = s.land_loads(tx);
+    s.land() | landed
 }
 
 fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
@@ -70,7 +73,10 @@ fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
 pub fn app() -> rune::App<App> {
     rune::App::new(AppSpec {
         poll: Some(poll),
-        setup: Some(|s: &mut App, waker| s.ops.set_waker(waker)),
+        setup: Some(|s: &mut App, waker| {
+            s.ops.set_waker(waker.clone());
+            s.loads.set_waker(waker);
+        }),
         on_key: Some(on_key),
         min_size: Some((900.0, 520.0)),
         fonts: theme::FONTS,

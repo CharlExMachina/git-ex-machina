@@ -62,6 +62,7 @@ impl std::error::Error for GitError {}
 
 /// A command for `git -C repo args...` in `env`.
 pub fn command(env: &Env, repo: &Path, args: &[&str]) -> Command {
+    env.off_ui_thread(&format_args!("`git {}`", args.join(" ")));
     let mut cmd = Command::new("git");
     cmd.arg("-C").arg(repo).args(args);
     if env.isolated {

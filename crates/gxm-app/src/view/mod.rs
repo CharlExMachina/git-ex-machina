@@ -21,7 +21,7 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
     let t = Theme::new(cx.system_dark());
     let main = match &s.load {
         Load::Failed(e) => message(&t, e),
-        Load::NotStarted | Load::Loaded => history::pane(s, &t),
+        Load::NotStarted | Load::Loading | Load::Loaded => history::pane(s, &t),
     };
     let mut shell = row().w_full().h_full().fill(t.chrome);
     if s.sidebar_open {

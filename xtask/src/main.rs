@@ -72,7 +72,12 @@ pub fn proof_dir() -> PathBuf {
 
 /// Builds a named world in `target/worlds/NAME`.
 pub fn build_world(name: &str) -> Result<World, String> {
-    let w = World::create_in(&target().join("worlds").join(name));
+    build_world_in(name, &target().join("worlds").join(name))
+}
+
+/// World `name`, built in `dir`: replays that run side by side each need their own.
+pub fn build_world_in(name: &str, dir: &std::path::Path) -> Result<World, String> {
+    let w = World::create_in(dir);
     match name {
         "mockup" => {
             gxm_world::fixtures::mockup(&w);

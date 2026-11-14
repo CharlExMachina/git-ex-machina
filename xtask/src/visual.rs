@@ -35,7 +35,8 @@ pub fn app_snap(name: &str, theme: &str, size: Option<&str>, out: &Path, tree: &
         .arg(out)
         .arg("--tree")
         .arg(tree)
-        .args(["--theme", theme, "--scale", "1", "--at", "0.5"]);
+        // The app reads off its UI thread in real time, so the render waits for the reads.
+        .args(["--theme", theme, "--scale", "1", "--realtime", "--at", "1.0"]);
     if let Some(s) = size {
         cmd.args(["--size", s]);
     }

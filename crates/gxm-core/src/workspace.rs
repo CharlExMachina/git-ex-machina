@@ -45,6 +45,7 @@ impl Workspace {
     /// The saved workspace, or an empty one when none has been saved yet.
     pub fn load(env: &Env) -> Result<Workspace, WorkspaceError> {
         let path = Workspace::file(env);
+        env.off_ui_thread(&format_args!("reading {}", path.display()));
         match std::fs::read_to_string(&path) {
             Ok(text) => serde_json::from_str(&text).map_err(|error| WorkspaceError::Json { path, error }),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Workspace::default()),
@@ -54,6 +55,7 @@ impl Workspace {
 
     pub fn save(&self, env: &Env) -> Result<(), WorkspaceError> {
         let path = Workspace::file(env);
+        env.off_ui_thread(&format_args!("writing {}", path.display()));
         let io = |error| WorkspaceError::Io { path: path.clone(), error };
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(io)?;

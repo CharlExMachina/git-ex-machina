@@ -1,18 +1,17 @@
 //! The app's state and what changes it.
 
-use gxm_core::diff::{self, Hunk};
+use std::path::PathBuf;
+
+use gxm_core::diff::Hunk;
 use gxm_core::env::Env;
-use gxm_core::graph::{self, GraphRow};
-use gxm_core::history::{self, ChangeStatus, Commit, CommitInfo, FileChange};
+use gxm_core::graph::GraphRow;
+use gxm_core::history::{Commit, CommitInfo, FileChange};
 use gxm_core::repo::RepoSummary;
-use gxm_core::workspace::Workspace;
 use rune::TextEdit;
 
 use crate::keys;
-use crate::ops::{OpState, Ops};
-
-/// How many commits the history loads. Paging past this is future work (see the perf budget).
-pub const HISTORY_LIMIT: usize = 2000;
+use crate::load::Loads;
+use crate::ops::Ops;
 
 pub struct App {
     pub env: Env,
@@ -29,15 +28,19 @@ pub struct App {
     pub inspector_open: bool,
     /// The toolbar's git operations.
     pub ops: Ops,
+    /// The reads running off the UI thread.
+    pub loads: Loads,
     /// The commit message, written in the inspector's Message tab while the working tree is
     /// shown.
     pub message: TextEdit,
 }
 
-/// Loading is an explicit machine: nothing is read before the first frame is up.
+/// Loading is an explicit machine: nothing is read before the first frame is up, and the
+/// workspace is read off the UI thread.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Load {
     NotStarted,
+    Loading,
     Loaded,
     Failed(String),
 }
@@ -49,12 +52,15 @@ pub struct RepoEntry {
 
 /// The selected repository's history.
 pub struct History {
+    /// The repository it was read from.
+    pub path: PathBuf,
     pub rows: Vec<Row>,
     pub graph: Vec<GraphRow>,
     /// The widest row's lane count.
     pub cols: usize,
-    /// Commits reachable from any ref (may exceed `rows`).
-    pub total: usize,
+    /// Commits reachable from any ref (may exceed `rows`), once counted: a big repository
+    /// takes a while, so the history shows before it.
+    pub total: Option<usize>,
     pub details: Option<Details>,
     pub error: Option<String>,
 }
@@ -134,8 +140,10 @@ pub struct Details {
 }
 
 impl App {
-    /// A window's state before anything is read. Cheap: no files, no git.
-    pub fn new(env: Env) -> App {
+    /// A window's state before anything is read. Cheap: no files, no git. Call it on the thread
+    /// that draws the window: debug builds then panic if git or a file read ever runs there.
+    pub fn new(mut env: Env) -> App {
+        env.claim_ui_thread();
         App {
             env,
             load: Load::NotStarted,
@@ -149,69 +157,13 @@ impl App {
             sidebar_open: true,
             inspector_open: true,
             ops: Ops::default(),
+            loads: Loads::default(),
             message: TextEdit::new(""),
-        }
-    }
-
-    /// Reads the workspace and opens the first pinned repository (or the first one).
-    pub fn load_workspace(&mut self) {
-        let ws = match Workspace::load(&self.env) {
-            Ok(ws) => ws,
-            Err(e) => {
-                self.load = Load::Failed(e.to_string());
-                return;
-            }
-        };
-        self.repos = ws
-            .repos
-            .iter()
-            .filter_map(|r| {
-                RepoSummary::read(&self.env, &r.path).ok().map(|summary| RepoEntry { summary, pinned: r.pinned })
-            })
-            .collect();
-        self.load = Load::Loaded;
-        let first = self.repos.iter().position(|r| r.pinned).or(if self.repos.is_empty() { None } else { Some(0) });
-        if let Some(i) = first {
-            self.select_repo(i);
         }
     }
 
     pub fn repo(&self) -> Option<&RepoEntry> {
         self.selected_repo.and_then(|i| self.repos.get(i))
-    }
-
-    /// Opens a repository's history with nothing selected, so the inspector shows HEAD.
-    pub fn select_repo(&mut self, i: usize) {
-        let Some(entry) = self.repos.get(i) else { return };
-        let (env, path) = (&self.env, entry.summary.path.clone());
-        self.selected_repo = Some(i);
-        let mut rows = Vec::new();
-        let mut error = None;
-        let changed = entry.summary.status.changed;
-        let head = entry.summary.status.head.clone();
-        match history::log(env, &path, HISTORY_LIMIT) {
-            Ok(commits) => {
-                if changed > 0 && head.is_some() {
-                    rows.push(Row::Worktree { changed });
-                }
-                rows.extend(commits.into_iter().map(Row::Commit));
-            }
-            Err(e) => error = Some(e.to_string()),
-        }
-        let graph = graph::layout(rows.iter().map(|r| match r {
-            Row::Worktree { .. } => {
-                (keys::WORKTREE_ROW, head.as_slice().iter().map(String::as_str).collect::<Vec<_>>())
-            }
-            Row::Commit(c) => (c.id.as_str(), c.parents.iter().map(String::as_str).collect()),
-        }));
-        let cols = graph.iter().map(|g| g.width).max().unwrap_or(1);
-        let total = history::count(env, &path).unwrap_or(rows.len());
-        self.history = Some(History { rows, graph, cols, total, details: None, error });
-        self.selection = Selection::default();
-        if matches!(self.ops.state, OpState::Failed { .. }) {
-            self.ops.state = OpState::Idle;
-        }
-        self.refresh_details();
     }
 
     /// The commit at HEAD, if the history has one.
@@ -351,62 +303,6 @@ impl App {
         })
     }
 
-    /// Loads the inspector's details when its subject changed. True when it changed anything.
-    pub fn refresh_details(&mut self) -> bool {
-        let want = self.subject();
-        let Some(h) = &self.history else { return false };
-        if h.details.as_ref().map(|d| &d.subject) == want.as_ref() {
-            return false;
-        }
-        let Some(repo) = self.repo().map(|r| r.summary.path.clone()) else { return false };
-        let env = &self.env;
-        let details = want.map(|subject| {
-            let (info, files) = match &subject {
-                Subject::Worktree => (Ok(None), history::uncommitted(env, &repo)),
-                Subject::Head(id) | Subject::Commit(id) => {
-                    (history::info(env, &repo, id).map(Some), history::changes(env, &repo, id))
-                }
-                Subject::Commits(ids) => {
-                    let mut all: Vec<FileChange> = Vec::new();
-                    let mut error = None;
-                    for id in ids {
-                        match history::changes(env, &repo, id) {
-                            Ok(files) => {
-                                for f in files {
-                                    if !all.iter().any(|a| a.path == f.path) {
-                                        all.push(f);
-                                    }
-                                }
-                            }
-                            Err(e) => error = Some(e),
-                        }
-                    }
-                    (Ok(None), error.map_or(Ok(all), Err))
-                }
-            };
-            let error = info.as_ref().err().or(files.as_ref().err()).map(ToString::to_string);
-            let mut files = files.unwrap_or_default();
-            review_order(&mut files);
-            let mut d = Details { subject, info: info.ok().flatten(), files, file: None, hunk: None, error };
-            let first = d.files.first().map(|f| f.path.clone());
-            preview(env, &repo, &mut d, first);
-            d
-        });
-        if let Some(h) = &mut self.history {
-            h.details = details;
-        }
-        true
-    }
-
-    /// Previews `path`'s first hunk in the inspector.
-    pub fn select_file(&mut self, path: &str) {
-        let Some(repo) = self.repo().map(|r| r.summary.path.clone()) else { return };
-        let env = self.env.clone();
-        if let Some(d) = self.history.as_mut().and_then(|h| h.details.as_mut()) {
-            preview(&env, &repo, d, Some(path.to_owned()));
-        }
-    }
-
     /// Repositories matching the sidebar's filter, pinned first, as (index, entry).
     pub fn visible_repos(&self, pinned: bool) -> Vec<(usize, &RepoEntry)> {
         let q = self.filter.text.trim().to_lowercase();
@@ -416,26 +312,4 @@ impl App {
             .filter(|(_, r)| r.pinned == pinned && (q.is_empty() || r.summary.name.to_lowercase().contains(&q)))
             .collect()
     }
-}
-
-/// Files a reviewer reads first come first: changed and added files by path, then renames,
-/// then deletions, whose content is gone.
-fn review_order(files: &mut [FileChange]) {
-    files.sort_by(|a, b| {
-        let rank = |f: &FileChange| match f.status {
-            ChangeStatus::Renamed | ChangeStatus::Copied => 1,
-            ChangeStatus::Deleted => 2,
-            _ => 0,
-        };
-        rank(a).cmp(&rank(b)).then_with(|| a.path.cmp(&b.path))
-    });
-}
-
-fn preview(env: &Env, repo: &std::path::Path, d: &mut Details, path: Option<String>) {
-    d.hunk = path.as_deref().and_then(|p| match &d.subject {
-        Subject::Worktree => diff::worktree_hunk(env, repo, p).ok().flatten(),
-        Subject::Head(id) | Subject::Commit(id) => diff::commit_hunk(env, repo, id, p).ok().flatten(),
-        Subject::Commits(ids) => ids.iter().find_map(|id| diff::commit_hunk(env, repo, id, p).ok().flatten()),
-    });
-    d.file = path;
 }

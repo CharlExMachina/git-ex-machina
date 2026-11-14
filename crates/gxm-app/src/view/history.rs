@@ -9,13 +9,15 @@ use super::graph::{self, Node, RowLook};
 use crate::icons;
 use crate::keys;
 use crate::ops::{OpState, Ops};
-use crate::state::{App, History, Pick, Row};
+use crate::state::{App, History, Load, Pick, Row};
 use crate::theme::{Theme, size, ty};
 use crate::ui;
 
 pub fn pane(s: &App, t: &Theme) -> El {
     let body = match &s.history {
-        None => empty(t, "Add a repository to see its history."),
+        None if s.load == Load::Loaded && s.repos.is_empty() => empty(t, "Add a repository to see its history."),
+        // Still reading: a blank canvas, not a claim that there's nothing to show.
+        None => col().w_full().grow(1.0),
         Some(History { error: Some(e), .. }) => empty(t, e),
         Some(h) => col().w_full().grow(1.0).min_h(0.0).child(summary(s, h, t)).child(header(t)).child(rows(h, t)),
     };
@@ -49,11 +51,14 @@ fn summary(s: &App, h: &History, t: &Theme) -> El {
             line = line.child(text(format!("↓{}", st.behind)).font(ty::MONO_SM).color(t.ink_muted));
         }
     }
-    let mut rest = if h.total == 1 { "· 1 commit".to_owned() } else { format!("· {} commits", thousands(h.total)) };
-    if let Some(at) = s.repo().and_then(|r| r.summary.fetched) {
-        rest.push_str(&format!(" · fetched {}", time::long(at, s.env.now(), &s.env.tz)));
-    }
-    line = line.child(text(rest).font(ty::CAPTION).color(t.ink_muted));
+    // The count lands after the history on a big repository; until then the line goes without.
+    let count = h.total.map(|n| if n == 1 { "1 commit".to_owned() } else { format!("{} commits", thousands(n)) });
+    let fetched = s
+        .repo()
+        .and_then(|r| r.summary.fetched)
+        .map(|at| format!("fetched {}", time::long(at, s.env.now(), &s.env.tz)));
+    let rest: String = count.into_iter().chain(fetched).map(|part| format!("· {part} ")).collect();
+    line = line.child(text(rest.trim_end().to_owned()).font(ty::CAPTION).color(t.ink_muted));
     if let OpState::Failed { op, message } = &s.ops.state {
         line = line.child(
             text(format!("· {} failed: {}", op.verb(), Ops::reason(message)))
