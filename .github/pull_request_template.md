@@ -10,7 +10,7 @@
 
 **Video** (`cargo xtask journey <name> --video`):
 
-<!-- Drag the GIF here so it plays inline; attach the mp4. -->
+<!-- Reference the GIF and mp4 by relative path, e.g. ![first_look](./first_look.gif), and pass them to `gh pr create --attach` (see CLAUDE.md, "Pull requests"). -->
 
 **Screenshots** (the journey's marks; before/after for visual changes):
 

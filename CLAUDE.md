@@ -75,4 +75,6 @@ Every PR carries **proof** that the change works, using `.github/pull_request_te
 - **Commands run**, with their results, `cargo xtask verify` included.
 - **Goldens**: each changed golden and why it changed.
 
+Put the media in the PR itself, not just in CI artifacts: copy the GIFs, mp4s and PNGs next to the body file, reference them with relative paths (`![The history on open](./first_look-01-history.png)`), and pass each file with `--attach` (`gh pr create` / `gh pr edit --body-file body.md --attach first_look.gif --attach ...`, up to 50 files). `gh` uploads them and rewrites the references; any attachment the body doesn't reference is appended to the end.
+
 A PR without proof isn't ready for review. CI re-runs every journey on its own runner and attaches the renders it made.
