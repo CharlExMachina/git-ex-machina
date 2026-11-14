@@ -13,8 +13,12 @@ The goal is that a person never needs a provider's PR page (GitHub, GitLab, Bitb
 
 `inspector.*` shows the inspector for a commit in an open PR and for a merge commit from a merged PR.
 
+`extras.*` (`python3 extras.py`) proposes the states the flow needs that the frames don't draw, built with the first slice and **awaiting sign-off**: draft comments and a pending reply in the cockpit (a `Pending` pill, the composer under a pressed line), Split, Viewed ticked, the inspector's Checks and Conversation tabs (after `a`'s checks list and timeline), and a repository whose provider isn't connected.
+
 ## Decisions still open
 
 - "Close pull request" only returns to the history; it doesn't close the PR on the provider. It needs a clearer name.
-- Draft review comments are kept locally and sent to the provider together, in one review, on Submit review.
+- Draft review comments are kept locally and sent to the provider together, in one review, on Submit review. (Built: GitHub gets one pending review holding every comment and reply, then submits it.)
+- The flow's inspector (flow1, `inspector`) has no diff preview under Changed files; the app keeps its first-hunk preview from the earlier design until the person says otherwise.
+- flow2's summary line ends "its commits are lit, the rest of the history dims", which reads like a note to the reader; the app shows it as drawn.
 - Not designed yet: re-running a check and reading its log, editing the title and description, requesting reviewers, resolving threads.
