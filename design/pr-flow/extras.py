@@ -1,5 +1,5 @@
 """States the C + B flow needs that its frames don't draw, in the same parts: drafts in the
-review cockpit, Split, Viewed ticked, the inspector's Checks and Conversation tabs, and a
+review cockpit, Split, Viewed ticked (and the shelf it goes to), the inspector's Checks and Conversation tabs, and a
 repository whose provider isn't connected. Proposed 2026-11-14 with the first build; they need
 the person's sign-off. Run `python3 extras.py` here."""
 from pages import *
@@ -49,7 +49,20 @@ def viewed_panel():
     head = lambda on: (f'<div class="row" style="padding:10px 16px;border-bottom:1px solid var(--line);background:var(--chrome)"><span class="gu-status gu-status-A">A</span>'
                        f'<span class="mono"><span class="muted">src/avatars/</span>metrics.rs</span><span class="gu-file-stat" style="margin-left:6px"><span class="add">+54</span></span>'
                        f'<div class="grow"></div><label class="row muted" style="gap:6px;font-size:12px">{box(on)}Viewed</label></div>')
-    return f'<div class="cardc" style="overflow:hidden">{head(False)}{head(True)}</div>'
+    file = lambda st, name, side, sel=False, muted=False: (
+        f'<div class="gu-file" aria-selected="{str(sel).lower()}"><span class="gu-status gu-status-{st}">{st}</span>'
+        f'<span class="gu-file-path"><span class="gu-file-name"{" style=\"color:var(--ink-muted)\"" if muted else ""}>{name}</span></span>{side}</div>')
+    # Ticked, the file leaves the list for the Viewed shelf beneath it (folded until opened, as
+    # T3 Code keeps settled threads), and the next file still to view opens.
+    shelf = (f'<div class="row muted" style="margin:4px 8px 0;height:32px;padding:0 8px;gap:8px;border-radius:6px">'
+             f'<span style="font-size:11px;font-weight:600;letter-spacing:.06em">Viewed</span>'
+             f'<span style="flex:1;height:1px;background:var(--line)"></span><span class="monosm">1</span>{icon("chevron", 12)}</div>')
+    side = (f'<aside class="side" style="height:auto;width:248px;padding:14px 0;border:1px solid var(--line);border-radius:10px">'
+            f'<div class="row" style="padding:0 16px 8px;justify-content:space-between"><span class="label">Files</span><span class="monosm muted">1 of 2 viewed</span></div>'
+            f'<div style="padding:0 16px 12px"><div style="height:4px;border-radius:2px;background:var(--well)"><div style="width:50%;height:4px;border-radius:2px;background:var(--added)"></div></div></div>'
+            f'<div class="col" style="padding:0 8px">{file("M", "cache.rs", f"<span class=\"row muted\" style=\"gap:4px;font-size:11px\">{icon("comment", 12)}2</span>", sel=True)}</div>'
+            f'{shelf}<div class="col" style="padding:0 8px">{file("A", "metrics.rs", f"<span class=\"ok\">{icon("check", 13)}</span>", muted=True)}</div></aside>')
+    return (f'<div class="row" style="gap:16px;align-items:flex-start"><div class="cardc grow" style="overflow:hidden">{head(False)}{head(True)}</div>{side}</div>')
 
 def tabs_bar(on, count):
     tab = lambda n, c=None: f'<span class="tab{" on" if n == on else ""}">{n}{f"<span class=count>{c}</span>" if c else ""}</span>'
@@ -109,7 +122,7 @@ def page_extras():
     return (BASE.replace('width:1552px;', 'width:1552px;') +
             f'<div class="row" style="gap:24px;align-items:flex-start;flex-wrap:wrap">'
             f'{panel("Draft comments, a pending reply, the composer", drafts_panel())}'
-            f'<div class="col" style="gap:24px">{panel("Split", split_panel())}{panel("Viewed, then ticked", viewed_panel())}</div>'
+            f'<div class="col" style="gap:24px">{panel("Split", split_panel())}{panel("Viewed, then ticked: the file moves to the Viewed shelf (shown open)", viewed_panel())}</div>'
             f'{panel("Inspector: Checks", checks_panel(), 361)}{panel("Inspector: Conversation", conversation_panel(), 361)}'
             f'{panel("Inspector: provider not connected", not_connected_panel(), 361)}'
             f'{panel("Merge box: ready, then confirming the squash commit", merge_panels())}'
