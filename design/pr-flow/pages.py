@@ -160,7 +160,7 @@ def page_b():
             f'<div class="col" style="gap:10px"><div class="label">Your review</div>'
             f'<div class="composer" style="min-height:88px">Summarise your review… <span class="faint">(2 pending comments will be sent with it)</span></div>'
             f'<div class="tabs" style="align-self:flex-start"><span class="tab">Comment</span><span class="tab on" style="color:var(--added)">{icon("check", 13)}Approve</span><span class="tab">Request changes</span></div>'
-            f'<div class="row">{btn("Submit review", None, "primary")}<span class="faint" style="font-size:11.5px">⌘↩</span></div></div>'
+            f'<div class="row">{btn("Submit review", None, "primary", badge="⌘↩")}</div></div>'
             f'</div></aside>')
     return BASE + f'<div class="win">{files_side}{main}{insp}</div>' + END
 

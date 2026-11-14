@@ -274,7 +274,9 @@ fn your_review(s: &App, t: &Theme) -> El {
         (l.key(key).on_press(move |s: &mut App| s.set_verdict(which)), on)
     };
     let sending = matches!(s.pulls.machine.sending, Sending::Sending { .. } | Sending::Refreshing { .. });
-    let submit = ui::button_in(t, Variant::Primary, None, "Submit review", None, sending).key(keys::SUBMIT_REVIEW);
+    // Its shortcut sits inside it, in the primary button's badge.
+    let submit = ui::button_in(t, Variant::Primary, None, "Submit review", Some("⌘↩".to_owned()), sending)
+        .key(keys::SUBMIT_REVIEW);
     let submit = if sending { submit.disabled(true) } else { submit.on_press(|s: &mut App| s.submit_review()) };
     let mut c = col()
         .w_full()
@@ -289,7 +291,7 @@ fn your_review(s: &App, t: &Theme) -> El {
                 choice("Request changes", keys::VERDICT_REQUEST_CHANGES, Verdict::RequestChanges),
             ],
         )))
-        .child(row().gap(8.0).center_y().child(submit).child(text("⌘↩").font(ty::HINT).color(t.ink_faint)));
+        .child(row().child(submit));
     if let Sending::Failed { number, message } = &s.pulls.machine.sending
         && *number == v.number
     {
