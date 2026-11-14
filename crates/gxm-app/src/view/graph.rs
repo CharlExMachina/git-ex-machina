@@ -44,9 +44,14 @@ pub struct RowLook {
     /// The row sits under the uncommitted-changes row, whose dashed rail ends above it, so the
     /// node has no rail coming in from above.
     pub under_worktree: bool,
-    /// The background the node's ring is cut from (the selected row's raised fill).
-    pub ground: Color,
+    /// The commit is selected: its node gets a ring in its lane's colour.
+    pub selected: bool,
 }
+
+/// The selected node's ring, and the cut-out of background under it that stops the rails a
+/// little outside the ring.
+const SELECTED_RING: f32 = 8.0;
+const SELECTED_CUT: f32 = 10.25;
 
 pub fn row(t: &Theme, g: &GraphRow, cols: usize, look: &RowLook) -> El {
     let nx = x(g.lane);
@@ -82,7 +87,17 @@ pub fn row(t: &Theme, g: &GraphRow, cols: usize, look: &RowLook) -> El {
     if !downs.is_empty() {
         shape = shape.line([nx, MID], [nx, H], STROKE, LineCap::Round, ink);
     }
-    shape = shape.fill(circle([nx, MID], 6.5), look.ground);
+    if look.selected {
+        shape = shape.fill(circle([nx, MID], SELECTED_CUT), t.canvas).stroke_with(
+            circle([nx, MID], SELECTED_RING),
+            true,
+            1.5,
+            LineCap::Round,
+            ink,
+        );
+    } else {
+        shape = shape.fill(circle([nx, MID], 6.5), t.canvas);
+    }
     shape = match look.node {
         Node::Head => shape
             .stroke_with(circle([nx, MID], 4.5), true, STROKE, LineCap::Round, ink)
@@ -96,7 +111,7 @@ pub fn row(t: &Theme, g: &GraphRow, cols: usize, look: &RowLook) -> El {
 /// The uncommitted row's mark: a ring of six even dashes, stroked like the graph's rails
 /// (gaps at the top and bottom, where the rail leaves it), and a dashed rail in `lane` running
 /// down into HEAD's row, where [`row`] continues it under HEAD's node.
-pub fn worktree(t: &Theme, staged: bool, lane: Color) -> El {
+pub fn worktree(t: &Theme, staged: bool, lane: Color, cols: usize) -> El {
     let c = [PAD, MID];
     let mut shape = Shape::new();
     if staged {
@@ -108,7 +123,7 @@ pub fn worktree(t: &Theme, staged: bool, lane: Color) -> El {
         }
     }
     shape = dashed_rail(shape, PAD, RAIL_START, H, 0.0, lane);
-    canvas(shape).w(52.0).h(H)
+    canvas(shape).w(width(cols)).h(H)
 }
 
 /// The worktree ring's radius.

@@ -159,20 +159,20 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
     let (Some(r), Some(g)) = (h.rows.get(i), h.graph.get(i)) else { return rune::el() };
     let id = r.id().to_owned();
     let selected = s.is_selected(&id);
-    let ground = if selected { t.raised } else { t.canvas };
-    let mut el = match r {
+    let lane = graph::color(t, g.color);
+    // The graph sits beside the row's content, never under its highlight, so no rail is ever
+    // covered or cut by a selection.
+    let (graph_el, content) = match r {
         Row::Worktree { changed } => {
             // Everything staged: a filled mark and a note.
             let staged = s.all_staged();
-            let mut r = row()
+            let mut c = row()
                 .gap(6.0)
-                .pr(12.0)
-                .child(graph::worktree(t, staged, graph::color(t, g.color)))
                 .child(row().grow(1.0).child(text("Uncommitted changes").font(ty::BODY_STRONG).color(t.ink)));
             if staged {
-                r = r.child(text("Staged").font(ty::CAPTION).color(t.ink_muted));
+                c = c.child(text("Staged").font(ty::CAPTION).color(t.ink_muted));
             }
-            r.child(ui::count(t, *changed))
+            (graph::worktree(t, staged, lane, h.cols), c.child(ui::count(t, *changed)))
         }
         Row::Commit(c) => {
             let node = if c.refs.iter().any(|r| r.kind == RefKind::Head) {
@@ -183,49 +183,50 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
                 Node::Commit
             };
             let under_worktree = i > 0 && matches!(h.rows[i - 1], Row::Worktree { .. });
-            let look = RowLook { node, under_worktree, ground };
-            commit_row(s, c, graph::row(t, g, h.cols, &look), graph::color(t, g.color), selected, t)
+            let look = RowLook { node, under_worktree, selected };
+            (graph::row(t, g, h.cols, &look), commit_content(s, c, lane, selected, t))
         }
     };
-    el = el.key(id.clone()).h(size::ROW_COMMIT).center_y().radius(size::RADIUS_SM).on_press_tx(
-        move |s: &mut App, tx| {
-            let m = tx.mods();
-            let how = if m.shift {
-                Pick::Range
-            } else if m.cmd {
-                Pick::Toggle
-            } else {
-                Pick::Plain
-            };
-            s.pick(&id, how);
-        },
-    );
-    if !selected {
-        return el.hover(t.control_hover);
+    let mut card = content.grow(1.0).min_w(0.0).h(size::ROW_COMMIT).pl(6.0).pr(12.0).center_y().radius(size::RADIUS_SM);
+    let mut el = row().key(id.clone()).h(size::ROW_COMMIT).center_y();
+    if selected {
+        // Neighbouring selected rows merge into one block: the first keeps its top, a middle
+        // row only its sides, the last its bottom and drop. A row with a selected row below
+        // paints over it, so the drop beneath can't cut across the block.
+        let picked = |k: Option<usize>| k.and_then(|k| h.rows.get(k)).is_some_and(|r| s.is_selected(r.id()));
+        let (above, below) = (picked(i.checked_sub(1)), picked(Some(i + 1)));
+        let r = size::RADIUS_SM;
+        let top = if above { 0.0 } else { r };
+        let bottom = if below { 0.0 } else { r };
+        card = card.fill(t.raised).corners([top, top, bottom, bottom]);
+        let shadows: Vec<rune::Shadow> = match (above, below) {
+            (false, false) => t.shadow_lifted().to_vec(),
+            (false, true) => t.shadow_lifted_first().to_vec(),
+            (true, true) => t.shadow_lifted_middle().to_vec(),
+            (true, false) => t.shadow_lifted_last().to_vec(),
+        };
+        for sh in shadows {
+            card = card.box_shadow(sh);
+        }
+        el = el.paint_order(if below { 2 } else { 1 });
+    } else {
+        card = card.hover(t.control_hover);
     }
-    // Neighbouring selected rows merge into one block: the first keeps its top, a middle row
-    // only its sides, the last its bottom and drop. A row with a selected row below paints over
-    // it, so the drop beneath can't cut across the block.
-    let picked = |k: Option<usize>| k.and_then(|k| h.rows.get(k)).is_some_and(|r| s.is_selected(r.id()));
-    let (above, below) = (picked(i.checked_sub(1)), picked(Some(i + 1)));
-    let r = size::RADIUS_SM;
-    let top = if above { 0.0 } else { r };
-    let bottom = if below { 0.0 } else { r };
-    el = el.fill(t.raised).corners([top, top, bottom, bottom]).paint_order(if below { 2 } else { 1 });
-    let shadows: Vec<rune::Shadow> = match (above, below) {
-        (false, false) => t.shadow_lifted().to_vec(),
-        (false, true) => t.shadow_lifted_first().to_vec(),
-        (true, true) => t.shadow_lifted_middle().to_vec(),
-        (true, false) => t.shadow_lifted_last().to_vec(),
-    };
-    for sh in shadows {
-        el = el.box_shadow(sh);
-    }
-    el
+    el.child(graph_el).child(card).on_press_tx(move |s: &mut App, tx| {
+        let m = tx.mods();
+        let how = if m.shift {
+            Pick::Range
+        } else if m.cmd {
+            Pick::Toggle
+        } else {
+            Pick::Plain
+        };
+        s.pick(&id, how);
+    })
 }
 
-/// A commit's row: graph, refs and subject, author, date, short id.
-fn commit_row(s: &App, c: &Commit, graph: El, lane: Color, selected: bool, t: &Theme) -> El {
+/// A commit's row content: refs and subject, author, date, short id.
+fn commit_content(s: &App, c: &Commit, lane: Color, selected: bool, t: &Theme) -> El {
     let mut body = row().grow(1.0).min_w(0.0).gap(6.0).center_y();
     for label in &c.refs {
         body = body.child(ref_badge(t, label.kind, &label.name, lane));
@@ -244,12 +245,9 @@ fn commit_row(s: &App, c: &Commit, graph: El, lane: Color, selected: bool, t: &T
             .color(t.ink_muted)
             .help(time::absolute(c.time, &s.env.tz)),
     );
-    let sha = row().w(SHA_W).justify_end().child(text(c.short_id().to_owned()).font(ty::MONO_11).color(if selected {
-        t.ink_muted
-    } else {
-        t.ink_faint
-    }));
-    row().pr(12.0).child(graph).child(body).child(author).child(date).child(sha)
+    let sha_ink = if selected { t.ink_muted } else { t.ink_faint };
+    let sha = row().w(SHA_W).justify_end().child(text(c.short_id().to_owned()).font(ty::MONO_11).color(sha_ink));
+    row().child(body).child(author).child(date).child(sha)
 }
 
 /// A person's colour: a lane chosen by a hash of their email (FNV-1a), so a name keeps its
