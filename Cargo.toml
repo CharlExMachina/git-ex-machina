@@ -20,10 +20,13 @@ gxm-world = { path = "crates/gxm-world" }
 rune = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749", version = "0.0.1" }
 rune-kit = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749", version = "0.0.1" }
 
-jiff = { version = "0.2", default-features = false, features = ["std", "alloc", "tz-system", "tzdb-bundle-platform", "tzdb-zoneinfo"] }
+jiff = { version = "0.2", default-features = false, features = ["std", "alloc", "serde", "tz-system", "tzdb-bundle-platform", "tzdb-zoneinfo"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
+# HTTPS to the providers' APIs: rustls on ring, verified by the platform's trust store (webpki-roots
+# is CDLA-licensed, which deny.toml doesn't allow).
+ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "_ring", "platform-verifier"] }
 
 [patch.crates-io]
 winit = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749" }

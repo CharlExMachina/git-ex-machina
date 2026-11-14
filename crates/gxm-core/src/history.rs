@@ -178,6 +178,20 @@ pub fn changes(env: &Env, repo: &Path, commit: &str) -> Result<Vec<FileChange>, 
     Ok(files)
 }
 
+/// What changed from commit `from` to commit `to`, file by file.
+pub fn range_changes(env: &Env, repo: &Path, from: &str, to: &str) -> Result<Vec<FileChange>, GitError> {
+    let raw = git::run(env, repo, &["diff", "-M", "-z", "--raw", from, to])?;
+    let num = git::run(env, repo, &["diff", "-M", "-z", "--numstat", from, to])?;
+    let mut files = parse_raw(&raw)?;
+    for (path, added, removed) in parse_numstat(&num)? {
+        if let Some(f) = files.iter_mut().find(|f| f.path == path) {
+            f.added = added;
+            f.removed = removed;
+        }
+    }
+    Ok(files)
+}
+
 /// `--raw -z`: `:old new oldsha newsha S\0path\0` (renames and copies add a second path).
 fn parse_raw(out: &str) -> Result<Vec<FileChange>, GitError> {
     let mut files = Vec::new();

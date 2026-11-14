@@ -1,6 +1,7 @@
 //! The window: the repository sidebar (248 + its border), the history, and the inspector
 //! (360 + its border), each under its own 48-point bar.
 
+mod facts;
 mod graph;
 mod history;
 mod inspector;

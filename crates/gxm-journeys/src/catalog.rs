@@ -7,7 +7,7 @@ use gxm_world::World;
 use crate::{Journey, Press};
 
 pub fn all() -> Vec<Journey> {
-    vec![first_look(), push_and_pull(), shape_history()]
+    vec![first_look(), push_and_pull(), shape_history(), crate::review::review_pull_request()]
 }
 
 pub fn find(name: &str) -> Option<Journey> {

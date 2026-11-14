@@ -239,3 +239,76 @@ pub fn pips(t: &Theme, added: u32, removed: u32) -> El {
     }
     r
 }
+
+/// `.gu-btn:disabled` at `sm`: ink-faint on a flat control, raised, at 60%, whatever its variant.
+pub fn button_disabled(t: &Theme, glyph: Option<&'static Icon>, label: &str) -> El {
+    let mut b = row().h(24.0).gap(6.0).center_y().radius(size::RADIUS_SM).fill(t.control);
+    b = if label.is_empty() { b.w(24.0).center() } else { b.px(8.0) };
+    for s in t.shadow_raised() {
+        b = b.box_shadow(s);
+    }
+    if let Some(g) = glyph {
+        b = b.child(icon(g, 14.0).color(t.ink_faint));
+    }
+    if !label.is_empty() {
+        b = b.child(text(label.to_owned()).font(ty::CONTROL).color(t.ink_faint));
+    }
+    b.role("button").disabled(true).opacity(0.6)
+}
+
+/// `.state`: a pull request's state, 20 tall, 6 in on the left and 8 on the right, a 12 icon 5
+/// from 600 11.5px text. Open is added on added-soft; merged is lane 6 on 18% of itself.
+pub fn state_pill(t: &Theme, state: gxm_core::forge::model::PullState, ground: Color) -> El {
+    use gxm_core::forge::model::PullState;
+    let (fg, bg, glyph) = match state {
+        PullState::Open => (t.added, t.added_soft, &icons::PULL_REQUEST),
+        PullState::Draft => (t.ink_muted, t.control_hover, &icons::PULL_REQUEST),
+        PullState::Merged => (t.lane(6), crate::theme::mix(t.lane(6), 0.18, ground), &icons::MERGE),
+        PullState::Closed => (t.removed, t.removed_soft, &icons::PULL_REQUEST),
+    };
+    row()
+        .h(20.0)
+        .pl(6.0)
+        .pr(8.0)
+        .gap(5.0)
+        .center_y()
+        .radius(size::PILL)
+        .fill(bg)
+        .child(icon(glyph, 12.0).color(fg))
+        .child(text(state.word()).font(ty::STATE).color(fg))
+}
+
+/// `.card`: raised, radius 12, a hairline ring inside.
+pub fn card(t: &Theme) -> El {
+    rune::col().radius(size::RADIUS_LG).fill(t.raised).box_shadow(crate::theme::Theme::ring(1.0, t.line))
+}
+
+/// `.count` beside a tab's label: mono 10.5/14, 5 a side, a pill of control-hover.
+pub fn tab_count(t: &Theme, n: usize) -> El {
+    row().px(5.0).radius(size::PILL).fill(t.control_hover).child(text(n.to_string()).font(ty::TAB_COUNT).color(t.ink_muted))
+}
+
+/// `.composer`: a well, radius 8, with the well's inner shade.
+pub fn well(t: &Theme) -> El {
+    let mut w = rune::col().radius(size::RADIUS_MD).fill(t.well);
+    for s in t.shadow_well() {
+        w = w.box_shadow(s);
+    }
+    w
+}
+
+/// The Viewed checkbox: 14 square, radius 4, a 1.5 ring of `--edge`; ticked, it fills with
+/// `--added` and shows a check.
+pub fn checkbox(t: &Theme, on: bool) -> El {
+    let b = row().size(14.0, 14.0).radius(size::RADIUS_XS).center();
+    if on {
+        b.fill(t.added).child(icon(&icons::CHECK, 10.0).color(t.on_lane))
+    } else {
+        b.box_shadow(crate::theme::Theme::ring(1.5, t.edge))
+    }
+}
+
+/// An icon and a word in one colour, 4 apart, 12px: `✓ Approved`, `× 1 failing`.
+pub fn signal(glyph: &'static Icon, color: Color, label: impl Into<String>) -> El {
+    row().gap(4.0).center_y().child(icon(glyph, 12.0).color(color)).child(text(label.into()).font(ty::CAPTION).color(color))
+}

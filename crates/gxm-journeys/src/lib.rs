@@ -12,6 +12,7 @@
 //! step, never one per assertion.
 
 pub mod catalog;
+mod review;
 mod runner;
 
 pub use runner::{Failure, Recording, run};
