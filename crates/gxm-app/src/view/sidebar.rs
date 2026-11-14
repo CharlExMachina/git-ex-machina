@@ -10,14 +10,17 @@ use crate::state::{App, RepoEntry};
 use crate::theme::{Theme, size, ty};
 use crate::ui::{self, Variant};
 
-/// Where macOS draws the window's traffic lights: three 12-point lights 8 apart.
-pub const LIGHTS_W: f32 = 52.0;
+/// Room for the window's traffic lights, which macOS draws inside the window (three 12-point
+/// lights 8 apart). Elsewhere the window manager draws its own title bar, so there's none.
+pub const LIGHTS_W: f32 = if cfg!(target_os = "macos") { 52.0 } else { 0.0 };
 
 pub fn sidebar(s: &App, t: &Theme) -> El {
     let soon = "Coming next: add a repository from disk";
-    let top = bar(t)
-        .px(12.0)
-        .child(rune::el().w(LIGHTS_W).h(12.0).key("traffic-lights"))
+    let mut top = bar(t).px(12.0);
+    if LIGHTS_W > 0.0 {
+        top = top.child(rune::el().w(LIGHTS_W).h(12.0).key("traffic-lights"));
+    }
+    let top = top
         .child(rune::el().grow(1.0))
         .child(
             ui::button(t, Variant::Ghost, Some(&icons::SIDEBAR), "", None)

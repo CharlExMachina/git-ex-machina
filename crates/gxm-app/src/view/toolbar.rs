@@ -20,9 +20,10 @@ use crate::ui::{self, Variant};
 pub fn toolbar(s: &App, t: &Theme) -> El {
     let mut bar = bar(t).px(16.0);
     if !s.sidebar_open {
-        // With the sidebar hidden, its toggle moves here, so it can come back, clear of the
-        // traffic lights the sidebar's bar made room for (12 in, 52 wide, then its 8 gap).
-        bar = bar.pl(12.0 + super::sidebar::LIGHTS_W + 8.0).child(
+        // With the sidebar hidden, its toggle moves here, so it can come back, clear of any
+        // traffic lights the sidebar's bar made room for (12 in, their width, then its 8 gap).
+        let lights = super::sidebar::LIGHTS_W;
+        bar = bar.pl(if lights > 0.0 { 12.0 + lights + 8.0 } else { 16.0 }).child(
             ui::button(t, Variant::Ghost, Some(&icons::SIDEBAR), "", None)
                 .key(keys::SIDEBAR_TOGGLE)
                 .help("Show the sidebar (⌃⌘S)")

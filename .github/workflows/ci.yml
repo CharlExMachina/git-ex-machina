@@ -44,9 +44,9 @@ jobs:
           retention-days: 30
 
   macos:
-    # The app's home platform: everything `verify` checks, and the journeys rendered with macOS
-    # text, as people will see them. GitHub-hosted, so no machine of ours runs a stranger's PR;
-    # free for a public repository.
+    # macOS, the other platform the app ships for (the `verify` job covers Linux): everything
+    # `verify` checks, and the journeys rendered with macOS text. GitHub-hosted, so no machine
+    # of ours runs a stranger's PR; free for a public repository.
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4

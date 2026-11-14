@@ -1,28 +1,17 @@
-<img src="assets/icon.svg" width="64" height="64" alt="">
+# Git Ex Machina
 
-# git-ex-machina
+A clean, no-nonsense Git GUI client, plus a no-nonsense, simple-to-use CLI. It lets you manage your repos, review PRs, clone projects, push, pull, and do everything else you'd expect from a Git client, with world-class performance. It's stress-tested to handle your biggest repos.
 
-A native git client: a GPU-rendered app built with [Rune](https://github.com/anomalyco/rune) and a CLI, `gxm`, in Rust. It shows a repository's history as a graph and makes branches, worktrees, pulls, pushes and diffs easy, across GitHub, GitLab and Bitbucket. SSH is the default; HTTPS is opt-in.
+For macOS and Linux.
 
-![first look](docs/first-look.png)
+![Git Ex Machina](docs/first-look.png)
 
-## Run it
+## Contributions
 
-Install [rustup](https://rustup.rs) (the project pins its toolchain), then:
+I'm not accepting contributions right now, except from people I've specifically authorized to contribute to this project. If you're thinking of contributing, don't, unless you're someone I've told is free to contribute. You know who you are.
 
-```sh
-cargo run -p gxm-app          # the app, on your workspace
-cargo run -p gxm-cli -- repos # the CLI
-cargo xtask help              # checks, worlds, snapshots, journeys
-```
-
-## How it's verified
-
-Every workflow is a **journey**: a long, user-shaped script that runs against the real app, headless, in a hermetic **world** of fixture repositories. That same journey renders to the screenshots and video attached to every pull request. `cargo xtask verify` runs everything CI does. Contributors (people and agents) start at [CLAUDE.md](CLAUDE.md).
+I do accept issues. If they're usability bugs or the app not working right, I'll do my best to work on them. I also accept ideas in the Issues tab, if they fit my vision for this project. But if you open a pull request and you're not one of the people I've allowed to contribute to this repo, I'll close it right away.
 
 ## License
 
-Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT), at your option. Bundled fonts (Hanken Grotesk, Geist Mono) are under the SIL Open Font License; their licenses sit beside them in `crates/gxm-app/assets/fonts/`.
-
-Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in this project, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
-
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT), at your option. The bundled fonts (Hanken Grotesk and Geist Mono) are under the SIL Open Font License; their licenses are in `crates/gxm-app/assets/fonts/`.

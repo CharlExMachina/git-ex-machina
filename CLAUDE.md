@@ -1,6 +1,6 @@
 # git-ex-machina
 
-A native git client in Rust: a Rune GUI (`gxm-app`) and a CLI (`gxm`) over one domain crate. It works with GitHub, GitLab and Bitbucket; SSH is the default transport and HTTPS is opt-in.
+A native git client in Rust for macOS and Linux: a Rune GUI (`gxm-app`) and a CLI (`gxm`) over one domain crate. It works with GitHub, GitLab and Bitbucket; SSH is the default transport and HTTPS is opt-in.
 
 ## Layout
 
