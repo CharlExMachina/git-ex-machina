@@ -1,5 +1,6 @@
-//! The window before there's a repository: what to do, and the two ways to do it. The
-//! sidebar, toolbar and inspector stay away until there's something for them to act on.
+//! The window before there's a repository: what to do, and the two ways to do it, with signing
+//! in to GitHub offered quietly at the foot. The sidebar, toolbar and inspector stay away until
+//! there's something for them to act on.
 
 use rune::{El, col, row, text};
 
@@ -10,7 +11,7 @@ use crate::state::App;
 use crate::theme::{Theme, size, ty};
 use crate::ui::{self, Variant};
 
-pub fn screen(t: &Theme) -> El {
+pub fn screen(s: &App, t: &Theme) -> El {
     let add = ui::button(t, Variant::Secondary, Some(&icons::PLUS), "Add repository", None)
         .key(keys::EMPTY_ADD)
         .on_press_tx(|s: &mut App, tx| s.sheet_event(Event::OpenAdd, Some(tx)));
@@ -31,6 +32,6 @@ pub fn screen(t: &Theme) -> El {
         // The band the window's title bar and traffic lights sit in.
         .child(rune::el().w_full().h(size::TOOLBAR + 1.0))
         .child(col().w_full().grow(1.0).center().child(ask))
-        // Balances the band above, so the question sits at the window's centre.
-        .child(rune::el().w_full().h(size::TOOLBAR + 1.0))
+        // As tall as the band above, so the question sits at the window's centre.
+        .child(row().w_full().h(size::TOOLBAR + 1.0).justify_center().center_y().child(super::account::control(s, t)))
 }
