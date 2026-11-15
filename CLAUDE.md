@@ -9,7 +9,6 @@ A native git client in Rust for macOS and Linux: a Rune GUI (`gxm-app`) and a CL
 - `crates/gxm-world`: hermetic **worlds** (sandboxed home, fixture repositories, local remotes).
 - `crates/gxm-journeys`: **journeys**, which are the tests, the demo videos and the PR proof.
 - `xtask`: every check and render. `cargo xtask help` lists them.
-- `design/pr-flow/`: the approved mockups for the pull-request viewer, until it ships.
 
 Rust comes from `rust-toolchain.toml` through rustup. Rune is pinned in `Cargo.toml`: its `rev` and the four `[patch.crates-io]` entries move together, in a PR of their own that re-runs every journey and golden.
 

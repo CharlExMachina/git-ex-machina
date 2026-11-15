@@ -17,6 +17,8 @@ pub struct Theme {
     pub control_hover: Color,
     pub well: Color,
     pub line: Color,
+    /// `--edge`: a control's outline (the Viewed checkbox).
+    pub edge: Color,
     pub ink: Color,
     pub ink_muted: Color,
     pub ink_faint: Color,
@@ -44,6 +46,14 @@ pub fn rgb(v: u32) -> Color {
 pub fn rgba(v: u32, a: f32) -> Color {
     let ch = |shift: u32| rune::color::srgb_decode(((v >> shift) & 0xff) as f32 / 255.0);
     Color { r: ch(16), g: ch(8), b: ch(0), a }
+}
+
+/// `color-mix(in srgb, <fg> <a>, transparent)` laid over `bg`, as the browser blends it (in
+/// sRGB), as one opaque colour: `fg` at `a` over `bg`.
+pub fn mix(fg: Color, a: f32, bg: Color) -> Color {
+    use rune::color::{srgb_decode, srgb_encode};
+    let m = |f: f32, b: f32| srgb_decode(srgb_encode(f) * a + srgb_encode(b) * (1.0 - a));
+    Color { r: m(fg.r, bg.r), g: m(fg.g, bg.g), b: m(fg.b, bg.b), a: 1.0 }
 }
 
 /// The shadow tokens. `pressed`, `lifted` and `well` keep their colours only (their geometry
@@ -83,6 +93,7 @@ impl Theme {
             control_hover: rgb(0x322f2c),
             well: rgb(0x0e0d0c),
             line: rgb(0x2b2826),
+            edge: rgb(0x7a736b),
             ink: rgb(0xf1ede8),
             ink_muted: rgb(0xa8a199),
             ink_faint: rgb(0x7d766f),
@@ -134,6 +145,7 @@ impl Theme {
             control_hover: rgb(0xf3f0ec),
             well: rgb(0xe6e2dc),
             line: rgb(0xe2ddd6),
+            edge: rgb(0x877f75),
             ink: rgb(0x1d1b19),
             ink_muted: rgb(0x665f57),
             ink_faint: rgb(0x8a8278),
@@ -339,4 +351,16 @@ pub mod ty {
     pub const STATUS: TextStyle = mono(10.0, 500.0, 16.0);
     /// `.display-sm`: the inspector's title, 600 18px/24px, -0.01em.
     pub const DISPLAY_SM: TextStyle = sans(18.0, 600.0, 24.0).tracking(-0.18);
+    /// 600 13px: a pull request's number, the merge box's headings.
+    pub const BODY_SEMI: TextStyle = sans(13.0, 600.0, 18.0);
+    /// 400 11px on the body's 18px line: the review cockpit's comment counts.
+    pub const SMALL: TextStyle = sans(11.0, 400.0, 18.0);
+    /// `.state`: a pull request's state pill, 600 11.5px/20px.
+    pub const STATE: TextStyle = sans(11.5, 600.0, 20.0);
+    /// 400 12.5px/18px: a pull request's description.
+    pub const DESCRIPTION: TextStyle = sans(12.5, 400.0, 18.0);
+    /// `.count` in a tab: 400 10.5px/14px mono.
+    pub const TAB_COUNT: TextStyle = mono(10.5, 400.0, 14.0);
+    /// 500 12px/18px mono: a name in a review thread (threads sit in the hunk's mono).
+    pub const MONO_STRONG: TextStyle = mono(12.0, 500.0, 18.0);
 }

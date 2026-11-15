@@ -1,5 +1,5 @@
 [files]
-extend-exclude = ["design", "target", "*.lock"]
+extend-exclude = ["target", "*.lock"]
 
 [default.extend-words]
 # Short commit ids and fixture text that look like typos.

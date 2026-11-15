@@ -2,6 +2,8 @@
 //!
 //! The CLI and the app share `gxm-core`, so anything the app shows can be checked here as text.
 
+mod prs;
+
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -19,6 +21,7 @@ gxm: git-ex-machina on the command line
 Usage:
   gxm repos [--json]              The workspace's repositories and their state
   gxm log [PATH] [-n N] [--json]  History with its graph (PATH defaults to .)
+  gxm prs [PATH]                  Pull requests on the repository's provider (a token: GH_TOKEN)
   gxm help                        This message
 ";
 
@@ -29,6 +32,7 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("repos") => repos(&env, &args[1..], &mut out),
         Some("log") => log(&env, &args[1..], &mut out),
+        Some("prs") => prs::prs(&env, &args[1..], &mut out),
         Some("help" | "--help" | "-h") | None => out.write_all(USAGE.as_bytes()).map_err(|e| e.to_string()),
         Some(other) => Err(format!("unknown command {other:?}\n\n{USAGE}")),
     };

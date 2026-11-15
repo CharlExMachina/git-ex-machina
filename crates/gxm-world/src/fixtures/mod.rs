@@ -10,8 +10,10 @@ use jiff::Timestamp;
 use crate::{Author, RepoBuilder, World};
 
 mod atlas;
+mod pulls;
 
 pub use atlas::atlas_web;
+pub use pulls::{DESCRIPTION, atlas_pulls, dotfiles_pull};
 
 // The app colours people by a hash of their email; these addresses give the colours the
 // design gives them (Ana blue, Kenji teal, Lea rose).
@@ -34,6 +36,7 @@ pub struct Mockup {
 /// six more repositories across GitHub, GitLab and Bitbucket in different states.
 pub fn mockup(w: &World) -> Mockup {
     let atlas_web = atlas_web(w);
+    atlas_pulls(w, &atlas_web);
     let m = Mockup {
         rune_playground: simple(
             w,
@@ -71,6 +74,7 @@ pub fn mockup(w: &World) -> Mockup {
         ),
         atlas_web,
     };
+    dotfiles_pull(w, &m.dotfiles);
     w.add_to_workspace(&m.atlas_web, true);
     w.add_to_workspace(&m.rune_playground, true);
     for repo in [&m.payments_api, &m.brand_tokens, &m.dotfiles, &m.field_notes, &m.infra_terraform] {

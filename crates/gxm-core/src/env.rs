@@ -30,6 +30,36 @@ pub struct Env {
     /// The thread that draws a window, set by [`Env::claim_ui_thread`]. Git and file reads on
     /// it would stall frames, so debug builds panic there (see [`Env::off_ui_thread`]).
     ui_thread: Option<std::thread::ThreadId>,
+    /// How to reach the providers' APIs (pull requests, reviews, checks).
+    pub forge: ForgeAccess,
+}
+
+/// Where a provider's API is and the token that opens it. Keychain storage and a sign-in
+/// wizard come later; for now the token comes from the environment, read here and nowhere else.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ForgeAccess {
+    /// GitHub's API root: `https://api.github.com`, or a world's fake.
+    pub github_api: String,
+    pub github_token: Option<String>,
+}
+
+impl std::fmt::Debug for ForgeAccess {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Never print a token.
+        f.debug_struct("ForgeAccess")
+            .field("github_api", &self.github_api)
+            .field("github_token", &self.github_token.as_ref().map(|_| "…"))
+            .finish()
+    }
+}
+
+impl ForgeAccess {
+    pub const GITHUB_API: &str = "https://api.github.com";
+
+    /// No provider reachable: no token, GitHub's real address.
+    pub fn none() -> ForgeAccess {
+        ForgeAccess { github_api: ForgeAccess::GITHUB_API.to_owned(), github_token: None }
+    }
 }
 
 /// The source of "now".
@@ -46,6 +76,8 @@ pub const NOW_VAR: &str = "GXM_NOW";
 pub const TZ_VAR: &str = "GXM_TZ";
 pub const ISOLATED_VAR: &str = "GXM_ISOLATED";
 pub const CONFIG_DIR_VAR: &str = "GXM_CONFIG_DIR";
+pub const GITHUB_API_VAR: &str = "GXM_GITHUB_API";
+pub const GITHUB_TOKEN_VAR: &str = "GXM_GITHUB_TOKEN";
 
 impl Env {
     /// The real environment, with the `GXM_*` overrides a sandboxed run sets.
@@ -58,7 +90,13 @@ impl Env {
         let isolated = var(ISOLATED_VAR).is_some_and(|v| v == "1");
         let config_dir = var(CONFIG_DIR_VAR).map(PathBuf::from).unwrap_or_else(|| default_config_dir(&home));
         let git_vars = if isolated { sandbox_git_vars(&home) } else { Vec::new() };
-        Env { home, config_dir, clock, tz, isolated, git_vars, ui_thread: None }
+        // An isolated run sees only the token its sandbox gives it; otherwise the token the
+        // GitHub CLI and Actions use works too.
+        let github_token = var(GITHUB_TOKEN_VAR)
+            .or_else(|| if isolated { None } else { var("GH_TOKEN").or_else(|| var("GITHUB_TOKEN")) });
+        let github_api = var(GITHUB_API_VAR).unwrap_or_else(|| ForgeAccess::GITHUB_API.to_owned());
+        let forge = ForgeAccess { github_api, github_token };
+        Env { home, config_dir, clock, tz, isolated, git_vars, forge, ui_thread: None }
     }
 
     /// A sandboxed environment rooted at `home`, at a fixed time, in UTC.
@@ -70,6 +108,7 @@ impl Env {
             tz: TimeZone::UTC,
             isolated: true,
             git_vars: sandbox_git_vars(home),
+            forge: ForgeAccess::none(),
             ui_thread: None,
         }
     }
@@ -110,6 +149,10 @@ impl Env {
         vars.push((TZ_VAR.into(), self.tz.iana_name().unwrap_or("UTC").into()));
         vars.push((ISOLATED_VAR.into(), "1".into()));
         vars.push((CONFIG_DIR_VAR.into(), self.config_dir.clone().into()));
+        vars.push((GITHUB_API_VAR.into(), self.forge.github_api.clone().into()));
+        if let Some(token) = &self.forge.github_token {
+            vars.push((GITHUB_TOKEN_VAR.into(), token.clone().into()));
+        }
         vars
     }
 }

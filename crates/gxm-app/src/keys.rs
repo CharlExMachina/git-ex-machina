@@ -50,3 +50,93 @@ pub fn changed_file(path: &str) -> String {
 fn sanitize(s: &str) -> String {
     s.replace('/', ":")
 }
+
+// Pull requests: the inspector's row for a commit's pull request and its button.
+pub const PULL_REQUEST_ROW: &str = "pull-request-row";
+pub const SEE_PULL_REQUEST: &str = "see-pull-request";
+/// Why pull requests can't be shown (no token, a provider not supported yet, an error).
+pub const PULL_NOTICE: &str = "pull-notice";
+
+// A pull request on the graph.
+/// The `#131` row above the pull request's tip.
+pub const PULL_BANNER: &str = "pull-banner";
+/// The line under the toolbar naming the pull request.
+pub const PULL_SUMMARY: &str = "pull-summary";
+pub const REVIEW: &str = "review";
+pub const CHECK_OUT_PULL: &str = "check-out-pull";
+pub const SQUASH_AND_MERGE: &str = "squash-and-merge";
+pub const CLOSE_PULL_REQUEST: &str = "close-pull-request";
+pub const OPEN_ON_PROVIDER: &str = "open-on-provider";
+pub const PULL_INSPECTOR: &str = "pull-inspector";
+pub const TAB_CHECKS: &str = "tab-checks";
+pub const TAB_CONVERSATION: &str = "tab-conversation";
+pub const MERGE_BOX: &str = "merge-box";
+
+// The review cockpit.
+pub const COCKPIT_BACK: &str = "cockpit-back";
+pub const COCKPIT_FILES: &str = "cockpit-files";
+pub const DIFF: &str = "diff";
+pub const DIFF_UNIFIED: &str = "diff-unified";
+pub const DIFF_SPLIT: &str = "diff-split";
+pub const FILE_HEADER: &str = "file-header";
+pub const VIEWED: &str = "viewed";
+/// The cockpit's shelf of viewed files: its header folds it open and shut.
+pub const VIEWED_SHELF: &str = "viewed-shelf";
+/// The composer for a new comment on a line.
+pub const LINE_COMMENT: &str = "line-comment";
+pub const REVIEW_SUMMARY: &str = "review-summary";
+pub const VERDICT_COMMENT: &str = "verdict-comment";
+pub const VERDICT_APPROVE: &str = "verdict-approve";
+pub const VERDICT_REQUEST_CHANGES: &str = "verdict-request-changes";
+pub const SUBMIT_REVIEW: &str = "submit-review";
+pub const REVIEW_PANEL: &str = "review-panel";
+
+/// The cockpit's `n`th hunk of the file shown, for `j` and `k`.
+pub fn hunk(n: usize) -> String {
+    format!("hunk-{n}")
+}
+
+/// A reviewer's row, by login.
+pub fn reviewer(login: &str) -> String {
+    format!("reviewer-{}", sanitize(login))
+}
+
+/// A file's row in the review cockpit's sidebar.
+pub fn pull_file(path: &str) -> String {
+    format!("pull-file-{}", sanitize(path))
+}
+
+/// A review thread in the diff, by the provider's id.
+pub fn thread(id: &str) -> String {
+    format!("thread-{}", sanitize(id))
+}
+
+/// The reply well under a thread, which opens the field when pressed.
+pub fn reply(id: &str) -> String {
+    format!("reply-{}", sanitize(id))
+}
+
+/// The field a reply is written in, once open.
+pub fn reply_field(id: &str) -> String {
+    format!("reply-field-{}", sanitize(id))
+}
+
+/// A line of the diff: `new` for the line as the pull request leaves it, else as it was.
+pub fn diff_line(path: &str, new: bool, line: u32) -> String {
+    format!("line-{}-{}{line}", sanitize(path), if new { 'R' } else { 'L' })
+}
+
+// Merging from the merge box.
+pub const MERGE_START: &str = "merge-start";
+/// The squash commit's message, while confirming.
+pub const MERGE_HEADLINE: &str = "merge-headline";
+pub const CONFIRM_MERGE: &str = "confirm-merge";
+pub const CANCEL_MERGE: &str = "cancel-merge";
+
+/// A commit in the cockpit's sidebar, by its short id: pressed, the cockpit shows it alone.
+pub fn pull_commit(short: &str) -> String {
+    format!("pull-commit-{short}")
+}
+
+/// Back to every commit's changes in the cockpit.
+pub const PULL_COMMITS_ALL: &str = "pull-commits-all";

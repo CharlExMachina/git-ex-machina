@@ -1,9 +1,14 @@
 //! The window: the repository sidebar (248 + its border), the history, and the inspector
 //! (360 + its border), each under its own 48-point bar.
 
+mod cockpit;
+mod cockpit_side;
 mod graph;
 mod history;
 mod inspector;
+mod on_graph;
+mod pull;
+mod pull_parts;
 mod sidebar;
 mod toolbar;
 
@@ -19,17 +24,25 @@ const INSPECTOR_W: f32 = size::INSPECTOR + 1.0;
 
 pub fn view(s: &App, cx: &mut Cx<App>) -> El {
     let t = Theme::new(cx.system_dark());
+    let cockpit = s.cockpit().is_some();
     let main = match &s.load {
         Load::Failed(e) => message(&t, e),
+        Load::NotStarted | Load::Loading | Load::Loaded if cockpit => cockpit::pane(s, &t),
         Load::NotStarted | Load::Loading | Load::Loaded => history::pane(s, &t),
     };
     let mut shell = row().w_full().h_full().fill(t.chrome);
     if s.sidebar_open {
-        shell = shell.child(sidebar::sidebar(s, &t).w(SIDEBAR_W).h_full());
+        let side = if cockpit { cockpit_side::sidebar(s, &t) } else { sidebar::sidebar(s, &t) };
+        shell = shell.child(side.w(SIDEBAR_W).h_full());
     }
     shell = shell.child(main.grow(1.0).min_w(0.0).h_full());
     if s.inspector_open {
-        shell = shell.child(inspector::inspector(s, &t).w(INSPECTOR_W).h_full());
+        let right = match s.pull_view() {
+            Some(_) if cockpit => cockpit_side::review_panel(s, &t),
+            Some(v) => pull::inspector(s, v, &t),
+            None => inspector::inspector(s, &t),
+        };
+        shell = shell.child(right.w(INSPECTOR_W).h_full());
     }
     shell
 }

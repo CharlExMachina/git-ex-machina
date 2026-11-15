@@ -4,7 +4,8 @@
 use gxm_core::diff::{Hunk, LineKind};
 use gxm_core::history::{ChangeStatus, Commit, CommitInfo, FileChange};
 use gxm_core::time;
-use rune::{El, ScrollSpec, col, row, text};
+use rune::text::Span;
+use rune::{El, ScrollSpec, col, rich, row, text};
 
 use super::bar;
 use super::history::author_color;
@@ -202,6 +203,9 @@ fn message_details(s: &App, c: &Commit, info: &CommitInfo, t: &Theme) -> El {
         let ids: Vec<String> = c.parents.iter().map(|p| short(p)).collect();
         rows.push((label.to_owned(), row().child(text(ids.join(" · ")).font(ty::MONO_SM).color(t.ink_muted))));
     }
+    if let Some(pr) = pull_request(s, c, t) {
+        rows.push(("Pull request".to_owned(), pr));
+    }
     if !info.contained_in.is_empty() {
         // A long-lived commit can be in hundreds of tags: show the first few.
         const SHOWN: usize = 8;
@@ -227,6 +231,28 @@ fn message_details(s: &App, c: &Commit, info: &CommitInfo, t: &Theme) -> El {
         );
     }
     grid
+}
+
+/// The pull request the commit belongs to (its state, number and title) with See pull request
+/// under it; or why pull requests can't be shown.
+fn pull_request(s: &App, c: &Commit, t: &Theme) -> Option<El> {
+    let Some(p) = s.pulls.of_commit(&c.id) else {
+        let problem = s.pulls.problem().filter(|_| s.pulls.index.is_none())?;
+        let note = text(problem.clone()).font(ty::CAPTION).color(t.ink_faint).wrap().help(problem);
+        return Some(row().key(keys::PULL_NOTICE).child(note));
+    };
+    let number = format!("#{}", p.number);
+    let line = format!("{number} {}", p.title);
+    let title = rich(line, vec![Span::new(0, number.len()).mono().size(11.0).weight(500.0).color(t.ink_faint)])
+        .font(ty::CAPTION)
+        .color(t.ink)
+        .truncate();
+    let n = p.number;
+    let what = row().gap(8.0).center_y().child(ui::state_pill(t, p.state, t.raised)).child(title.grow(1.0).min_w(0.0));
+    let see = ui::button(t, Variant::Secondary, Some(&icons::PULL_REQUEST), "See pull request", None)
+        .key(keys::SEE_PULL_REQUEST)
+        .on_press(move |s: &mut App| s.open_pull(n));
+    Some(col().key(keys::PULL_REQUEST_ROW).w_full().gap(10.0).child(what).child(row().child(see)))
 }
 
 /// What a multi-selection allows.

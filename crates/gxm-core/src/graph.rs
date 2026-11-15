@@ -111,6 +111,49 @@ where
     rows
 }
 
+/// Which parts of a row belong to a set of commits, such as a pull request's.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Lit {
+    /// The row's commit is one of them.
+    pub node: bool,
+    /// For each of the row's edges, in order.
+    pub edges: Vec<bool>,
+}
+
+/// Lights a set of commits (`member[i]` for row `i`) in a laid-out graph: their nodes, the
+/// lines from each down to its parents, and the lane those lines run in until they land. A line
+/// that joins a lane already running (the base branch) lights only itself, not that lane.
+pub fn light(rows: &[GraphRow], member: &[bool]) -> Vec<Lit> {
+    let mut lanes: Vec<usize> = Vec::new();
+    let mut out = Vec::with_capacity(rows.len());
+    for (i, row) in rows.iter().enumerate() {
+        let mine = member.get(i).copied().unwrap_or(false);
+        let edges = row
+            .edges
+            .iter()
+            .map(|e| match *e {
+                Edge::Pass { lane, .. } => lanes.contains(&lane),
+                Edge::In { from, .. } => lanes.contains(&from),
+                Edge::Out { .. } => mine,
+            })
+            .collect();
+        let passing = |lane: usize| row.edges.iter().any(|e| matches!(*e, Edge::Pass { lane: l, .. } if l == lane));
+        lanes.retain(|l| !row.edges.iter().any(|e| matches!(*e, Edge::In { from, .. } if from == *l)));
+        if mine {
+            for e in &row.edges {
+                if let Edge::Out { to, .. } = *e
+                    && !passing(to)
+                    && !lanes.contains(&to)
+                {
+                    lanes.push(to);
+                }
+            }
+        }
+        out.push(Lit { node: mine, edges });
+    }
+    out
+}
+
 /// The first free column, or a new one.
 fn claim(lanes: &mut Vec<Option<Lane>>) -> usize {
     match lanes.iter().position(Option::is_none) {

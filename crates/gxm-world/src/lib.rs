@@ -11,12 +11,13 @@
 
 use std::path::{Path, PathBuf};
 
-use gxm_core::env::Env;
+use gxm_core::env::{Env, ForgeAccess};
 use gxm_core::git::{self, GitError};
 use gxm_core::workspace::Workspace;
 use jiff::{SignedDuration, Timestamp};
 
 pub mod fixtures;
+pub mod hub;
 
 /// "Now" in every world unless a test picks another time: Wednesday, Nov 11 2026, 15:00 UTC.
 pub const NOW: &str = "2026-11-11T15:00:00Z";
@@ -28,6 +29,7 @@ pub const HOSTS: &[&str] = &["github.com", "gitlab.com", "bitbucket.org"];
 pub struct World {
     root: PathBuf,
     env: Env,
+    hub: hub::Hub,
     _tmp: Option<tempfile::TempDir>,
 }
 
@@ -66,7 +68,10 @@ impl World {
             std::fs::create_dir_all(&dir).unwrap_or_else(|e| fail("make the world's folders", e));
         }
         let now: Timestamp = NOW.parse().unwrap_or_else(|e| fail("read NOW", e));
-        let env = Env::sandbox(&home, now);
+        // Every world has its own GitHub, empty until a fixture adds pull requests to it.
+        let mut env = Env::sandbox(&home, now);
+        let hub = hub::Hub::start(env.clone(), root.join("remotes"));
+        env.forge = ForgeAccess { github_api: hub.url(), github_token: Some(hub::TOKEN.to_owned()) };
         let mut cfg = String::from(
             // The person at the keyboard is Ana, who owns the demo workspace: what the app
             // commits in a world is hers.
@@ -79,11 +84,16 @@ impl World {
             cfg.push_str(&format!("[url \"file://{}/\"]\n\tinsteadOf = git@{host}:\n", base.display()));
         }
         std::fs::write(home.join(".gitconfig"), cfg).unwrap_or_else(|e| fail("write the world's .gitconfig", e));
-        World { root, env, _tmp: None }
+        World { root, env, hub, _tmp: None }
     }
 
     pub fn env(&self) -> &Env {
         &self.env
+    }
+
+    /// The world's GitHub (see [`hub`]).
+    pub fn hub(&self) -> &hub::Hub {
+        &self.hub
     }
 
     pub fn root(&self) -> &Path {

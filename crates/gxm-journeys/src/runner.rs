@@ -23,6 +23,8 @@ const AFTER_TYPE: f64 = 0.5;
 const AFTER_PRESS: f64 = 0.5;
 /// A mark's screenshot is taken at its time; the next step waits this long so it can't leak in.
 const AFTER_MARK: f64 = 0.3;
+/// One wheel step of a [`Step::ScrollTo`], in points.
+const WHEEL: f32 = 60.0;
 /// The video runs this long past the last step.
 const TAIL: f64 = 1.2;
 
@@ -124,6 +126,26 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                 d.advance_to(t + DT);
             }
             Step::Wait(s) => d.advance_to(t + s),
+            Step::ScrollTo(key) => {
+                for _ in 0..80 {
+                    let e =
+                        d.rt.elements()
+                            .into_iter()
+                            .find(|e| e.key.as_deref() == Some(key.as_str()) && !e.exiting)
+                            .ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
+                    if e.visible[3] >= e.rect[3] - 0.5 {
+                        break;
+                    }
+                    // Positive moves the content down, showing what's above.
+                    let dy = if e.rect[1] < e.visible[1] { WHEEL } else { -WHEEL };
+                    let (x, y) = (e.rect[0] + e.rect[2] / 2.0, (e.rect[1]).clamp(80.0, gxm_app::SIZE.1 - 40.0));
+                    d.rt.pointer_move(x, y);
+                    d.rt.wheel(x, y, dy);
+                    d.events.push(json!({ "t": d.now, "type": "wheel", "x": x, "y": y, "dy": dy }));
+                    d.advance_to(d.now + DT * 2.0);
+                }
+                d.advance_to(d.now + AFTER_PRESS);
+            }
             Step::WaitFor { key, text } => {
                 let started = std::time::Instant::now();
                 while !d.text_in(key).is_some_and(|shown| shown.contains(text.as_str())) {
@@ -199,7 +221,7 @@ impl Driver {
             if started.elapsed() > crate::WAIT_LIMIT {
                 return Err(format!("a background read was still running after {:?}", crate::WAIT_LIMIT));
             }
-            if self.rt.state.loads.busy() {
+            if self.rt.state.busy() {
                 quiet = 0;
                 std::thread::sleep(POLL);
             } else {

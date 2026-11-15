@@ -72,6 +72,29 @@ pub fn absolute(at: Timestamp, tz: &TimeZone) -> String {
     at.to_zoned(tz.clone()).strftime("%a, %b %-d, %Y at %H:%M").to_string()
 }
 
+/// The inspector's date: `Nov 11, 2026, 10:00`.
+pub fn stamp(at: Timestamp, tz: &TimeZone) -> String {
+    at.to_zoned(tz.clone()).strftime("%b %-d, %Y, %H:%M").to_string()
+}
+
+/// How long ago, in the largest whole unit: `just now`, `12 minutes ago`, `5 hours ago`,
+/// `yesterday`, `3 days ago`, `2 weeks ago`, `4 months ago`, `2 years ago`.
+pub fn ago(at: Timestamp, now: Timestamp) -> String {
+    let secs = now.as_second() - at.as_second();
+    let n = |unit: i64| secs / unit;
+    let say = |n: i64, unit: &str| if n == 1 { format!("1 {unit} ago") } else { format!("{n} {unit}s ago") };
+    match secs {
+        ..60 => "just now".to_owned(),
+        60..3600 => say(n(60), "minute"),
+        3600..86_400 => say(n(3600), "hour"),
+        86_400..172_800 => "yesterday".to_owned(),
+        172_800..1_209_600 => say(n(86_400), "day"),
+        1_209_600..5_184_000 => say(n(604_800), "week"),
+        5_184_000..31_536_000 => say(n(2_592_000), "month"),
+        _ => say(n(31_536_000), "year"),
+    }
+}
+
 fn weekday(d: Weekday) -> &'static str {
     match d {
         Weekday::Monday => "Mon",
@@ -113,5 +136,15 @@ mod tests {
         assert_eq!(long("2025-12-31T09:00:00Z"), "Dec 31, 2025 at 09:00");
         assert_eq!(date_time("2026-11-10T18:42:00Z".parse().unwrap(), &tz), "Nov 10, 2026, 18:42");
         assert_eq!(absolute("2026-11-09T14:05:00Z".parse().unwrap(), &tz), "Mon, Nov 9, 2026 at 14:05");
+        assert_eq!(stamp("2026-11-11T10:00:00Z".parse().unwrap(), &tz), "Nov 11, 2026, 10:00");
+        let ago = |s: &str| ago(s.parse().unwrap(), now);
+        assert_eq!(ago("2026-11-11T14:59:30Z"), "just now");
+        assert_eq!(ago("2026-11-11T14:59:00Z"), "1 minute ago");
+        assert_eq!(ago("2026-11-11T10:00:00Z"), "5 hours ago");
+        assert_eq!(ago("2026-11-10T09:00:00Z"), "yesterday");
+        assert_eq!(ago("2026-11-08T15:00:00Z"), "3 days ago");
+        assert_eq!(ago("2026-10-28T15:00:00Z"), "2 weeks ago");
+        assert_eq!(ago("2026-07-01T15:00:00Z"), "4 months ago");
+        assert_eq!(ago("2024-11-01T15:00:00Z"), "2 years ago");
     }
 }

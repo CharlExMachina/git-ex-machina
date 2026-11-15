@@ -49,4 +49,12 @@ fn someone_checks_their_workspace_and_reads_a_history_from_the_terminal() {
     // The history with its graph, exactly: commit ids are deterministic in a world.
     let log = gxm(&w, &["log", "atlas-web", "-n", "12"]);
     gxm_world::golden(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens/atlas-web-log.txt"), &log);
+
+    // Its pull requests on GitHub, matched to the commits in the history.
+    let prs = gxm(&w, &["prs", "atlas-web"]);
+    assert!(
+        prs.contains("#131   Open    fix/avatar-cache → main  Evict avatars by last paint, not insert  · Lea Brandt · 2 commits here"),
+        "{prs}"
+    );
+    assert!(prs.contains("#128   Merged  feature/graph-virtualization → main"), "{prs}");
 }

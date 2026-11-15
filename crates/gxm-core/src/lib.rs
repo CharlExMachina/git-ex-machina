@@ -5,6 +5,7 @@
 
 pub mod diff;
 pub mod env;
+pub mod forge;
 pub mod git;
 pub mod graph;
 pub mod history;

@@ -2,7 +2,7 @@
 //! 12 in from the edge, rails stroked 2 with round caps, a 6.5 ring of background around each
 //! node, a 4.5 node (3.25 for a merge), and HEAD as a ring with a centre dot.
 
-use gxm_core::graph::{Edge, GraphRow};
+use gxm_core::graph::{Edge, GraphRow, Lit};
 use rune::{Color, El, LineCap, Path, Shape, canvas};
 
 use crate::theme::{Theme, size};
@@ -39,13 +39,44 @@ pub enum Node {
     Head,
 }
 
-pub struct RowLook {
+pub struct RowLook<'a> {
     pub node: Node,
     /// The row sits under the uncommitted-changes row, whose dashed rail ends above it, so the
     /// node has no rail coming in from above.
     pub under_worktree: bool,
     /// The commit is selected: its node gets a ring in its lane's colour.
     pub selected: bool,
+    /// With a pull request open, which parts of the row are its; the rest dims.
+    pub light: Option<&'a Lit>,
+}
+
+/// How far what isn't the open pull request's dims, as an opacity.
+pub const DIM: f32 = 0.38;
+
+/// A dimmed line's colour: solid, as the lane at [`DIM`] over the canvas the graph sits on.
+/// A translucent stroke would double up wherever two pieces overlap (the round caps where rows
+/// meet, a curve's segments) and bead the line.
+fn dimmed(t: &Theme, c: Color) -> Color {
+    crate::theme::mix(c, DIM, t.canvas)
+}
+
+/// Strokes the cubic `[p0, c1, c2, p3]` in short pieces, its colour easing from `start` to
+/// `end` along it (Rune strokes in one colour). The colours are solid, so the pieces' round caps
+/// overlap without a seam.
+fn fading(mut shape: Shape, [p0, c1, c2, p3]: [[f32; 2]; 4], start: Color, end: Color) -> Shape {
+    const PIECES: usize = 16;
+    let at = |u: f32| {
+        let v = 1.0 - u;
+        let (a, b, c, d) = (v * v * v, 3.0 * v * v * u, 3.0 * v * u * u, u * u * u);
+        [a * p0[0] + b * c1[0] + c * c2[0] + d * p3[0], a * p0[1] + b * c1[1] + c * c2[1] + d * p3[1]]
+    };
+    for i in 0..PIECES {
+        let (u0, u1) = (i as f32 / PIECES as f32, (i + 1) as f32 / PIECES as f32);
+        let mid = (u0 + u1) / 2.0;
+        let ease = mid * mid * (3.0 - 2.0 * mid);
+        shape = shape.line(at(u0), at(u1), STROKE, LineCap::Round, crate::theme::mix(end, ease, start));
+    }
+    shape
 }
 
 /// The selected node's ring, and the cut-out of background under it that stops the rails a
@@ -53,40 +84,69 @@ pub struct RowLook {
 const SELECTED_RING: f32 = 8.0;
 const SELECTED_CUT: f32 = 10.25;
 
-pub fn row(t: &Theme, g: &GraphRow, cols: usize, look: &RowLook) -> El {
+pub fn row(t: &Theme, g: &GraphRow, cols: usize, look: &RowLook<'_>) -> El {
     let nx = x(g.lane);
+    let lit = |k: usize| look.light.is_none_or(|l| l.edges.get(k).copied().unwrap_or(false));
+    let ink_of = |c: Color, on: bool| if on { c } else { dimmed(t, c) };
+    // A lane running dimmed through the row, as its colour: a lit curve meeting it turns into it.
+    let dimmed_lane = |lane: usize| {
+        g.edges.iter().enumerate().find_map(|(k, e)| match *e {
+            Edge::Pass { lane: l, color: c } if l == lane && !lit(k) => Some(dimmed(t, color(t, c))),
+            _ => None,
+        })
+    };
     let mut shape = Shape::new();
-    let mut ups = Vec::new();
-    let mut downs = Vec::new();
-    for e in &g.edges {
-        match *e {
+    let (mut up, mut down) = (None, None);
+    // What dims is drawn first, so the pull request's lines run over it.
+    let mut order: Vec<usize> = (0..g.edges.len()).collect();
+    order.sort_by_key(|&k| lit(k));
+    for k in order {
+        let on = lit(k);
+        match g.edges[k] {
             Edge::Pass { lane, color: c } => {
-                shape = shape.line([x(lane), 0.0], [x(lane), H], STROKE, LineCap::Round, color(t, c));
+                shape = shape.line([x(lane), 0.0], [x(lane), H], STROKE, LineCap::Round, ink_of(color(t, c), on));
             }
-            Edge::In { from, .. } if from == g.lane => ups.push(()),
+            Edge::In { from, .. } if from == g.lane => up = Some(on || up == Some(true)),
             Edge::In { from, color: c } => {
                 let xc = x(from);
-                let p = Path::new().move_to([xc, 0.0]).cubic_to([xc, 10.0], [nx, 6.0], [nx, MID]);
-                shape = shape.stroke_path(&p, STROKE, LineCap::Round, color(t, c));
+                let curve = [[xc, 0.0], [xc, 10.0], [nx, 6.0], [nx, MID]];
+                // Out of a dimmed lane into the pull request, the line turns from that lane's
+                // colour into its own.
+                if let Some(base) = dimmed_lane(from).filter(|_| on) {
+                    shape = fading(shape, curve, base, color(t, c));
+                } else {
+                    let p = Path::new().move_to(curve[0]).cubic_to(curve[1], curve[2], curve[3]);
+                    shape = shape.stroke_path(&p, STROKE, LineCap::Round, ink_of(color(t, c), on));
+                }
             }
-            Edge::Out { to, .. } if to == g.lane => downs.push(()),
+            Edge::Out { to, .. } if to == g.lane => down = Some(on),
             Edge::Out { to, color: c } => {
                 let xc = x(to);
-                let p = Path::new().move_to([nx, MID]).cubic_to([nx, 24.0], [xc, 20.0], [xc, H]);
-                shape = shape.stroke_path(&p, STROKE, LineCap::Round, color(t, c));
+                let curve = [[nx, MID], [nx, 24.0], [xc, 20.0], [xc, H]];
+                // From the pull request into a dimmed lane (its base), the line turns into that
+                // lane's colour as it goes.
+                if let Some(base) = dimmed_lane(to).filter(|_| on) {
+                    shape = fading(shape, curve, color(t, c), base);
+                } else {
+                    let p = Path::new().move_to(curve[0]).cubic_to(curve[1], curve[2], curve[3]);
+                    shape = shape.stroke_path(&p, STROKE, LineCap::Round, ink_of(color(t, c), on));
+                }
             }
         }
     }
-    let ink = color(t, g.color);
+    let lane = color(t, g.color);
+    let node_on = look.light.is_none_or(|l| l.node);
     if look.under_worktree {
         // The worktree's dashed rail comes down into this row and ends under the node's ring.
-        shape = dashed_rail(shape, nx, 0.0, MID, H, ink);
-    } else if !ups.is_empty() {
-        shape = shape.line([nx, 0.0], [nx, MID], STROKE, LineCap::Round, ink);
+        shape = dashed_rail(shape, nx, 0.0, MID, H, ink_of(lane, look.light.is_none()));
+    } else if let Some(on) = up {
+        shape = shape.line([nx, 0.0], [nx, MID], STROKE, LineCap::Round, ink_of(lane, on));
     }
-    if !downs.is_empty() {
-        shape = shape.line([nx, MID], [nx, H], STROKE, LineCap::Round, ink);
+    if let Some(on) = down {
+        shape = shape.line([nx, MID], [nx, H], STROKE, LineCap::Round, ink_of(lane, on));
     }
+    // The cut-out is the background itself, so it hides dimmed lines as cleanly as lit ones.
+    let ink = ink_of(lane, node_on);
     if look.selected {
         shape = shape.fill(circle([nx, MID], SELECTED_CUT), t.canvas).stroke_with(
             circle([nx, MID], SELECTED_RING),
@@ -106,6 +166,23 @@ pub fn row(t: &Theme, g: &GraphRow, cols: usize, look: &RowLook) -> El {
         Node::Commit => shape.fill(circle([nx, MID], 4.5), ink),
     };
     canvas(shape).w(width(cols)).h(H)
+}
+
+/// The lanes running past a row inserted above row `g` (the pull request's row): every line
+/// that crosses `g`'s top edge, straight through, dimmed unless the pull request's.
+pub fn passing(t: &Theme, g: &GraphRow, cols: usize, light: Option<&Lit>, h: f32) -> El {
+    let mut shape = Shape::new();
+    for (k, e) in g.edges.iter().enumerate() {
+        let (lane, c) = match *e {
+            Edge::Pass { lane, color } => (lane, color),
+            Edge::In { from, color } => (from, color),
+            Edge::Out { .. } => continue,
+        };
+        let on = light.is_none_or(|l| l.edges.get(k).copied().unwrap_or(false));
+        let ink = if on { color(t, c) } else { dimmed(t, color(t, c)) };
+        shape = shape.line([x(lane), 0.0], [x(lane), h], STROKE, LineCap::Butt, ink);
+    }
+    canvas(shape).w(width(cols)).h(h)
 }
 
 /// The uncommitted row's mark: a ring of six even dashes, stroked like the graph's rails

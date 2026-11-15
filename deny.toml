@@ -1,6 +1,12 @@
 # cargo deny check: licenses, advisories, duplicate and unknown sources.
 [graph]
 all-features = false
+# The platforms the app ships on. (ureq's platform verifier takes CDLA-licensed root
+# certificates only on wasm32, which isn't one of them.)
+targets = [
+  "aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-pc-windows-msvc",
+  "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
+]
 
 [advisories]
 yanked = "deny"

@@ -59,16 +59,39 @@ pub fn worktree_hunk(env: &Env, repo: &Path, path: &str) -> Result<Option<Hunk>,
     Ok(first_hunk(&out))
 }
 
+/// Every hunk of what changed in `path` from commit `from` to commit `to`, with git's usual
+/// three lines of context.
+pub fn range_hunks(env: &Env, repo: &Path, from: &str, to: &str, path: &str) -> Result<Vec<Hunk>, GitError> {
+    let out = git::run(env, repo, &["diff", "-M", from, to, "--", path])?;
+    Ok(hunks(&out))
+}
+
 /// The first `@@` hunk of a unified diff.
 pub fn first_hunk(diff: &str) -> Option<Hunk> {
-    let mut lines = diff.lines().skip_while(|l| !l.starts_with("@@ "));
-    let header = lines.next()?.to_owned();
-    let (mut old, mut new) = starts(&header)?;
+    hunks(diff).into_iter().next()
+}
+
+/// Every `@@` hunk of a unified diff of one file.
+pub fn hunks(diff: &str) -> Vec<Hunk> {
     let mut out = Vec::new();
-    for l in lines {
-        if l.starts_with("@@ ") || l.starts_with("diff --git ") {
-            break;
+    let mut rest = diff.lines().skip_while(|l| !l.starts_with("@@ ")).peekable();
+    while let Some(header) = rest.next() {
+        let mut body = Vec::new();
+        while let Some(l) = rest.next_if(|l| !l.starts_with("@@ ") && !l.starts_with("diff --git ")) {
+            body.push(l);
         }
+        if let Some(h) = hunk(header, &body) {
+            out.push(h);
+        }
+    }
+    out
+}
+
+fn hunk(header: &str, body: &[&str]) -> Option<Hunk> {
+    let (mut old, mut new) = starts(header)?;
+    let header = header.to_owned();
+    let mut out = Vec::new();
+    for l in body.iter().copied() {
         let (kind, text) = match l.as_bytes().first() {
             Some(b'+') => (LineKind::Added, &l[1..]),
             Some(b'-') => (LineKind::Removed, &l[1..]),
@@ -122,5 +145,15 @@ mod tests {
             ]
         );
         assert_eq!(first_hunk("no hunks here"), None);
+    }
+
+    #[test]
+    fn every_hunk_of_a_file_numbers_from_its_own_header() {
+        let diff = "--- a/c.rs\n+++ b/c.rs\n@@ -2,2 +2,2 @@\n a\n-b\n+c\n@@ -40,1 +40,2 @@ fn x()\n y\n+z\n\\ No newline at end of file\n";
+        let hs = hunks(diff);
+        assert_eq!(hs.len(), 2);
+        assert_eq!(hs[1].header, "@@ -40,1 +40,2 @@ fn x()");
+        let second: Vec<_> = hs[1].lines.iter().map(|l| (l.kind, l.old, l.new)).collect();
+        assert_eq!(second, [(LineKind::Context, Some(40), Some(40)), (LineKind::Added, None, Some(41))]);
     }
 }

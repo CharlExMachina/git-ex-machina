@@ -31,6 +31,16 @@ fn shape_history() {
 }
 
 #[test]
+fn review_pull_request() {
+    journey("review_pull_request");
+}
+
+#[test]
+fn merge_pull_request() {
+    journey("merge_pull_request");
+}
+
+#[test]
 fn every_journey_is_tested() {
     let tested = include_str!("journeys.rs");
     for j in catalog::all() {

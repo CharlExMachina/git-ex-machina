@@ -41,3 +41,29 @@ icon!(
     r#"<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="10" r="1.5"/><path d="M4.5 5v6"/><path d="M4.5 5c0 3 3 5 5.5 5"/>"#
 );
 icon!(CHANGES, "gxm-changes", r#"<path d="M8 2.5v6M5 5.5h6M5 12.5h6"/>"#);
+icon!(
+    PULL_REQUEST,
+    "gxm-pull-request",
+    r#"<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="12.5" r="1.5"/><path d="M4.5 5v6"/><path d="M11.5 11V6.5a2 2 0 0 0-2-2H7"/><path d="M8.5 3 7 4.5 8.5 6"/>"#
+);
+icon!(CHECK, "gxm-check", r#"<path d="M3.5 8.5 6.5 11.5 12.5 4.5"/>"#);
+icon!(X, "gxm-x", r#"<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>"#);
+icon!(
+    EYE,
+    "gxm-eye",
+    r#"<path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>"#
+);
+icon!(CLOCK, "gxm-clock", r#"<circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.5"/>"#);
+icon!(
+    COMMENT,
+    "gxm-comment",
+    r#"<path d="M2.5 4a1.5 1.5 0 0 1 1.5-1.5h8A1.5 1.5 0 0 1 13.5 4v5.5A1.5 1.5 0 0 1 12 11H7l-3 2.5V11a1.5 1.5 0 0 1-1.5-1.5z"/>"#
+);
+icon!(BACK, "gxm-back", r#"<path d="M9.5 3.5 5 8l4.5 4.5"/>"#);
+icon!(
+    EXTERNAL,
+    "gxm-external",
+    r#"<path d="M9 2.5h4.5V7"/><path d="M13.5 2.5 7.5 8.5"/><path d="M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"/>"#
+);
+icon!(CHEVRON, "gxm-chevron", r#"<path d="M4.5 6.5 8 10l3.5-3.5"/>"#);
+icon!(CHEVRON_RIGHT, "gxm-chevron-right", r#"<path d="M6.5 4.5 10 8l-3.5 3.5"/>"#);

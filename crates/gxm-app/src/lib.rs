@@ -8,6 +8,9 @@ pub mod icons;
 pub mod keys;
 pub mod load;
 pub mod ops;
+pub mod pull_disk;
+pub mod pulls;
+pub mod review;
 pub mod state;
 pub mod theme;
 pub mod ui;
@@ -37,7 +40,12 @@ fn poll(s: &mut App, _t: f64, tx: &mut Tx) -> bool {
         return true;
     }
     let landed = s.land_loads(tx);
-    s.land() | landed
+    let pulled = s.land_pulls();
+    if pulled {
+        // A pull request's index can arrive after its commit was selected: read it now.
+        s.prefetch_pull();
+    }
+    s.land() | landed | pulled
 }
 
 fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
@@ -58,6 +66,24 @@ fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
         return true;
     }
     let plain = !ev.mods.cmd && !ev.mods.alt && !ev.mods.ctrl && !ev.mods.shift;
+    if s.cockpit().is_some() {
+        // ⌘↩ sends the review; j and k move between the file's changes.
+        if ev.key == Key::Enter && ev.mods.cmd {
+            s.submit_review();
+            return true;
+        }
+        let by = match &ev.key {
+            Key::Text(t) if plain && t == "j" => 1,
+            Key::Text(t) if plain && t == "k" => -1,
+            _ => 0,
+        };
+        if by != 0 {
+            if let Some(key) = s.step_change(by) {
+                tx.scroll_into_view_in(keys::DIFF, key);
+            }
+            return true;
+        }
+    }
     let by = match ev.key {
         Key::Down if plain => 1,
         Key::Up if plain => -1,
@@ -75,6 +101,7 @@ pub fn app() -> rune::App<App> {
         poll: Some(poll),
         setup: Some(|s: &mut App, waker| {
             s.ops.set_waker(waker.clone());
+            s.pulls.set_waker(&waker);
             s.loads.set_waker(waker);
         }),
         on_key: Some(on_key),
