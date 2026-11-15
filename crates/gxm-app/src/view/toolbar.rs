@@ -82,17 +82,22 @@ pub fn toolbar(s: &App, t: &Theme) -> El {
             v
         }
         Some(Subject::Head(_)) | None => {
-            let ahead = s.repo().map_or(0, |r| r.summary.status.ahead);
+            let st = s.repo().map(|r| &r.summary.status);
+            let ahead = st.map_or(0, |st| st.ahead);
+            let mut push = b.op(
+                Variant::Primary,
+                Some(&icons::PUSH),
+                keys::PUSH,
+                Op::Push,
+                (ahead > 0).then(|| ahead.to_string()),
+            );
+            if let Some(branch) = st.filter(|st| st.upstream.is_none()).and_then(|st| st.branch.as_deref()) {
+                push = push.help(format!("Publishes {branch} and tracks it from then on"));
+            }
             vec![
                 b.op(Variant::Secondary, Some(&icons::FETCH), keys::FETCH, Op::Fetch, None),
                 b.op(Variant::Secondary, Some(&icons::PULL), keys::PULL, Op::Pull, None),
-                b.op(
-                    Variant::Primary,
-                    Some(&icons::PUSH),
-                    keys::PUSH,
-                    Op::Push,
-                    (ahead > 0).then(|| ahead.to_string()),
-                ),
+                push,
             ]
         }
     };

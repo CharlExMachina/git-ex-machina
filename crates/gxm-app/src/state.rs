@@ -14,6 +14,7 @@ use crate::load::Loads;
 use crate::ops::Ops;
 use crate::pulls::Pulls;
 use crate::review::Mode;
+use crate::sheet::{Fields, Sheet, SheetJobs};
 
 pub struct App {
     pub env: Env,
@@ -41,6 +42,10 @@ pub struct App {
     pub mode: Mode,
     /// Where a field's edits land once what it edited is gone (a comment kept a moment ago).
     pub scratch: TextEdit,
+    /// Add or Clone, over the window.
+    pub sheet: Sheet,
+    pub fields: Fields,
+    pub sheet_jobs: SheetJobs,
 }
 
 /// Loading is an explicit machine: nothing is read before the first frame is up, and the
@@ -172,6 +177,9 @@ impl App {
             pulls: Pulls::default(),
             mode: Mode::History,
             scratch: TextEdit::new(""),
+            sheet: Sheet::Closed,
+            fields: Fields::default(),
+            sheet_jobs: SheetJobs::default(),
         }
     }
 

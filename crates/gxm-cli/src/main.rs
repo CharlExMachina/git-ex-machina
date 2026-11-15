@@ -13,7 +13,7 @@ use gxm_core::graph::{self, Edge, GraphRow};
 use gxm_core::history::{self, Commit, RefKind};
 use gxm_core::repo::RepoSummary;
 use gxm_core::time;
-use gxm_core::workspace::Workspace;
+use gxm_core::workspace::{self, Workspace};
 
 const USAGE: &str = "\
 gxm: git-ex-machina on the command line
@@ -22,6 +22,8 @@ Usage:
   gxm repos [--json]              The workspace's repositories and their state
   gxm log [PATH] [-n N] [--json]  History with its graph (PATH defaults to .)
   gxm prs [PATH]                  Pull requests on the repository's provider (a token: GH_TOKEN)
+  gxm add PATH                    Add a repository on disk to the workspace
+  gxm clone URL [INTO]            Clone over SSH into INTO (default ~/code) and add it
   gxm help                        This message
 ";
 
@@ -33,6 +35,8 @@ fn main() -> ExitCode {
         Some("repos") => repos(&env, &args[1..], &mut out),
         Some("log") => log(&env, &args[1..], &mut out),
         Some("prs") => prs::prs(&env, &args[1..], &mut out),
+        Some("add") => add(&env, &args[1..], &mut out),
+        Some("clone") => clone(&env, &args[1..], &mut out),
         Some("help" | "--help" | "-h") | None => out.write_all(USAGE.as_bytes()).map_err(|e| e.to_string()),
         Some(other) => Err(format!("unknown command {other:?}\n\n{USAGE}")),
     };
@@ -93,6 +97,26 @@ fn repos(env: &Env, args: &[String], out: &mut impl Write) -> Result<(), String>
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+fn add(env: &Env, args: &[String], out: &mut impl Write) -> Result<(), String> {
+    let [path] = args else { return Err(format!("add takes one path\n\n{USAGE}")) };
+    let top = workspace::add_repo(env, &env.expand(path)).map_err(|e| e.to_string())?;
+    writeln!(out, "Added {}", env.tilde(&top)).map_err(|e| e.to_string())
+}
+
+fn clone(env: &Env, args: &[String], out: &mut impl Write) -> Result<(), String> {
+    let (typed, into) = match args {
+        [typed] => (typed, env.home.join("code")),
+        [typed, into] => (typed, env.expand(into)),
+        _ => return Err(format!("clone takes a URL and, optionally, where to clone it\n\n{USAGE}")),
+    };
+    let source = gxm_core::clone::source(typed).ok_or_else(|| format!("{typed:?} isn't a repository URL"))?;
+    let dest = gxm_core::clone::destination(&into, &source);
+    writeln!(out, "Cloning {} into {}", source.url, env.tilde(&dest)).map_err(|e| e.to_string())?;
+    gxm_core::clone::run(env, &source.url, &dest, &mut |_| {}, &|| false).map_err(|e| e.to_string())?;
+    workspace::add_repo(env, &dest).map_err(|e| e.to_string())?;
+    writeln!(out, "Added {}", env.tilde(&dest)).map_err(|e| e.to_string())
 }
 
 fn log(env: &Env, args: &[String], out: &mut impl Write) -> Result<(), String> {
