@@ -136,6 +136,27 @@ impl Env {
         }
     }
 
+    /// A path as a person typed it: `~` is the home folder, and so is the start of a relative
+    /// path, since a window has no working directory a person could know about.
+    pub fn expand(&self, typed: &str) -> PathBuf {
+        let typed = typed.trim();
+        let rest = typed.strip_prefix('~').filter(|r| r.is_empty() || r.starts_with('/'));
+        match rest {
+            Some(rest) => self.home.join(rest.trim_start_matches('/')),
+            None if Path::new(typed).is_absolute() => PathBuf::from(typed),
+            None => self.home.join(typed),
+        }
+    }
+
+    /// A path as a person reads it: inside the home folder, as `~/…`.
+    pub fn tilde(&self, path: &Path) -> String {
+        match path.strip_prefix(&self.home) {
+            Ok(rest) if rest.as_os_str().is_empty() => "~".to_owned(),
+            Ok(rest) => format!("~/{}", rest.display()),
+            Err(_) => path.display().to_string(),
+        }
+    }
+
     /// The variables a child process needs to see this same sandbox (for headless renders of
     /// the app binary and for the CLI). Empty for a real, non-isolated environment.
     pub fn child_vars(&self) -> Vec<(OsString, OsString)> {
@@ -165,11 +186,13 @@ fn default_config_dir(home: &Path) -> PathBuf {
     }
 }
 
-/// Git with no system config, a global config inside the sandbox home, no prompts, and stable
-/// output (C locale, UTC).
+/// Git with no system config, a global config inside the sandbox home, no prompts, stable
+/// output (C locale, UTC), and no looking for a repository above the sandbox: a world built
+/// inside a checkout must not find the checkout.
 fn sandbox_git_vars(home: &Path) -> Vec<(OsString, OsString)> {
     vec![
         ("HOME".into(), home.into()),
+        ("GIT_CEILING_DIRECTORIES".into(), home.parent().unwrap_or(home).into()),
         ("GIT_CONFIG_NOSYSTEM".into(), "1".into()),
         ("GIT_CONFIG_GLOBAL".into(), home.join(".gitconfig").into()),
         ("GIT_TERMINAL_PROMPT".into(), "0".into()),
@@ -178,4 +201,23 @@ fn sandbox_git_vars(home: &Path) -> Vec<(OsString, OsString)> {
         ("LC_ALL".into(), "C".into()),
         ("TZ".into(), "UTC".into()),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn typed_paths_start_at_home_and_read_back_with_a_tilde() {
+        let env = Env::sandbox(Path::new("/home/ana"), Timestamp::UNIX_EPOCH);
+        assert_eq!(env.expand("~"), Path::new("/home/ana"));
+        assert_eq!(env.expand(" ~/code/site/ "), Path::new("/home/ana/code/site/"));
+        assert_eq!(env.expand("code/site"), Path::new("/home/ana/code/site"), "relative to home");
+        assert_eq!(env.expand("/srv/git/site"), Path::new("/srv/git/site"));
+        assert_eq!(env.expand("~bob/x"), Path::new("/home/ana/~bob/x"), "another user's home isn't ours to guess");
+        assert_eq!(env.tilde(Path::new("/home/ana/code/site")), "~/code/site");
+        assert_eq!(env.tilde(Path::new("/home/ana")), "~");
+        assert_eq!(env.tilde(Path::new("/home/anabel")), "/home/anabel");
+        assert_eq!(env.tilde(Path::new("/srv/git")), "/srv/git");
+    }
 }

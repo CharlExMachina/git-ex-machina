@@ -109,6 +109,37 @@ pub fn search_field<S: 'static>(
     w.role("textbox").child(icon(&icons::SEARCH, 14.0).color(t.ink_faint)).child(field).child(kbd(t, shortcut))
 }
 
+/// `TextField` under its label: the label 500 12px, 6 above a 28-tall well (radius 6, 8 a
+/// side) holding the field, keyed `key`, editing what `access` returns.
+pub fn field<S: 'static>(
+    t: &Theme,
+    edit: &TextEdit,
+    label: &str,
+    placeholder: &str,
+    key: &str,
+    access: impl for<'a> Fn(&'a mut S) -> &'a mut TextEdit + 'static,
+    handlers: impl FnOnce(El) -> El,
+) -> El {
+    let input = handlers(text_input(edit, ty::BODY))
+        .key(key)
+        .label(label.to_owned())
+        .on_edit(access)
+        .single_line()
+        .placeholder(placeholder.to_owned(), t.ink_faint)
+        .color(t.ink)
+        .grow(1.0)
+        .min_w(0.0);
+    let mut w = row().h(28.0).px(8.0).center_y().radius(size::RADIUS_SM).fill(t.well);
+    for s in t.shadow_well() {
+        w = w.box_shadow(s);
+    }
+    rune::col()
+        .w_full()
+        .gap(6.0)
+        .child(text(label.to_owned()).font(ty::CAPTION_STRONG).color(t.ink_muted))
+        .child(w.role("textbox").child(input))
+}
+
 /// `SegmentedControl`: a well with 2 of padding and gap, radius 8; options 24 tall, 12 a side,
 /// radius 6, 12px medium; the selected one raised.
 pub fn segmented(t: &Theme, options: Vec<(El, bool)>) -> El {

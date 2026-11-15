@@ -65,5 +65,37 @@ impl Op {
 /// Runs `op` in `repo`. Fetch, pull and push block on the network, so the app runs every
 /// operation off the UI thread.
 pub fn run(env: &Env, repo: &Path, op: &Op) -> Result<(), GitError> {
+    if *op == Op::Push && !has_upstream(env, repo) {
+        return publish(env, repo);
+    }
     git::run(env, repo, &op.args()).map(|_| ())
+}
+
+/// Whether the checked-out branch tracks a remote branch.
+pub fn has_upstream(env: &Env, repo: &Path) -> bool {
+    git::run(env, repo, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]).is_ok()
+}
+
+/// Pushes a branch that has never been pushed, and makes the remote branch its upstream, so the
+/// next push and pull just work.
+fn publish(env: &Env, repo: &Path) -> Result<(), GitError> {
+    let remote = publish_remote(env, repo)?;
+    git::run(env, repo, &["push", "--quiet", "--set-upstream", &remote, "HEAD"]).map(|_| ())
+}
+
+/// Where a new branch goes: `remote.pushDefault`, else `origin`, else the only remote.
+fn publish_remote(env: &Env, repo: &Path) -> Result<String, GitError> {
+    let configured = git::run(env, repo, &["config", "--get", "remote.pushDefault"]).unwrap_or_default();
+    if !configured.trim().is_empty() {
+        return Ok(configured.trim().to_owned());
+    }
+    let out = git::run(env, repo, &["remote"])?;
+    let remotes: Vec<&str> = out.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let refuse = |why: &str| GitError::Failed { args: "push".to_owned(), code: None, stderr: format!("fatal: {why}") };
+    match remotes.as_slice() {
+        _ if remotes.contains(&"origin") => Ok("origin".to_owned()),
+        [one] => Ok((*one).to_owned()),
+        [] => Err(refuse("this repository has no remote to push to")),
+        _ => Err(refuse("there are several remotes and none is origin: set remote.pushDefault to choose")),
+    }
 }

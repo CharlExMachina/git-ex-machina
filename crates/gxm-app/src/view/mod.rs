@@ -9,6 +9,7 @@ mod inspector;
 mod on_graph;
 mod pull;
 mod pull_parts;
+mod sheet;
 mod sidebar;
 mod toolbar;
 
@@ -44,7 +45,7 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
         };
         shell = shell.child(right.w(INSPECTOR_W).h_full());
     }
-    shell
+    shell.children(sheet::layer(s, &t))
 }
 
 fn message(t: &Theme, e: &str) -> El {

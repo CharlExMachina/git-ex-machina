@@ -8,6 +8,7 @@ use crate::{Journey, Press};
 
 pub fn all() -> Vec<Journey> {
     vec![
+        get_started(),
         first_look(),
         push_and_pull(),
         shape_history(),
@@ -22,6 +23,111 @@ pub fn find(name: &str) -> Option<Journey> {
 
 fn mockup_world(w: &World) {
     gxm_world::fixtures::mockup(w);
+}
+
+/// A first run: nothing in the workspace yet. On disk, `~/code/field-notes` is on a `drafts`
+/// branch that was never pushed, and `~/code/scratch` is a folder without git. `studio/site`
+/// is only on GitHub.
+fn first_run_world(w: &World) {
+    use gxm_world::fixtures::{ANA, KENJI, LEA};
+    use gxm_world::{days, hours};
+    let notes = w.repo("github.com", "personal", "field-notes");
+    notes.commit(ANA, w.ago(days(9)), "Start the field notes", &["README.md"]);
+    notes.commit(KENJI, w.ago(days(6)), "Notes from the Lisbon workshop", &["2026/lisbon.md"]);
+    notes.push("main");
+    notes.branch("drafts");
+    notes.commit(ANA, w.ago(days(2)), "Draft the review checklist", &["drafts/checklist.md"]);
+    notes.commit(ANA, w.ago(hours(3)), "Sketch the onboarding notes", &["drafts/onboarding.md"]);
+    let scratch = w.code().join("scratch");
+    std::fs::create_dir_all(&scratch).unwrap_or_else(|e| panic!("make ~/code/scratch: {e}"));
+    std::fs::write(scratch.join("todo.txt"), "buy milk\n").unwrap_or_else(|e| panic!("write todo.txt: {e}"));
+    let site = w.repo("github.com", "studio", "site");
+    site.commit(KENJI, w.ago(days(20)), "Scaffold the site", &["index.html"]);
+    site.commit(LEA, w.ago(days(12)), "Add the pricing page", &["pricing.html"]);
+    site.commit(KENJI, w.ago(days(1)), "Publish the landing page", &["index.html"]);
+    site.push("main");
+    // Only GitHub has it: the working copy that built it goes.
+    std::fs::remove_dir_all(site.path()).unwrap_or_else(|e| panic!("remove site's working copy: {e}"));
+}
+
+/// Starting out: an empty workspace, a repository added from disk (after a folder that isn't
+/// one), a repository cloned from GitHub (and a second clone refused), and a branch that only
+/// existed locally published with Push.
+pub fn get_started() -> Journey {
+    Journey::new(
+        "get_started",
+        "Someone opens git-ex-machina for the first time, adds a repository they already have, clones one from GitHub, and publishes a branch that was only on their machine.",
+        first_run_world,
+    )
+    // An empty workspace says how to start, and offers both ways in.
+    .see_in(keys::EMPTY_STATE, "Add a repository you have, or clone one")
+    .see_in(keys::EMPTY_ADD, "Add repository")
+    .see_in(keys::EMPTY_CLONE, "Clone repository")
+    .mark("empty")
+    // Add asks for a folder, starting where repositories usually live.
+    .tap(keys::EMPTY_ADD)
+    .see_in(keys::SHEET, "Add a repository")
+    .see_in(keys::ADD_PATH, "~/code/")
+    // A folder without git is refused, with the reason.
+    .type_text("scratch")
+    .press(Press::ENTER)
+    .wait_for(keys::SHEET_ERROR, "~/code/scratch isn't a git repository")
+    .mark("not-a-repo")
+    .press(Press::cmd("a"))
+    .type_text("~/code/field-notes")
+    .tap(keys::ADD_CONFIRM)
+    .wait_for(keys::BRANCH_SUMMARY, "drafts")
+    .gone(keys::SHEET)
+    .see_in(keys::repo("field-notes"), "drafts · personal")
+    .see_in(keys::BRANCH_SUMMARY, "not pushed yet")
+    .see_in(keys::INSPECTOR_TITLE, "Sketch the onboarding notes")
+    .world_check("the workspace keeps field-notes", |w| {
+        let ws = gxm_core::workspace::Workspace::load(w.env()).map_err(|e| e.to_string())?;
+        let want = w.code().join("field-notes");
+        if ws.repos.iter().any(|r| r.path == want) { Ok(()) } else { Err(format!("workspace: {:?}", ws.repos)) }
+    })
+    .mark("added")
+    // Clone takes the URL as GitHub's page shows it, and clones over SSH beside the others.
+    .tap(keys::CLONE)
+    .see_in(keys::SHEET, "Clone a repository")
+    .see_in(keys::CLONE_INTO, "~/code")
+    .type_text("https://github.com/studio/site")
+    .see_in(keys::CLONE_PLAN, "git@github.com:studio/site.git")
+    .see_in(keys::CLONE_PLAN, "~/code/site")
+    .mark("clone")
+    .tap(keys::CLONE_CONFIRM)
+    .wait_for(keys::BRANCH_SUMMARY, "main · 3 commits")
+    .gone(keys::SHEET)
+    .see_in(keys::repo("site"), "main · studio")
+    .see_in(keys::INSPECTOR_TITLE, "Publish the landing page")
+    .world_check("site is cloned, with the SSH URL as its origin", |w| {
+        let url = w.git(&w.code().join("site"), &["config", "--get", "remote.origin.url"]);
+        if url.trim() == "git@github.com:studio/site.git" { Ok(()) } else { Err(format!("origin is {url:?}")) }
+    })
+    .mark("cloned")
+    // Cloning it again would land on the copy that's there, so it says so.
+    .tap(keys::CLONE)
+    .type_text("git@github.com:studio/site.git")
+    .tap(keys::CLONE_CONFIRM)
+    .wait_for(keys::SHEET_ERROR, "~/code/site already exists")
+    .press(Press::ESCAPE)
+    .gone(keys::SHEET)
+    // drafts was never pushed: Push publishes it to origin and tracks it there.
+    .tap(keys::repo("field-notes"))
+    .see_in(keys::BRANCH_SUMMARY, "drafts not pushed yet")
+    .tap(keys::PUSH)
+    .wait_for(keys::BRANCH_SUMMARY, "drafts · 4 commits")
+    .not_see("not pushed yet")
+    .world_check("origin has drafts, and drafts tracks it", |w| {
+        let local = w.git(&w.code().join("field-notes"), &["rev-parse", "drafts"]).trim().to_owned();
+        let remote = w.remote_head("github.com", "personal", "field-notes", "drafts");
+        let upstream = w.git(&w.code().join("field-notes"), &["rev-parse", "--abbrev-ref", "drafts@{upstream}"]);
+        match (local == remote, upstream.trim()) {
+            (true, "origin/drafts") => Ok(()),
+            _ => Err(format!("remote drafts {remote}, local {local}, upstream {upstream:?}")),
+        }
+    })
+    .mark("published")
 }
 
 /// Opening the app on a workspace: the history graph of the pinned repository, its commits
@@ -159,7 +265,7 @@ pub fn push_and_pull() -> Journey {
     .see_in(keys::PUSH, "Push")
     .not_see("↑4")
     .world_check("the remote's main is the local merge", |w| {
-        let local = w.git(&w.root().join("code/atlas-web"), &["rev-parse", "main"]).trim().to_owned();
+        let local = w.git(&w.code().join("atlas-web"), &["rev-parse", "main"]).trim().to_owned();
         let remote = w.remote_head("github.com", "studio", "atlas-web", "main");
         if local == remote { Ok(()) } else { Err(format!("remote main is {remote}, local main is {local}")) }
     })
@@ -218,7 +324,7 @@ pub fn shape_history() -> Journey {
     .see_in(keys::BRANCH_SUMMARY, "main ↑5")
     .not_see("Uncommitted changes")
     .world_check("main's newest commit is the one just made", |w| {
-        let subject = w.git(&w.root().join("code/atlas-web"), &["log", "-1", "--format=%s"]);
+        let subject = w.git(&w.code().join("atlas-web"), &["log", "-1", "--format=%s"]);
         if subject.trim() == "Toolbar context for the selection" { Ok(()) } else { Err(format!("HEAD is {subject:?}")) }
     })
     // One commit selected: the toolbar turns to what can be done with it.
@@ -261,7 +367,7 @@ pub fn shape_history() -> Journey {
     .not_see("Discarded in git-ex-machina")
     .see_in(keys::BRANCH_SUMMARY, "main · 6 commits")
     .world_check("the changes are in a stash, not gone", |w| {
-        let stashes = w.git(&w.root().join("code/brand-tokens"), &["stash", "list"]);
+        let stashes = w.git(&w.code().join("brand-tokens"), &["stash", "list"]);
         if stashes.contains(gxm_core::ops::DISCARD_STASH) { Ok(()) } else { Err(format!("stash list: {stashes:?}")) }
     })
     .mark("discarded")
