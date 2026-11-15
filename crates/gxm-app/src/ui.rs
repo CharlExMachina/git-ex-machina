@@ -140,6 +140,30 @@ pub fn field<S: 'static>(
         .child(w.role("textbox").child(input))
 }
 
+/// `Checkbox`: a 16-point box, radius 4, raised when off and accent with a check when on, 8
+/// before its label.
+pub fn check(t: &Theme, on: bool, label: &str) -> El {
+    let mut b = row().size(16.0, 16.0).radius(size::RADIUS_XS).center();
+    if on {
+        b = b.fill(t.accent).gradient(t.accent_top, t.accent).child(icon(&icons::CHECK, 12.0).color(t.on_accent));
+        for s in t.shadow_primary() {
+            b = b.box_shadow(s);
+        }
+    } else {
+        b = b.fill(t.control);
+        for s in t.shadow_raised() {
+            b = b.box_shadow(s);
+        }
+    }
+    row()
+        .gap(8.0)
+        .center_y()
+        .role("checkbox")
+        .label(label.to_owned())
+        .child(b)
+        .child(text(label.to_owned()).font(ty::BODY).color(t.ink))
+}
+
 /// `SegmentedControl`: a well with 2 of padding and gap, radius 8; options 24 tall, 12 a side,
 /// radius 6, 12px medium; the selected one raised.
 pub fn segmented(t: &Theme, options: Vec<(El, bool)>) -> El {

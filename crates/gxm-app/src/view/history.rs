@@ -62,7 +62,11 @@ fn summary(s: &App, h: &History, t: &Theme) -> El {
         }
     }
     // The count lands after the history on a big repository; until then the line goes without.
-    let count = h.total.map(|n| if n == 1 { "1 commit".to_owned() } else { format!("{} commits", thousands(n)) });
+    let count = h.total.map(|n| match n {
+        0 => "no commits yet".to_owned(),
+        1 => "1 commit".to_owned(),
+        n => format!("{} commits", thousands(n)),
+    });
     let fetched = s
         .repo()
         .and_then(|r| r.summary.fetched)
@@ -191,7 +195,8 @@ fn history_row(s: &App, i: usize, t: &Theme) -> El {
                 .gap(6.0)
                 .child(row().grow(1.0).child(text("Uncommitted changes").font(ty::BODY_STRONG).color(t.ink)))
                 .child(text(note).font(ty::CAPTION).color(t.ink_muted));
-            let mark = graph::worktree(t, staged, lane, h.cols);
+            let has_head = h.rows.iter().any(|r| matches!(r, Row::Commit(_)));
+            let mark = graph::worktree(t, staged, has_head, lane, h.cols);
             (if dim { mark.opacity(graph::DIM) } else { mark }, c)
         }
         Row::Commit(c) => {

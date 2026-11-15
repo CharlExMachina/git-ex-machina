@@ -28,6 +28,7 @@ icon!(PULL, "gxm-pull", r#"<path d="M8 2.5v8"/><path d="M4.5 7 8 10.5 11.5 7"/><
 icon!(PUSH, "gxm-push", r#"<path d="M8 13.5v-8"/><path d="M4.5 9 8 5.5 11.5 9"/><path d="M3 2.5h10"/>"#);
 icon!(TAG, "gxm-tag", r#"<path d="M2.5 2.5h5l6 6-5 5-6-6z"/><circle cx="5.5" cy="5.5" r="0.75"/>"#);
 icon!(PLUS, "gxm-plus", r#"<path d="M8 3v10M3 8h10"/>"#);
+icon!(CHECK, "gxm-check", r#"<path d="M3.5 8.5 6.5 11.5 12.5 4.5"/>"#);
 icon!(SIDEBAR, "gxm-sidebar", r#"<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/>"#);
 icon!(
     COPY,
@@ -46,7 +47,6 @@ icon!(
     "gxm-pull-request",
     r#"<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="12.5" r="1.5"/><path d="M4.5 5v6"/><path d="M11.5 11V6.5a2 2 0 0 0-2-2H7"/><path d="M8.5 3 7 4.5 8.5 6"/>"#
 );
-icon!(CHECK, "gxm-check", r#"<path d="M3.5 8.5 6.5 11.5 12.5 4.5"/>"#);
 icon!(X, "gxm-x", r#"<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>"#);
 icon!(
     EYE,
