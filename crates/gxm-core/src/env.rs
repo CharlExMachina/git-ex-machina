@@ -32,14 +32,28 @@ pub struct Env {
     ui_thread: Option<std::thread::ThreadId>,
     /// How to reach the providers' APIs (pull requests, reviews, checks).
     pub forge: ForgeAccess,
+    /// Where tokens are kept.
+    pub secrets: Secrets,
 }
 
-/// Where a provider's API is and the token that opens it. Keychain storage and a sign-in
-/// wizard come later; for now the token comes from the environment, read here and nowhere else.
+/// Where tokens are kept.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Secrets {
+    /// The macOS Keychain, or the Secret Service on Linux.
+    Keychain,
+    /// A file only its owner can read: a sandbox's, so tests never touch the person's Keychain.
+    File(PathBuf),
+}
+
+/// Where a provider's API is and the token that opens it. The token here is one the process
+/// environment gave (`GH_TOKEN`); a sign-in's token, kept in the Keychain, is read off the UI
+/// thread and put here when it lands (see `auth`).
 #[derive(Clone, PartialEq, Eq)]
 pub struct ForgeAccess {
     /// GitHub's API root: `https://api.github.com`, or a world's fake.
     pub github_api: String,
+    /// Where GitHub's sign-in pages are: `https://github.com`, or a world's fake.
+    pub github_web: String,
     pub github_token: Option<String>,
 }
 
@@ -48,6 +62,7 @@ impl std::fmt::Debug for ForgeAccess {
         // Never print a token.
         f.debug_struct("ForgeAccess")
             .field("github_api", &self.github_api)
+            .field("github_web", &self.github_web)
             .field("github_token", &self.github_token.as_ref().map(|_| "…"))
             .finish()
     }
@@ -55,10 +70,15 @@ impl std::fmt::Debug for ForgeAccess {
 
 impl ForgeAccess {
     pub const GITHUB_API: &str = "https://api.github.com";
+    pub const GITHUB_WEB: &str = "https://github.com";
 
-    /// No provider reachable: no token, GitHub's real address.
+    /// No provider reachable: no token, GitHub's real addresses.
     pub fn none() -> ForgeAccess {
-        ForgeAccess { github_api: ForgeAccess::GITHUB_API.to_owned(), github_token: None }
+        ForgeAccess {
+            github_api: ForgeAccess::GITHUB_API.to_owned(),
+            github_web: ForgeAccess::GITHUB_WEB.to_owned(),
+            github_token: None,
+        }
     }
 }
 
@@ -78,6 +98,7 @@ pub const ISOLATED_VAR: &str = "GXM_ISOLATED";
 pub const CONFIG_DIR_VAR: &str = "GXM_CONFIG_DIR";
 pub const GITHUB_API_VAR: &str = "GXM_GITHUB_API";
 pub const GITHUB_TOKEN_VAR: &str = "GXM_GITHUB_TOKEN";
+pub const GITHUB_WEB_VAR: &str = "GXM_GITHUB_WEB";
 
 impl Env {
     /// The real environment, with the `GXM_*` overrides a sandboxed run sets.
@@ -95,8 +116,10 @@ impl Env {
         let github_token = var(GITHUB_TOKEN_VAR)
             .or_else(|| if isolated { None } else { var("GH_TOKEN").or_else(|| var("GITHUB_TOKEN")) });
         let github_api = var(GITHUB_API_VAR).unwrap_or_else(|| ForgeAccess::GITHUB_API.to_owned());
-        let forge = ForgeAccess { github_api, github_token };
-        Env { home, config_dir, clock, tz, isolated, git_vars, forge, ui_thread: None }
+        let github_web = var(GITHUB_WEB_VAR).unwrap_or_else(|| ForgeAccess::GITHUB_WEB.to_owned());
+        let forge = ForgeAccess { github_api, github_web, github_token };
+        let secrets = if isolated { Secrets::File(config_dir.join("secrets.json")) } else { Secrets::Keychain };
+        Env { home, config_dir, clock, tz, isolated, git_vars, forge, secrets, ui_thread: None }
     }
 
     /// A sandboxed environment rooted at `home`, at a fixed time, in UTC.
@@ -109,6 +132,7 @@ impl Env {
             isolated: true,
             git_vars: sandbox_git_vars(home),
             forge: ForgeAccess::none(),
+            secrets: Secrets::File(home.join(".config/git-ex-machina/secrets.json")),
             ui_thread: None,
         }
     }
@@ -171,6 +195,7 @@ impl Env {
         vars.push((ISOLATED_VAR.into(), "1".into()));
         vars.push((CONFIG_DIR_VAR.into(), self.config_dir.clone().into()));
         vars.push((GITHUB_API_VAR.into(), self.forge.github_api.clone().into()));
+        vars.push((GITHUB_WEB_VAR.into(), self.forge.github_web.clone().into()));
         if let Some(token) = &self.forge.github_token {
             vars.push((GITHUB_TOKEN_VAR.into(), token.clone().into()));
         }

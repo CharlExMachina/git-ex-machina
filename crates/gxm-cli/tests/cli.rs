@@ -17,6 +17,17 @@ fn gxm(w: &World, args: &[&str]) -> String {
     String::from_utf8(out.stdout).expect("gxm prints UTF-8")
 }
 
+/// Runs gxm, whatever it exits with.
+#[expect(clippy::expect_used, reason = "a test helper: a broken binary fails the test loudly")]
+fn gxm_run(w: &World, args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_gxm"))
+        .args(args)
+        .envs(w.env().child_vars())
+        .current_dir(w.code())
+        .output()
+        .expect("gxm runs")
+}
+
 #[test]
 fn someone_checks_their_workspace_and_reads_a_history_from_the_terminal() {
     let w = World::new();
@@ -79,4 +90,35 @@ fn someone_adds_and_clones_repositories_from_the_terminal() {
     assert_eq!(cloned, "Cloning git@github.com:studio/site.git into ~/code/site\nAdded ~/code/site\n");
     let repos = gxm(&w, &["repos"]);
     assert!(repos.contains("field-notes") && repos.contains("site"), "{repos}");
+}
+
+#[test]
+fn someone_signs_in_to_github_from_the_terminal() {
+    use std::io::{BufRead as _, BufReader};
+    let w = World::new();
+    w.sign_out();
+    // Not signed in yet: status says so, and fails, for scripts.
+    assert!(!gxm_run(&w, &["auth", "status"]).status.success());
+
+    // Login shows the code and where to enter it, then waits until it's approved on GitHub.
+    let mut login = Command::new(env!("CARGO_BIN_EXE_gxm"))
+        .args(["auth", "login"])
+        .envs(w.env().child_vars())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut lines = BufReader::new(login.stdout.take().unwrap()).lines().map(Result::unwrap);
+    assert_eq!(lines.next().unwrap(), format!("Your one-time code: {}", gxm_world::hub::USER_CODE));
+    assert_eq!(lines.next().unwrap(), "Enter it at https://github.com/login/device to sign in. Waiting…");
+    // The world's GitHub approves after a couple of asks.
+    assert_eq!(lines.next().unwrap(), "Signed in to github.com as ana-ruiz");
+    assert!(login.wait().unwrap().success());
+
+    // A separate run finds the sign-in, checks it with GitHub, and hands out the token.
+    assert_eq!(gxm(&w, &["auth", "status"]), "Signed in to github.com as ana-ruiz\n");
+    assert_eq!(gxm(&w, &["auth", "token"]), format!("{}\n", gxm_world::hub::TOKEN));
+    assert_eq!(gxm(&w, &["auth", "logout"]), "Signed out of github.com (ana-ruiz)\n");
+    let status = gxm_run(&w, &["auth", "status"]);
+    assert!(!status.status.success());
+    assert_eq!(String::from_utf8_lossy(&status.stderr), "gxm: not signed in to github.com: gxm auth login\n");
 }

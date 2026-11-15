@@ -9,6 +9,7 @@ use gxm_core::history::{Commit, CommitInfo, FileChange};
 use gxm_core::repo::RepoSummary;
 use rune::TextEdit;
 
+use crate::account::AccountJobs;
 use crate::keys;
 use crate::load::Loads;
 use crate::ops::Ops;
@@ -46,6 +47,9 @@ pub struct App {
     pub sheet: Sheet,
     pub fields: Fields,
     pub sheet_jobs: SheetJobs,
+    /// Who's signed in to GitHub; None when no one is.
+    pub account: Option<gxm_core::forge::model::User>,
+    pub account_jobs: AccountJobs,
 }
 
 /// Loading is an explicit machine: nothing is read before the first frame is up, and the
@@ -159,6 +163,7 @@ impl App {
     /// that draws the window: debug builds then panic if git or a file read ever runs there.
     pub fn new(mut env: Env) -> App {
         env.claim_ui_thread();
+        let env_token = env.forge.github_token.clone();
         App {
             env,
             load: Load::NotStarted,
@@ -180,12 +185,14 @@ impl App {
             sheet: Sheet::Closed,
             fields: Fields::default(),
             sheet_jobs: SheetJobs::default(),
+            account: None,
+            account_jobs: AccountJobs::new(env_token),
         }
     }
 
     /// A read, a write or a provider call is in flight: what's on screen may be about to change.
     pub fn busy(&self) -> bool {
-        self.loads.busy() || self.pulls.busy()
+        self.loads.busy() || self.pulls.busy() || self.account_jobs.reading()
     }
 
     /// Lights the open pull request's commits in the graph, or clears the light.

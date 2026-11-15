@@ -1,6 +1,7 @@
 //! The window: the repository sidebar (248 + its border), the history, and the inspector
 //! (360 + its border), each under its own 48-point bar.
 
+mod account;
 mod cockpit;
 mod cockpit_side;
 mod graph;

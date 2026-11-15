@@ -68,10 +68,14 @@ impl World {
             std::fs::create_dir_all(&dir).unwrap_or_else(|e| fail("make the world's folders", e));
         }
         let now: Timestamp = NOW.parse().unwrap_or_else(|e| fail("read NOW", e));
-        // Every world has its own GitHub, empty until a fixture adds pull requests to it.
+        // Every world has its own GitHub, empty until a fixture adds pull requests to it. Ana is
+        // signed in to it as a sign-in leaves things: the token kept (in the sandbox, not a
+        // Keychain) and her account beside it. The environment itself carries no token.
         let mut env = Env::sandbox(&home, now);
         let hub = hub::Hub::start(env.clone(), root.join("remotes"));
-        env.forge = ForgeAccess { github_api: hub.url(), github_token: Some(hub::TOKEN.to_owned()) };
+        env.forge = ForgeAccess { github_api: hub.url(), github_web: hub.url(), github_token: None };
+        let ana = gxm_core::forge::model::User { login: hub::ANA.login.to_owned(), name: hub::ANA.name.to_owned() };
+        gxm_core::auth::remember(&env, &ana, hub::TOKEN).unwrap_or_else(|e| fail("sign Ana in", e));
         let mut cfg = String::from(
             // The person at the keyboard is Ana, who owns the demo workspace: what the app
             // commits in a world is hers.
@@ -89,6 +93,11 @@ impl World {
 
     pub fn env(&self) -> &Env {
         &self.env
+    }
+
+    /// Forgets Ana's sign-in, so the world starts signed out of GitHub.
+    pub fn sign_out(&self) {
+        gxm_core::auth::sign_out(&self.env).unwrap_or_else(|e| fail("sign Ana out", e));
     }
 
     /// The world's GitHub (see [`hub`]).
