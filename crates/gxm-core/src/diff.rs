@@ -48,6 +48,10 @@ pub fn worktree_hunk(env: &Env, repo: &Path, path: &str) -> Result<Option<Hunk>,
     let tracked = git::run(env, repo, &["ls-files", "--", path])?;
     if tracked.trim().is_empty() {
         let Ok(text) = std::fs::read_to_string(repo.join(path)) else { return Ok(None) };
+        if text.contains('\0') {
+            // Binary, as git judges it: no lines to show.
+            return Ok(None);
+        }
         let lines: Vec<HunkLine> = text
             .lines()
             .zip(1..)

@@ -26,7 +26,8 @@ fn mockup_world(w: &World) {
 }
 
 /// A first run: nothing in the workspace yet. On disk, `~/code/lantern` is a Godot project
-/// that was never put in git (its `.godot/` cache included), and `~/code/field-notes` is on a
+/// that was never put in git (its `.godot/` cache and binary assets included; tracking those
+/// with LFS needs `git-lfs` installed, as CI's runners have it), and `~/code/field-notes` is on a
 /// `drafts` branch that was never pushed. `studio/site` is only on GitHub.
 fn first_run_world(w: &World) {
     use gxm_world::fixtures::{ANA, KENJI, LEA};
@@ -53,6 +54,13 @@ fn first_run_world(w: &World) {
         std::fs::create_dir_all(path.parent().unwrap_or(&lantern))
             .unwrap_or_else(|e| panic!("make {file}'s folder: {e}"));
         std::fs::write(&path, text).unwrap_or_else(|e| panic!("write {file}: {e}"));
+    }
+    // Assets: binary, as their headers make them.
+    std::fs::create_dir_all(lantern.join("music")).unwrap_or_else(|e| panic!("make music/: {e}"));
+    for (file, bytes) in
+        [("icon.png", &b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"[..]), ("music/theme.ogg", b"OggS\x00\x02")]
+    {
+        std::fs::write(lantern.join(file), bytes).unwrap_or_else(|e| panic!("write {file}: {e}"));
     }
     let site = w.repo("github.com", "studio", "site");
     site.commit(KENJI, w.ago(days(20)), "Scaffold the site", &["index.html"]);
@@ -97,6 +105,9 @@ pub fn get_started() -> Journey {
     .see_in(keys::INIT_NAME, "lantern")
     .see_in(keys::INIT_README_TEXT, "# lantern")
     .see_in(keys::INIT_IGNORE, "Ignore Godot's generated files")
+    // Git LFS is offered for the binary files that are there, and is the person's choice.
+    .see_in(keys::INIT_LFS, "Track binary files with Git LFS (.ogg, .png)")
+    .tap(keys::INIT_LFS)
     .see_in(keys::INIT_LOCAL, "Local only")
     .see_in(keys::INIT_GITHUB, "On GitHub")
     // The README's heading follows the name until the README is edited.
@@ -114,6 +125,7 @@ pub fn get_started() -> Journey {
     .see_in(keys::changed_file("README.md"), "A")
     .see_in(keys::changed_file(".gitignore"), "A")
     .see_in(keys::changed_file("project.godot"), "A")
+    .see_in(keys::changed_file(".gitattributes"), "A")
     .gone(keys::changed_file(".godot/editor/main.tscn-folding.cfg"))
     .world_check("lantern is a repository with its files where they were, nothing committed", |w| {
         let dir = w.code().join("lantern");
@@ -134,6 +146,12 @@ pub fn get_started() -> Journey {
     .tap(keys::COMMIT)
     .wait_for(keys::BRANCH_SUMMARY, "main · 1 commit")
     .see_in(keys::INSPECTOR_TITLE, "First playable")
+    .world_check("the assets went in through LFS", |w| {
+        let files = w.git(&w.code().join("lantern"), &["lfs", "ls-files", "--name-only"]);
+        let mut files: Vec<&str> = files.lines().collect();
+        files.sort_unstable();
+        if files == ["icon.png", "music/theme.ogg"] { Ok(()) } else { Err(format!("LFS has {files:?}")) }
+    })
     .mark("first-commit")
     // A repository that's already there is added as it is.
     .tap(keys::ADD_REPO)

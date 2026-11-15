@@ -212,5 +212,32 @@ fn init_fields(s: &App, t: &Theme, offer: &sheet::Offer) -> Vec<El> {
         ),
         (None, false) => {}
     }
+    if let Some(lfs) = lfs(t, s, offer) {
+        fields.push(lfs);
+    }
     fields
+}
+
+/// Git LFS for the binary files the folder has, naming their extensions; nothing when it has
+/// none. Without `git-lfs` installed it says how to get it.
+fn lfs(t: &Theme, s: &App, offer: &sheet::Offer) -> Option<El> {
+    let binary = &offer.survey.binary;
+    if binary.is_empty() {
+        return None;
+    }
+    const SHOWN: usize = 5;
+    let mut exts: Vec<String> = binary.iter().take(SHOWN).map(|e| format!(".{e}")).collect();
+    if binary.len() > SHOWN {
+        exts.push(format!("{} more", binary.len() - SHOWN));
+    }
+    let label = format!("Track binary files with Git LFS ({})", exts.join(", "));
+    let check = ui::check(t, s.fields.use_lfs && offer.survey.lfs, &label).key(keys::INIT_LFS);
+    Some(if offer.survey.lfs {
+        check.on_press(|s: &mut App| s.sheet_event(Event::ToggleLfs, None))
+    } else {
+        check
+            .disabled(true)
+            .opacity(0.5)
+            .help("Install Git LFS first: brew install git-lfs, or your package manager's git-lfs")
+    })
 }

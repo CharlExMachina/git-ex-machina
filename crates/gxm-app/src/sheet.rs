@@ -67,6 +67,9 @@ pub struct Fields {
     pub readme_follows: bool,
     pub write_readme: bool,
     pub write_ignore: bool,
+    /// Track the folder's binary files with Git LFS. Off until the person turns it on: it needs
+    /// `git-lfs` wherever the repository goes, and counts against the host's LFS quota.
+    pub use_lfs: bool,
 }
 
 impl Default for Fields {
@@ -80,6 +83,7 @@ impl Default for Fields {
             readme_follows: true,
             write_readme: true,
             write_ignore: true,
+            use_lfs: false,
         }
     }
 }
@@ -111,6 +115,7 @@ pub enum Event {
     ReadmeEdited,
     ToggleReadme,
     ToggleIgnore,
+    ToggleLfs,
     Landed(Result<Box<RepoEntry>, Refusal>),
 }
 
@@ -154,6 +159,7 @@ pub fn step(sheet: &mut Sheet, fields: &mut Fields, event: Event, env: &Env, int
             let plan = Plan {
                 readme: (fields.write_readme && !offer.survey.has_readme).then(|| fields.readme.text.clone()),
                 ignore: offer.survey.kind.filter(|_| fields.write_ignore && !offer.survey.has_ignore),
+                lfs: if fields.use_lfs && offer.survey.lfs { offer.survey.binary.clone() } else { Vec::new() },
             };
             vec![Effect::Init { folder: offer.folder.clone(), plan }]
         }
@@ -171,6 +177,10 @@ pub fn step(sheet: &mut Sheet, fields: &mut Fields, event: Event, env: &Env, int
         }
         (Sheet::Init { phase, .. }, Event::ToggleIgnore) if phase.editing() => {
             fields.write_ignore = !fields.write_ignore;
+            vec![]
+        }
+        (Sheet::Init { offer, phase }, Event::ToggleLfs) if phase.editing() && offer.survey.lfs => {
+            fields.use_lfs = !fields.use_lfs;
             vec![]
         }
         (Sheet::Clone(phase), Event::Submit) if phase.editing() => match plan(env, fields) {
@@ -206,6 +216,7 @@ pub fn step(sheet: &mut Sheet, fields: &mut Fields, event: Event, env: &Env, int
             fields.readme_follows = true;
             fields.write_readme = !offer.survey.has_readme;
             fields.write_ignore = offer.survey.kind.is_some() && !offer.survey.has_ignore;
+            fields.use_lfs = false;
             *sheet = Sheet::Init { offer: *offer, phase: editing };
             vec![Effect::Focus(keys::INIT_NAME)]
         }

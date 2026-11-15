@@ -56,6 +56,7 @@ pub const INIT_GITHUB: &str = "init-github";
 pub const INIT_README: &str = "init-readme";
 pub const INIT_README_TEXT: &str = "init-readme-text";
 pub const INIT_IGNORE: &str = "init-ignore";
+pub const INIT_LFS: &str = "init-lfs";
 pub const INIT_CONFIRM: &str = "init-confirm";
 
 /// A repository's row in the sidebar.
