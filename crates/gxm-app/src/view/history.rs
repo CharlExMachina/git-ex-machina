@@ -9,14 +9,12 @@ use super::graph::{self, Node, RowLook};
 use crate::icons;
 use crate::keys;
 use crate::ops::{OpState, Ops};
-use crate::sheet::Event;
-use crate::state::{App, History, Load, Pick, Row};
+use crate::state::{App, History, Pick, Row};
 use crate::theme::{Theme, size, ty};
-use crate::ui::{self, Variant};
+use crate::ui;
 
 pub fn pane(s: &App, t: &Theme) -> El {
     let body = match &s.history {
-        None if s.load == Load::Loaded && s.repos.is_empty() => first_run(t),
         // Still reading: a blank canvas, not a claim that there's nothing to show.
         None => col().w_full().grow(1.0),
         Some(History { error: Some(e), .. }) => empty(t, e),
@@ -38,24 +36,6 @@ fn empty(t: &Theme, message: &str) -> El {
         .grow(1.0)
         .center()
         .child(text(message.to_owned()).font(ty::BODY).color(t.ink_muted))
-}
-
-/// An empty workspace: the two ways in.
-fn first_run(t: &Theme) -> El {
-    let add = ui::button(t, Variant::Secondary, Some(&icons::PLUS), "Add repository", None)
-        .key(keys::EMPTY_ADD)
-        .on_press_tx(|s: &mut App, tx| s.sheet_event(Event::OpenAdd, Some(tx)));
-    let clone = ui::button(t, Variant::Primary, Some(&icons::FETCH), "Clone repository", None)
-        .key(keys::EMPTY_CLONE)
-        .on_press_tx(|s: &mut App, tx| s.sheet_event(Event::OpenClone, Some(tx)));
-    col()
-        .key(keys::EMPTY_STATE)
-        .w_full()
-        .grow(1.0)
-        .center()
-        .gap(16.0)
-        .child(text("Add a repository you have, or clone one.").font(ty::BODY).color(t.ink_muted))
-        .child(row().gap(8.0).child(add).child(clone))
 }
 
 /// `⑂ main ↑2 · 1,284 commits · fetched 2 minutes ago`, the multi-select hint and commit search.

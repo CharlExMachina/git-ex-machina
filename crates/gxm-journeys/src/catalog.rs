@@ -60,9 +60,14 @@ pub fn get_started() -> Journey {
         first_run_world,
     )
     // An empty workspace says how to start, and offers both ways in.
-    .see_in(keys::EMPTY_STATE, "Add a repository you have, or clone one")
+    .see_in(keys::EMPTY_STATE, "Start with a repository")
+    .see_in(keys::EMPTY_STATE, "Add one you have, or clone one.")
     .see_in(keys::EMPTY_ADD, "Add repository")
     .see_in(keys::EMPTY_CLONE, "Clone repository")
+    // Nothing that can't act yet: no sidebar to filter, no toolbar, no inspector.
+    .gone(keys::REPO_FILTER)
+    .gone(keys::FETCH)
+    .gone(keys::INSPECTOR)
     .mark("empty")
     // Add asks for a folder, starting where repositories usually live.
     .tap(keys::EMPTY_ADD)
