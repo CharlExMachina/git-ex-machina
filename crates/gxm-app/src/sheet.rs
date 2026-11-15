@@ -22,15 +22,20 @@ use crate::state::{App, RepoEntry};
 
 pub enum Sheet {
     Closed,
+    /// Signing in to GitHub, or who's signed in.
+    Account(crate::account::SignIn),
     Add(Phase),
-    Init { offer: Offer, phase: Phase },
+    Init {
+        offer: Offer,
+        phase: Phase,
+    },
     Clone(Phase),
 }
 
 impl Sheet {
     fn phase(&self) -> Option<&Phase> {
         match self {
-            Sheet::Closed => None,
+            Sheet::Closed | Sheet::Account(_) => None,
             Sheet::Add(phase) | Sheet::Clone(phase) | Sheet::Init { phase, .. } => Some(phase),
         }
     }
@@ -125,6 +130,7 @@ pub enum Effect {
     Init { folder: PathBuf, plan: Plan },
     Clone { url: String, dest: PathBuf },
     StopClone,
+    StopSignIn,
     Open(Box<RepoEntry>),
 }
 
@@ -196,6 +202,10 @@ pub fn step(sheet: &mut Sheet, fields: &mut Fields, event: Event, env: &Env, int
         (Sheet::Clone(phase), Event::Dismiss) if *phase == Phase::Working => {
             *phase = Phase::Cancelling;
             vec![Effect::StopClone]
+        }
+        (sheet @ Sheet::Account(_), Event::Dismiss) => {
+            *sheet = Sheet::Closed;
+            vec![Effect::StopSignIn]
         }
         (sheet, Event::Dismiss) if !working => {
             *sheet = Sheet::Closed;
@@ -290,6 +300,7 @@ impl App {
                 }
                 Effect::Clone { url, dest } => self.start_clone(url, dest),
                 Effect::StopClone => self.sheet_jobs.cancel.store(true, Ordering::Relaxed),
+                Effect::StopSignIn => self.account_jobs.stop(),
                 Effect::Open(entry) => self.open_repo(*entry),
             }
         }

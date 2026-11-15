@@ -9,6 +9,12 @@ use gxm_core::forge::{self, local};
 use gxm_core::repo::RepoSummary;
 
 pub fn prs(env: &Env, args: &[String], out: &mut impl Write) -> Result<(), String> {
+    // A token from the environment (`GH_TOKEN`) comes first; else the sign-in's.
+    let mut env = env.clone();
+    if env.forge.github_token.is_none() {
+        env.forge.github_token = gxm_core::auth::token(&env).map_err(|e| e.to_string())?;
+    }
+    let env = &env;
     let path = args.first().map_or_else(|| PathBuf::from("."), PathBuf::from);
     let summary = RepoSummary::read(env, &path).map_err(|e| e.to_string())?;
     let remote = summary.origin.ok_or("this repository has no origin")?;

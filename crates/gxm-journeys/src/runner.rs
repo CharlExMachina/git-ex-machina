@@ -86,7 +86,16 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
     rt.set_font_smoothing(gxm_app::FONT_SMOOTHING);
     rt.state = App::new(world.env().clone());
     let painter = crate::paint::Painter::new(&mut rt);
-    let mut d = Driver { rt, painter, now: 0.0, animating: true, dark: j.dark, events: Vec::new(), marks: Vec::new() };
+    let mut d = Driver {
+        rt,
+        painter,
+        opened: Vec::new(),
+        now: 0.0,
+        animating: true,
+        dark: j.dark,
+        events: Vec::new(),
+        marks: Vec::new(),
+    };
     d.advance_to(START);
     for (i, step) in j.steps.iter().enumerate() {
         let fail = |why: String, d: &Driver| Failure {
@@ -210,6 +219,12 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                     return Err(fail(format!("[{key}] is still there"), &d));
                 }
             }
+            Step::Opened(url) => {
+                let asked = std::mem::take(&mut d.opened);
+                if !asked.iter().any(|u| u == url) {
+                    return Err(fail(format!("the app asked to open {asked:?}"), &d));
+                }
+            }
             Step::World { check, .. } => check(world).map_err(|why| fail(why, &d))?,
         }
     }
@@ -221,6 +236,8 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
 struct Driver {
     rt: Runtime<App>,
     painter: crate::paint::Painter,
+    /// URLs the app asked to open, since the last `Opened` step looked.
+    opened: Vec<String>,
     now: f64,
     /// Whether the last frame was still animating.
     animating: bool,
@@ -238,6 +255,7 @@ impl Driver {
             let dt = frames as f64 * DT;
             self.animating = self.rt.frame(dt);
             self.now += dt;
+            self.opened.extend(self.rt.take_url_requests());
         }
     }
 

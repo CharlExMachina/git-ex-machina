@@ -59,6 +59,15 @@ pub const INIT_IGNORE: &str = "init-ignore";
 pub const INIT_LFS: &str = "init-lfs";
 pub const INIT_CONFIRM: &str = "init-confirm";
 
+/// The sidebar's account control: who's signed in to GitHub, or Sign in.
+pub const ACCOUNT: &str = "account";
+/// The one-time code a sign-in shows, and the sheet's buttons.
+pub const SIGNIN_CODE: &str = "signin-code";
+pub const SIGNIN_COPY: &str = "signin-copy";
+pub const SIGNIN_OPEN: &str = "signin-open";
+pub const SIGNIN_RETRY: &str = "signin-retry";
+pub const SIGN_OUT: &str = "sign-out";
+
 /// A repository's row in the sidebar.
 pub fn repo(name: &str) -> String {
     format!("repo-{}", sanitize(name))

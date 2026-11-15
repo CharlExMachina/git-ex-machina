@@ -29,6 +29,15 @@ pub fn post_json(url: &str, token: &str, body: &Value) -> Result<Value, ForgeErr
         .header("Accept", "application/json")
         .content_type("application/json")
         .send(body.to_string());
+    read(response)
+}
+
+/// POSTs `fields` as a form, as OAuth's sign-in endpoints take them, and reads the JSON answer.
+pub fn post_form(url: &str, fields: &[(&str, &str)]) -> Result<Value, ForgeError> {
+    read(agent().post(url).header("Accept", "application/json").send_form(fields.iter().copied()))
+}
+
+fn read(response: Result<ureq::http::Response<ureq::Body>, ureq::Error>) -> Result<Value, ForgeError> {
     let mut response = match response {
         Ok(r) => r,
         Err(ureq::Error::StatusCode(code)) => return Err(ForgeError::Status(code)),

@@ -1,5 +1,5 @@
 //! The repository sidebar: the traffic-light bar, the filter, pinned repositories, the rest,
-//! and "Clone repository" at the foot.
+//! and, at the foot, the GitHub account and "Clone repository".
 
 use rune::{El, col, icon, row, text};
 
@@ -59,18 +59,20 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
         }
         list = list.child(rows);
     }
-    let footer = row()
+    let footer = col()
         .w_full()
         .padding(12.0)
-        .gap(8.0)
-        .center_y()
+        .gap(4.0)
         .border_sides([1.0, 0.0, 0.0, 0.0], t.line)
         .border_layout()
+        .child(row().child(super::account::control(s, t)))
         .child(
-            ui::button(t, Variant::Ghost, Some(&icons::PLUS), "Clone repository", None)
-                .key(keys::CLONE)
-                .help("Clone a repository over SSH")
-                .on_press_tx(|s: &mut App, tx| s.sheet_event(Event::OpenClone, Some(tx))),
+            row().child(
+                ui::button(t, Variant::Ghost, Some(&icons::PLUS), "Clone repository", None)
+                    .key(keys::CLONE)
+                    .help("Clone a repository over SSH")
+                    .on_press_tx(|s: &mut App, tx| s.sheet_event(Event::OpenClone, Some(tx))),
+            ),
         );
     col().fill(t.chrome).border_sides([0.0, 1.0, 0.0, 0.0], t.line).border_layout().child(list).child(footer)
 }

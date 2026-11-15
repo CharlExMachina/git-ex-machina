@@ -372,6 +372,8 @@ pub mod ty {
     pub const STATUS: TextStyle = mono(10.0, 500.0, 16.0);
     /// A sheet's title: 600 15px/20px, -0.01em.
     pub const TITLE: TextStyle = sans(15.0, 600.0, 20.0).tracking(-0.15);
+    /// A one-time code to type somewhere else: 500 24px/32px mono, spaced out.
+    pub const CODE: TextStyle = mono(24.0, 500.0, 32.0).tracking(2.0);
     /// `.display-sm`: the inspector's title, 600 18px/24px, -0.01em.
     pub const DISPLAY_SM: TextStyle = sans(18.0, 600.0, 24.0).tracking(-0.18);
     /// 600 13px: a pull request's number, the merge box's headings.

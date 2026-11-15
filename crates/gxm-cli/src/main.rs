@@ -21,9 +21,13 @@ gxm: git-ex-machina on the command line
 Usage:
   gxm repos [--json]              The workspace's repositories and their state
   gxm log [PATH] [-n N] [--json]  History with its graph (PATH defaults to .)
-  gxm prs [PATH]                  Pull requests on the repository's provider (a token: GH_TOKEN)
+  gxm prs [PATH]                  Pull requests on the repository's provider (gxm auth login, or GH_TOKEN)
   gxm add PATH                    Add a repository on disk to the workspace
   gxm clone URL [INTO]            Clone over SSH into INTO (default ~/code) and add it
+  gxm auth login                  Sign in to GitHub with a one-time code
+  gxm auth status                 Who's signed in, checked with GitHub
+  gxm auth token                  Print the token, for scripts
+  gxm auth logout                 Forget the sign-in
   gxm help                        This message
 ";
 
@@ -37,6 +41,7 @@ fn main() -> ExitCode {
         Some("prs") => prs::prs(&env, &args[1..], &mut out),
         Some("add") => add(&env, &args[1..], &mut out),
         Some("clone") => clone(&env, &args[1..], &mut out),
+        Some("auth") => auth(&env, &args[1..], &mut out),
         Some("help" | "--help" | "-h") | None => out.write_all(USAGE.as_bytes()).map_err(|e| e.to_string()),
         Some(other) => Err(format!("unknown command {other:?}\n\n{USAGE}")),
     };
@@ -117,6 +122,42 @@ fn clone(env: &Env, args: &[String], out: &mut impl Write) -> Result<(), String>
     gxm_core::clone::run(env, &source.url, &dest, &mut |_| {}, &|| false).map_err(|e| e.to_string())?;
     workspace::add_repo(env, &dest).map_err(|e| e.to_string())?;
     writeln!(out, "Added {}", env.tilde(&dest)).map_err(|e| e.to_string())
+}
+
+fn auth(env: &Env, args: &[String], out: &mut impl Write) -> Result<(), String> {
+    use gxm_core::auth::{self, AuthError};
+    let say = |out: &mut dyn Write, line: String| writeln!(out, "{line}").and_then(|()| out.flush());
+    let fail = |e: AuthError| e.to_string();
+    match args.first().map(String::as_str) {
+        Some("login") => {
+            let code = auth::start(env).map_err(fail)?;
+            say(out, format!("Your one-time code: {}", code.user_code)).map_err(|e| e.to_string())?;
+            say(out, format!("Enter it at {} to sign in. Waiting…", code.verification_uri))
+                .map_err(|e| e.to_string())?;
+            let token = auth::wait(env, &code, &|| false).map_err(fail)?;
+            let account = auth::whoami(env, &token).map_err(fail)?;
+            auth::remember(env, &account, &token).map_err(fail)?;
+            say(out, format!("Signed in to github.com as {}", account.login)).map_err(|e| e.to_string())
+        }
+        Some("status") => {
+            let token = auth::token(env).map_err(fail)?.ok_or("not signed in to github.com: gxm auth login")?;
+            match auth::whoami(env, &token) {
+                Ok(a) => say(out, format!("Signed in to github.com as {}", a.login)).map_err(|e| e.to_string()),
+                Err(AuthError::BadToken) => Err("GitHub no longer accepts this sign-in: gxm auth login".to_owned()),
+                Err(e) => Err(e.to_string()),
+            }
+        }
+        Some("token") => {
+            let token = auth::token(env).map_err(fail)?.ok_or("not signed in to github.com: gxm auth login")?;
+            say(out, token).map_err(|e| e.to_string())
+        }
+        Some("logout") => {
+            let who = auth::signed_in(env).ok_or("not signed in to github.com")?;
+            auth::sign_out(env).map_err(fail)?;
+            say(out, format!("Signed out of github.com ({})", who.login)).map_err(|e| e.to_string())
+        }
+        _ => Err(format!("auth takes login, status, token or logout\n\n{USAGE}")),
+    }
 }
 
 fn log(env: &Env, args: &[String], out: &mut impl Write) -> Result<(), String> {
