@@ -33,6 +33,8 @@ fn mockup_world(w: &World) {
 fn first_run_world(w: &World) {
     use gxm_world::fixtures::{ANA, KENJI, LEA};
     use gxm_world::{days, hours};
+    // A first run: not signed in to GitHub either.
+    w.sign_out();
     let notes = w.repo("github.com", "personal", "field-notes");
     notes.commit(ANA, w.ago(days(9)), "Start the field notes", &["README.md"]);
     notes.commit(KENJI, w.ago(days(6)), "Notes from the Lisbon workshop", &["2026/lisbon.md"]);
@@ -90,6 +92,8 @@ pub fn get_started() -> Journey {
     .gone(keys::REPO_FILTER)
     .gone(keys::FETCH)
     .gone(keys::INSPECTOR)
+    // Signing in can wait (cloning goes over SSH), so it's offered quietly, apart.
+    .see_in(keys::ACCOUNT, "Sign in to GitHub")
     .mark("empty")
     // Add asks for a folder, starting where repositories usually live.
     .tap(keys::EMPTY_ADD)
