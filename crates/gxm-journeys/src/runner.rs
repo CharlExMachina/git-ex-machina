@@ -69,7 +69,7 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
     let env = rune::Env { system_dark: j.dark, scale: 1.0 };
     let mut rt = gxm_app::app().headless_runtime(gxm_app::SIZE, env);
     rt.state = App::new(world.env().clone());
-    let mut d = Driver { rt, now: 0.0, events: Vec::new(), marks: Vec::new() };
+    let mut d = Driver { rt, opened: Vec::new(), now: 0.0, events: Vec::new(), marks: Vec::new() };
     d.advance_to(START);
     for (i, step) in j.steps.iter().enumerate() {
         let fail = |why: String, d: &Driver| Failure {
@@ -186,6 +186,12 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                     return Err(fail(format!("[{key}] is still there"), &d));
                 }
             }
+            Step::Opened(url) => {
+                let asked = std::mem::take(&mut d.opened);
+                if !asked.iter().any(|u| u == url) {
+                    return Err(fail(format!("the app asked to open {asked:?}"), &d));
+                }
+            }
             Step::World { check, .. } => check(world).map_err(|why| fail(why, &d))?,
         }
     }
@@ -196,6 +202,8 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
 
 struct Driver {
     rt: Runtime<App>,
+    /// URLs the app asked to open, since the last `Opened` step looked.
+    opened: Vec<String>,
     now: f64,
     events: Vec<Value>,
     marks: Vec<(&'static str, f64)>,
@@ -206,6 +214,7 @@ impl Driver {
         while self.now + DT / 2.0 < t {
             self.rt.frame(DT);
             self.now += DT;
+            self.opened.extend(self.rt.take_url_requests());
         }
     }
 

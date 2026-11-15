@@ -20,6 +20,11 @@ fn get_started() {
 }
 
 #[test]
+fn sign_in() {
+    journey("sign_in");
+}
+
+#[test]
 fn first_look() {
     journey("first_look");
 }

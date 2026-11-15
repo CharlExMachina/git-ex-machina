@@ -10,8 +10,8 @@
 
 pub mod cache;
 pub mod drafts;
-mod github;
-mod http;
+pub(crate) mod github;
+pub(crate) mod http;
 pub mod local;
 pub mod model;
 
@@ -83,7 +83,7 @@ impl NotConnected {
         match self {
             NotConnected::NoProvider => "This repository has no remote on GitHub, GitLab or Bitbucket.".to_owned(),
             NotConnected::NotYet(p) => format!("Pull requests on {} are coming next.", p.name()),
-            NotConnected::NoToken(p) => format!("Connect {} to see pull requests.", p.name()),
+            NotConnected::NoToken(p) => format!("Sign in to {} to see pull requests.", p.name()),
         }
     }
 }

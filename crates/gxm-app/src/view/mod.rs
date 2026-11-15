@@ -1,6 +1,7 @@
 //! The window: the repository sidebar (248 + its border), the history, and the inspector
 //! (360 + its border), each under its own 48-point bar.
 
+mod account;
 mod cockpit;
 mod cockpit_side;
 mod graph;
@@ -27,7 +28,7 @@ const INSPECTOR_W: f32 = size::INSPECTOR + 1.0;
 pub fn view(s: &App, cx: &mut Cx<App>) -> El {
     let t = Theme::new(cx.system_dark());
     if s.load == Load::Loaded && s.repos.is_empty() {
-        return welcome::screen(&t).children(sheet::layer(s, &t));
+        return welcome::screen(s, &t).children(sheet::layer(s, &t));
     }
     let cockpit = s.cockpit().is_some();
     let main = match &s.load {
