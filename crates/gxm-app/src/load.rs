@@ -236,7 +236,12 @@ impl App {
                     tx.scroll_into_view_in(keys::HISTORY, head.to_owned());
                 }
             }
-            None => self.selection = Selection::default(),
+            None => {
+                // A repository with no commits yet opens on its files, waiting to be committed.
+                let only_worktree =
+                    self.history.as_ref().is_some_and(|h| matches!(h.rows.as_slice(), [Row::Worktree { .. }]));
+                self.selection = Selection { worktree: only_worktree, ..Selection::default() };
+            }
         }
         self.refresh_details();
     }
@@ -268,7 +273,8 @@ fn read_history(env: &Env, path: PathBuf) -> Read {
     let mut error = None;
     match log {
         Ok(commits) => {
-            if changed > 0 && head.is_some() {
+            // Before the first commit too: then it's all there is.
+            if changed > 0 {
                 rows.push(Row::Worktree { changed });
             }
             rows.extend(commits.into_iter().map(Row::Commit));

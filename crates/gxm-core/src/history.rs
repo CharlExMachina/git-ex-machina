@@ -310,6 +310,15 @@ pub fn count(env: &Env, repo: &Path) -> Result<usize, GitError> {
     out.trim().parse().map_err(|_| GitError::Parse { what: "a commit count", line: out.clone() })
 }
 
+/// git's empty tree: what a repository with no commits yet compares its files against.
+const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/// What uncommitted changes are measured against: HEAD, or the empty tree before the first
+/// commit.
+pub fn base(env: &Env, repo: &Path) -> &'static str {
+    if git::run(env, repo, &["rev-parse", "--verify", "--quiet", "HEAD"]).is_ok() { "HEAD" } else { EMPTY_TREE }
+}
+
 /// Uncommitted changes against HEAD: staged, unstaged and untracked files.
 pub fn uncommitted(env: &Env, repo: &Path) -> Result<Vec<FileChange>, GitError> {
     let out = git::run(env, repo, &["status", "--porcelain=v2", "--untracked-files=all", "-z"])?;
@@ -344,7 +353,7 @@ pub fn uncommitted(env: &Env, repo: &Path) -> Result<Vec<FileChange>, GitError> 
         files.push(FileChange { path: path.to_owned(), status, added: None, removed: None });
     }
     // Line counts for tracked files; untracked ones count every line as added.
-    if let Ok(num) = git::run(env, repo, &["diff", "HEAD", "--numstat", "-M", "-z"]) {
+    if let Ok(num) = git::run(env, repo, &["diff", base(env, repo), "--numstat", "-M", "-z"]) {
         for (path, added, removed) in parse_numstat(&num)? {
             if let Some(f) = files.iter_mut().find(|f| f.path == path) {
                 f.added = added;

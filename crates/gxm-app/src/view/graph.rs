@@ -187,8 +187,9 @@ pub fn passing(t: &Theme, g: &GraphRow, cols: usize, light: Option<&Lit>, h: f32
 
 /// The uncommitted row's mark: a ring of six even dashes, stroked like the graph's rails
 /// (gaps at the top and bottom, where the rail leaves it), and a dashed rail in `lane` running
-/// down into HEAD's row, where [`row`] continues it under HEAD's node.
-pub fn worktree(t: &Theme, staged: bool, lane: Color, cols: usize) -> El {
+/// down into HEAD's row, where [`row`] continues it under HEAD's node. Before the first commit
+/// there's no HEAD, and no rail.
+pub fn worktree(t: &Theme, staged: bool, has_head: bool, lane: Color, cols: usize) -> El {
     let c = [PAD, MID];
     let mut shape = Shape::new();
     if staged {
@@ -199,7 +200,9 @@ pub fn worktree(t: &Theme, staged: bool, lane: Color, cols: usize) -> El {
             shape = shape.stroke_path(&arc, STROKE, LineCap::Round, lane);
         }
     }
-    shape = dashed_rail(shape, PAD, RAIL_START, H, 0.0, lane);
+    if has_head {
+        shape = dashed_rail(shape, PAD, RAIL_START, H, 0.0, lane);
+    }
     canvas(shape).w(width(cols)).h(H)
 }
 
