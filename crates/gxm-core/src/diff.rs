@@ -55,7 +55,8 @@ pub fn worktree_hunk(env: &Env, repo: &Path, path: &str) -> Result<Option<Hunk>,
             .collect();
         return Ok(Some(Hunk { header: format!("@@ -0,0 +1,{} @@ {path}", lines.len()), lines }));
     }
-    let out = git::run(env, repo, &["diff", "HEAD", "-M", CONTEXT, "--", path])?;
+    let base = crate::history::base(env, repo);
+    let out = git::run(env, repo, &["diff", base, "-M", CONTEXT, "--", path])?;
     Ok(first_hunk(&out))
 }
 

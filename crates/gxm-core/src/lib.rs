@@ -10,6 +10,7 @@ pub mod forge;
 pub mod git;
 pub mod graph;
 pub mod history;
+pub mod init;
 pub mod ops;
 pub mod remote;
 pub mod repo;

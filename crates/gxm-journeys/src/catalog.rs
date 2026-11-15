@@ -25,9 +25,9 @@ fn mockup_world(w: &World) {
     gxm_world::fixtures::mockup(w);
 }
 
-/// A first run: nothing in the workspace yet. On disk, `~/code/field-notes` is on a `drafts`
-/// branch that was never pushed, and `~/code/scratch` is a folder without git. `studio/site`
-/// is only on GitHub.
+/// A first run: nothing in the workspace yet. On disk, `~/code/lantern` is a Godot project
+/// that was never put in git (its `.godot/` cache included), and `~/code/field-notes` is on a
+/// `drafts` branch that was never pushed. `studio/site` is only on GitHub.
 fn first_run_world(w: &World) {
     use gxm_world::fixtures::{ANA, KENJI, LEA};
     use gxm_world::{days, hours};
@@ -38,9 +38,22 @@ fn first_run_world(w: &World) {
     notes.branch("drafts");
     notes.commit(ANA, w.ago(days(2)), "Draft the review checklist", &["drafts/checklist.md"]);
     notes.commit(ANA, w.ago(hours(3)), "Sketch the onboarding notes", &["drafts/onboarding.md"]);
-    let scratch = w.code().join("scratch");
-    std::fs::create_dir_all(&scratch).unwrap_or_else(|e| panic!("make ~/code/scratch: {e}"));
-    std::fs::write(scratch.join("todo.txt"), "buy milk\n").unwrap_or_else(|e| panic!("write todo.txt: {e}"));
+    let lantern = w.code().join("lantern");
+    for (file, text) in [
+        (
+            "project.godot",
+            "config_version=5\n\n[application]\nconfig/name=\"Lantern\"\nrun/main_scene=\"res://main.tscn\"\n",
+        ),
+        ("main.tscn", "[gd_scene format=3]\n\n[node name=\"Main\" type=\"Node2D\"]\n"),
+        ("player.gd", "extends CharacterBody2D\n\nconst SPEED = 220.0\n"),
+        (".godot/editor/main.tscn-folding.cfg", "[folding]\n"),
+        (".godot/imported/icon.svg-218a8f2b.ctex", "GST2\n"),
+    ] {
+        let path = lantern.join(file);
+        std::fs::create_dir_all(path.parent().unwrap_or(&lantern))
+            .unwrap_or_else(|e| panic!("make {file}'s folder: {e}"));
+        std::fs::write(&path, text).unwrap_or_else(|e| panic!("write {file}: {e}"));
+    }
     let site = w.repo("github.com", "studio", "site");
     site.commit(KENJI, w.ago(days(20)), "Scaffold the site", &["index.html"]);
     site.commit(LEA, w.ago(days(12)), "Add the pricing page", &["pricing.html"]);
@@ -50,13 +63,13 @@ fn first_run_world(w: &World) {
     std::fs::remove_dir_all(site.path()).unwrap_or_else(|e| panic!("remove site's working copy: {e}"));
 }
 
-/// Starting out: an empty workspace, a repository added from disk (after a folder that isn't
-/// one), a repository cloned from GitHub (and a second clone refused), and a branch that only
+/// Starting out: an empty workspace, a Godot project made a repository where it is and
+/// committed, a repository added from disk, a repository cloned from GitHub (and a second clone refused), and a branch that only
 /// existed locally published with Push.
 pub fn get_started() -> Journey {
     Journey::new(
         "get_started",
-        "Someone opens git-ex-machina for the first time, adds a repository they already have, clones one from GitHub, and publishes a branch that was only on their machine.",
+        "Someone opens git-ex-machina for the first time, turns a Godot project into a repository, adds a repository they already have, clones one from GitHub, and publishes a branch that was only on their machine.",
         first_run_world,
     )
     // An empty workspace says how to start, and offers both ways in.
@@ -73,23 +86,69 @@ pub fn get_started() -> Journey {
     .tap(keys::EMPTY_ADD)
     .see_in(keys::SHEET, "Add a repository")
     .see_in(keys::ADD_PATH, "~/code/")
-    // A folder without git is refused, with the reason.
-    .type_text("scratch")
+    // A path with nothing there is refused, with the reason.
+    .type_text("lanter")
     .press(Press::ENTER)
-    .wait_for(keys::SHEET_ERROR, "~/code/scratch isn't a git repository")
-    .mark("not-a-repo")
+    .wait_for(keys::SHEET_ERROR, "Nothing is at ~/code/lanter")
+    // A folder without git is offered as a new repository, right where it is.
+    .type_text("n")
+    .press(Press::ENTER)
+    .wait_for(keys::SHEET, "Make lantern a repository")
+    .see_in(keys::INIT_NAME, "lantern")
+    .see_in(keys::INIT_README_TEXT, "# lantern")
+    .see_in(keys::INIT_IGNORE, "Ignore Godot's generated files")
+    .see_in(keys::INIT_LOCAL, "Local only")
+    .see_in(keys::INIT_GITHUB, "On GitHub")
+    // The README's heading follows the name until the README is edited.
+    .tap(keys::INIT_NAME)
     .press(Press::cmd("a"))
-    .type_text("~/code/field-notes")
+    .type_text("Lantern")
+    .see_in(keys::INIT_README_TEXT, "# Lantern")
+    .mark("make-it-a-repo")
+    .tap(keys::INIT_CONFIRM)
+    .wait_for(keys::BRANCH_SUMMARY, "main · no commits yet")
+    .gone(keys::SHEET)
+    .see_in(keys::repo("lantern"), "main · local")
+    // Everything waits uncommitted, to look over first; Godot's cache stays out.
+    .see_in(keys::INSPECTOR, "WORKING TREE")
+    .see_in(keys::changed_file("README.md"), "A")
+    .see_in(keys::changed_file(".gitignore"), "A")
+    .see_in(keys::changed_file("project.godot"), "A")
+    .gone(keys::changed_file(".godot/editor/main.tscn-folding.cfg"))
+    .world_check("lantern is a repository with its files where they were, nothing committed", |w| {
+        let dir = w.code().join("lantern");
+        let readme = std::fs::read_to_string(dir.join("README.md")).map_err(|e| e.to_string())?;
+        let ignore = std::fs::read_to_string(dir.join(".gitignore")).map_err(|e| e.to_string())?;
+        let commits = gxm_core::history::count(w.env(), &dir).map_err(|e| e.to_string())?;
+        match (readme.as_str(), ignore.contains(".godot/"), dir.join("player.gd").exists(), commits) {
+            ("# Lantern\n", true, true, 0) => Ok(()),
+            _ => Err(format!("README {readme:?}, .gitignore {ignore:?}, {commits} commits")),
+        }
+    })
+    .mark("new-repo")
+    // Committing it is the usual stage and commit.
+    .tap(keys::STAGE_ALL)
+    .wait_for(keys::COMMIT, "Commit")
+    .tap(keys::COMMIT)
+    .type_text("First playable")
+    .tap(keys::COMMIT)
+    .wait_for(keys::BRANCH_SUMMARY, "main · 1 commit")
+    .see_in(keys::INSPECTOR_TITLE, "First playable")
+    .mark("first-commit")
+    // A repository that's already there is added as it is.
+    .tap(keys::ADD_REPO)
+    .see_in(keys::ADD_PATH, "~/code/")
+    .type_text("field-notes")
     .tap(keys::ADD_CONFIRM)
     .wait_for(keys::BRANCH_SUMMARY, "drafts")
     .gone(keys::SHEET)
     .see_in(keys::repo("field-notes"), "drafts · personal")
     .see_in(keys::BRANCH_SUMMARY, "not pushed yet")
     .see_in(keys::INSPECTOR_TITLE, "Sketch the onboarding notes")
-    .world_check("the workspace keeps field-notes", |w| {
+    .world_check("the workspace keeps both", |w| {
         let ws = gxm_core::workspace::Workspace::load(w.env()).map_err(|e| e.to_string())?;
-        let want = w.code().join("field-notes");
-        if ws.repos.iter().any(|r| r.path == want) { Ok(()) } else { Err(format!("workspace: {:?}", ws.repos)) }
+        let has = |name: &str| ws.repos.iter().any(|r| r.path == w.code().join(name));
+        if has("lantern") && has("field-notes") { Ok(()) } else { Err(format!("workspace: {:?}", ws.repos)) }
     })
     .mark("added")
     // Clone takes the URL as GitHub's page shows it, and clones over SSH beside the others.
