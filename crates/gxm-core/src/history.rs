@@ -362,7 +362,10 @@ pub fn uncommitted(env: &Env, repo: &Path) -> Result<Vec<FileChange>, GitError> 
         }
     }
     for f in files.iter_mut().filter(|f| f.added.is_none() && f.status == ChangeStatus::Added) {
-        if let Ok(text) = std::fs::read_to_string(repo.join(&f.path)) {
+        // A NUL makes it binary, as git judges it: no lines to count.
+        if let Ok(text) = std::fs::read_to_string(repo.join(&f.path))
+            && !text.contains('\0')
+        {
             f.added = Some(u32::try_from(text.lines().count()).unwrap_or(u32::MAX));
             f.removed = Some(0);
         }
