@@ -95,7 +95,7 @@ fn world_cmd(args: &[String]) -> Result<(), String> {
     let name = args.first().map_or("mockup", String::as_str);
     let w = build_world(name)?;
     println!("World {name:?} at {}", w.root().display());
-    println!("  repositories: {}", w.root().join("code").display());
+    println!("  repositories: {}", w.code().display());
     println!("  try: cargo xtask gxm {name} -- repos");
     println!("       cargo xtask app {name}            (opens the window inside the world)");
     Ok(())
@@ -114,7 +114,7 @@ fn in_world(what: &str, args: &[String]) -> Result<(), String> {
     let status = Command::new(bin)
         .args(passthrough)
         .envs(w.env().child_vars())
-        .current_dir(w.root().join("code"))
+        .current_dir(w.code())
         .status()
         .map_err(|e| e.to_string())?;
     if status.success() { Ok(()) } else { Err(format!("{what} exited with {status}")) }

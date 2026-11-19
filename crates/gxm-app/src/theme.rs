@@ -34,6 +34,8 @@ pub struct Theme {
     /// `--lane-1` … `--lane-6`.
     pub lanes: [Color; 6],
     pub on_lane: Color,
+    /// `--scrim`: what dims the window behind a sheet.
+    pub scrim: Color,
     shadows: Shadows,
 }
 
@@ -75,6 +77,8 @@ struct Shadows {
     lifted: [Color; 3],
     /// `--shadow-well`: inner shade, inner ring.
     well: [Color; 2],
+    /// `--shadow-overlay`: top highlight, edge ring, a near drop and a far one.
+    overlay: [Color; 4],
 }
 
 impl Theme {
@@ -108,6 +112,7 @@ impl Theme {
             removed_soft: rgb(0x35201c),
             lanes: [rgb(0xe2ad62), rgb(0x6fc2b4), rgb(0x86ade8), rgb(0xe88fa4), rgb(0xb3c56e), rgb(0xbba4e8)],
             on_lane: rgb(0x121110),
+            scrim: rgba(0x000000, 0.5),
             shadows: Shadows {
                 // inset 0 1px 0 rgba(255,255,255,0.07), 0 0 0 1px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.5)
                 raised: [
@@ -130,6 +135,7 @@ impl Theme {
                 pressed: [rgba(0x000000, 0.6), rgba(0x000000, 0.55)],
                 lifted: [rgba(0xffffff, 0.06), rgba(0x000000, 0.45), rgba(0x000000, 0.35)],
                 well: [rgba(0x000000, 0.5), rgba(0xffffff, 0.03)],
+                overlay: [rgba(0xffffff, 0.07), rgba(0x000000, 0.6), rgba(0x000000, 0.4), rgba(0x000000, 0.45)],
             },
         }
     }
@@ -160,6 +166,7 @@ impl Theme {
             removed_soft: rgb(0xf9e4df),
             lanes: [rgb(0x8f5c17), rgb(0x1f7768), rgb(0x2f62b0), rgb(0xb03d5b), rgb(0x5b6f1c), rgb(0x6c4fb5)],
             on_lane: rgb(0xffffff),
+            scrim: rgba(0x2e2214, 0.22),
             shadows: Shadows {
                 // inset 0 1px 0 #ffffff, 0 0 0 1px rgba(46,34,20,0.15), 0 1px 1px rgba(46,34,20,0.12),
                 // 0 2px 4px -2px rgba(46,34,20,0.22)
@@ -183,6 +190,7 @@ impl Theme {
                 pressed: [rgba(0x2e2214, 0.18), rgba(0x2e2214, 0.15)],
                 lifted: [rgba(0xffffff, 1.0), rgba(0x2e2214, 0.08), rgba(0x2e2214, 0.08)],
                 well: [rgba(0x2e2214, 0.10), rgba(0x2e2214, 0.06)],
+                overlay: [rgb(0xffffff), rgba(0x2e2214, 0.14), rgba(0x2e2214, 0.12), rgba(0x2e2214, 0.2)],
             },
         }
     }
@@ -260,6 +268,18 @@ impl Theme {
         [inset(0.0, 0.0, 0.0, 1.0, ring), inset(0.0, 1.0, 2.0, 0.0, shade)]
     }
 
+    /// `inset 0 1px 0 <highlight>, 0 0 0 1px <ring>, 0 2px 4px <near>, 0 16px 40px <far>`: a
+    /// sheet floating over the window.
+    pub fn shadow_overlay(&self) -> [Shadow; 4] {
+        let [hi, ring, near, far] = self.shadows.overlay;
+        [
+            outer(0.0, 16.0, 40.0, 0.0, far),
+            outer(0.0, 2.0, 4.0, 0.0, near),
+            outer(0.0, 0.0, 0.0, 1.0, ring),
+            inset(0.0, 1.0, 0.0, 0.0, hi),
+        ]
+    }
+
     /// `inset 0 0 0 <width> <color>`: a ring inside the box that takes no layout space.
     pub fn ring(width: f32, color: Color) -> Shadow {
         inset(0.0, 0.0, 0.0, width, color)
@@ -286,6 +306,7 @@ pub mod size {
     pub const RADIUS_LG: f32 = 12.0;
     pub const PILL: f32 = 999.0;
     pub const SIDEBAR: f32 = 248.0;
+    pub const SHEET: f32 = 460.0;
     pub const INSPECTOR: f32 = 360.0;
     pub const TOOLBAR: f32 = 48.0;
     pub const ROW_REPO: f32 = 36.0;
@@ -349,6 +370,8 @@ pub mod ty {
     pub const MONO_11: TextStyle = mono(11.0, 400.0, 16.0);
     /// `.gu-status`: 500 10px/16px mono.
     pub const STATUS: TextStyle = mono(10.0, 500.0, 16.0);
+    /// A sheet's title: 600 15px/20px, -0.01em.
+    pub const TITLE: TextStyle = sans(15.0, 600.0, 20.0).tracking(-0.15);
     /// `.display-sm`: the inspector's title, 600 18px/24px, -0.01em.
     pub const DISPLAY_SM: TextStyle = sans(18.0, 600.0, 24.0).tracking(-0.18);
     /// 600 13px: a pull request's number, the merge box's headings.

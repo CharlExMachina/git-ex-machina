@@ -15,6 +15,11 @@ fn journey(name: &str) {
 }
 
 #[test]
+fn get_started() {
+    journey("get_started");
+}
+
+#[test]
 fn first_look() {
     journey("first_look");
 }

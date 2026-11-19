@@ -1,7 +1,7 @@
 //! Hermetic worlds for journeys, CLI tests and headless renders.
 //!
-//! A [`World`] is a folder holding a sandboxed home (its own `.gitconfig`, `.ssh` and app
-//! config), local bare repositories standing in for GitHub, GitLab and Bitbucket, and working
+//! A [`World`] is a folder holding a sandboxed home (its own `.gitconfig`, `.ssh`, app config
+//! and `~/code`, where the working copies live), local bare repositories standing in for GitHub, GitLab and Bitbucket, and working
 //! copies built commit by commit with fixed authors and dates. The same world always produces
 //! the same commit ids, so goldens stay stable.
 //!
@@ -64,7 +64,7 @@ impl World {
 
     fn empty(root: PathBuf) -> World {
         let home = root.join("home");
-        for dir in [home.join(".ssh"), root.join("code"), root.join("remotes")] {
+        for dir in [home.join(".ssh"), home.join("code"), root.join("remotes")] {
             std::fs::create_dir_all(&dir).unwrap_or_else(|e| fail("make the world's folders", e));
         }
         let now: Timestamp = NOW.parse().unwrap_or_else(|e| fail("read NOW", e));
@@ -100,18 +100,23 @@ impl World {
         &self.root
     }
 
+    /// `~/code` in the world's home, where its working copies live.
+    pub fn code(&self) -> PathBuf {
+        self.env.home.join("code")
+    }
+
     /// `now` minus `d`.
     pub fn ago(&self, d: SignedDuration) -> Timestamp {
         self.env.now().checked_sub(d).unwrap_or_else(|e| fail("subtract from now", e))
     }
 
-    /// A new working copy at `code/<name>` whose `origin` is `git@<host>:<owner>/<name>.git`,
+    /// A new working copy at `~/code/<name>` whose `origin` is `git@<host>:<owner>/<name>.git`,
     /// backed by an empty local bare repository.
     pub fn repo(&self, host: &str, owner: &str, name: &str) -> RepoBuilder<'_> {
-        let bare = self.root.join("remotes").join(host).join(owner).join(format!("{name}.git"));
+        let bare = self.remote(host, owner, name);
         std::fs::create_dir_all(&bare).unwrap_or_else(|e| fail("make a remote", e));
         self.git(&bare, &["init", "--bare", "--quiet"]);
-        let path = self.root.join("code").join(name);
+        let path = self.code().join(name);
         std::fs::create_dir_all(&path).unwrap_or_else(|e| fail("make a working copy", e));
         self.git(&path, &["init", "--quiet"]);
         self.git(&path, &["remote", "add", "origin", &format!("git@{host}:{owner}/{name}.git")]);
@@ -125,8 +130,12 @@ impl World {
 
     /// The commit `branch` points at in the local remote standing in for `host`.
     pub fn remote_head(&self, host: &str, owner: &str, name: &str, branch: &str) -> String {
-        let bare = self.root.join("remotes").join(host).join(owner).join(format!("{name}.git"));
-        self.git(&bare, &["rev-parse", branch]).trim().to_owned()
+        self.git(&self.remote(host, owner, name), &["rev-parse", branch]).trim().to_owned()
+    }
+
+    /// The local bare repository standing in for `git@<host>:<owner>/<name>.git`.
+    pub fn remote(&self, host: &str, owner: &str, name: &str) -> PathBuf {
+        self.root.join("remotes").join(host).join(owner).join(format!("{name}.git"))
     }
 
     /// Lists a repository in the app's workspace.

@@ -9,13 +9,12 @@ use super::graph::{self, Node, RowLook};
 use crate::icons;
 use crate::keys;
 use crate::ops::{OpState, Ops};
-use crate::state::{App, History, Load, Pick, Row};
+use crate::state::{App, History, Pick, Row};
 use crate::theme::{Theme, size, ty};
 use crate::ui;
 
 pub fn pane(s: &App, t: &Theme) -> El {
     let body = match &s.history {
-        None if s.load == Load::Loaded && s.repos.is_empty() => empty(t, "Add a repository to see its history."),
         // Still reading: a blank canvas, not a claim that there's nothing to show.
         None => col().w_full().grow(1.0),
         Some(History { error: Some(e), .. }) => empty(t, e),
@@ -55,6 +54,11 @@ fn summary(s: &App, h: &History, t: &Theme) -> El {
         }
         if st.behind > 0 {
             line = line.child(text(format!("↓{}", st.behind)).font(ty::MONO_SM).color(t.ink_muted));
+        }
+        // A branch only this computer has: Push publishes it.
+        let has_remote = s.repo().is_some_and(|r| r.summary.origin.is_some());
+        if st.branch.is_some() && st.upstream.is_none() && has_remote {
+            line = line.child(text("not pushed yet").font(ty::CAPTION).color(t.accent));
         }
     }
     // The count lands after the history on a big repository; until then the line goes without.
