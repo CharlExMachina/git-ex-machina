@@ -10,7 +10,12 @@ use serde_json::{Value, json};
 use crate::{Journey, Press, Step};
 
 /// Frames advance at 60 Hz on the runtime's virtual clock, as `--script` renders do.
-const DT: f64 = 1.0 / 60.0;
+pub const FPS: usize = 60;
+const DT: f64 = 1.0 / FPS as f64;
+/// Every mark lands on a frame that's a multiple of this. One replay that dumps every
+/// `MARK_EVERY`th frame (Rune's `--out --every`) then holds every mark's screenshot, where a
+/// `--snap` per mark would replay the journey from its start once for each.
+pub const MARK_EVERY: usize = 15;
 /// When the first step happens: after the workspace loads and the first frame settles.
 const START: f64 = 0.8;
 /// How long the runner sleeps between frames while a background read is in flight, so the read
@@ -32,8 +37,18 @@ const TAIL: f64 = 1.2;
 #[derive(Clone, Debug)]
 pub struct Recording {
     pub events: Vec<Value>,
-    pub marks: Vec<(&'static str, f64)>,
+    pub marks: Vec<Mark>,
     pub end: f64,
+}
+
+/// A moment worth a screenshot.
+#[derive(Clone, Debug)]
+pub struct Mark {
+    pub name: &'static str,
+    /// The frame it lands on, at [`FPS`]: always a multiple of [`MARK_EVERY`].
+    pub frame: usize,
+    /// The element tree the journey saw there, as JSON.
+    pub tree: Value,
 }
 
 impl Recording {
@@ -69,7 +84,7 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
     let env = rune::Env { system_dark: j.dark, scale: 1.0 };
     let mut rt = gxm_app::app().headless_runtime(gxm_app::SIZE, env);
     rt.state = App::new(world.env().clone());
-    let mut d = Driver { rt, now: 0.0, events: Vec::new(), marks: Vec::new() };
+    let mut d = Driver { rt, now: 0.0, dark: j.dark, events: Vec::new(), marks: Vec::new() };
     d.advance_to(START);
     for (i, step) in j.steps.iter().enumerate() {
         let fail = |why: String, d: &Driver| Failure {
@@ -159,8 +174,11 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                 d.advance_to(d.now + AFTER_PRESS);
             }
             Step::Mark(name) => {
+                let frame = on_grid((t / DT).round() as usize);
+                let t = frame as f64 * DT;
+                d.advance_to(t);
                 d.events.push(json!({ "t": t, "type": "mark", "name": name }));
-                d.marks.push((name, t));
+                d.marks.push(Mark { name, frame, tree: crate::tree::tree(&d.rt, t, d.dark) });
                 d.advance_to(t + AFTER_MARK);
             }
             Step::See(text) => {
@@ -197,8 +215,14 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
 struct Driver {
     rt: Runtime<App>,
     now: f64,
+    dark: bool,
     events: Vec<Value>,
-    marks: Vec<(&'static str, f64)>,
+    marks: Vec<Mark>,
+}
+
+/// The first frame at or after `frame` that a mark can land on.
+fn on_grid(frame: usize) -> usize {
+    frame.div_ceil(MARK_EVERY) * MARK_EVERY
 }
 
 impl Driver {
@@ -318,4 +342,17 @@ fn key_of(p: &Press) -> Option<Key> {
         name if name.chars().count() == 1 => Key::Text(name.to_owned()),
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn marks_land_on_the_next_grid_frame() {
+        assert_eq!(on_grid(0), 0);
+        assert_eq!(on_grid(1), MARK_EVERY);
+        assert_eq!(on_grid(MARK_EVERY), MARK_EVERY);
+        assert_eq!(on_grid(MARK_EVERY + 1), 2 * MARK_EVERY);
+    }
 }

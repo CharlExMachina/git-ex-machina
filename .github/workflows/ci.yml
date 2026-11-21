@@ -23,6 +23,9 @@ jobs:
       - name: System libraries
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev mesa-vulkan-drivers ffmpeg
       - uses: Swatinem/rust-cache@v2
+        with:
+          # `proof.yml` builds xtask from this cache too; it runs only on PRs, so it can't seed one.
+          shared-key: linux-debug
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny,typos-cli,cargo-machete

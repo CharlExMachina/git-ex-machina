@@ -15,8 +15,9 @@ pub mod catalog;
 mod merge;
 mod review;
 mod runner;
+mod tree;
 
-pub use runner::{Failure, Recording, run};
+pub use runner::{FPS, Failure, MARK_EVERY, Mark, Recording, run};
 
 use gxm_world::World;
 
