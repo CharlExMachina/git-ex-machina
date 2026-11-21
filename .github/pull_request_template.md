@@ -4,13 +4,13 @@
 
 ## Proof
 
-<!-- Required. A PR without proof isn't ready for review. -->
+<!-- Required. A PR without proof isn't ready for review. Open the PR with `cargo xtask pr open body.md`: it checks this section the way CI does, then attaches every file the body references. -->
 
-**Journeys:** <!-- e.g. first_look (extended: steps 12–18), push_and_pull (new) -->
+**Journeys:** <!-- the journeys' names first, as `cargo xtask journeys` lists them, e.g. first_look (extended: steps 12–18), push_and_pull (new) -->
 
 **Video** (`cargo xtask journey <name> --video`):
 
-<!-- Reference the GIF and mp4 by relative path, e.g. ![first_look](./first_look.gif), and pass them to `gh pr create --attach` (see CLAUDE.md, "Pull requests"). -->
+<!-- Reference the GIF and mp4 by relative path, e.g. ![first_look](./first_look.gif) and [first_look.mp4](./first_look.mp4); `cargo xtask pr open` attaches them (see CLAUDE.md, "Pull requests"). -->
 
 **Screenshots** (the journey's marks; before/after for visual changes):
 

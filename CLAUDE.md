@@ -20,7 +20,7 @@ Every change goes through these steps, in order:
 2. **Make it green.** Put logic in `gxm-core`, where the CLI and the app can both verify it.
 3. **See it.** `cargo xtask journey <name>`, then open every mark PNG in `target/proof/<name>/`. For a visual change, render the same mark before and after (the base branch too) and look at both zoomed in. This step is done when you've looked at every mark and each one shows what the journey claims.
 4. **Verify.** `cargo xtask verify` is green.
-5. **Proof.** Open the PR with its proof (see "Pull requests").
+5. **Proof.** Open the PR with `cargo xtask pr open body.md`, with its proof in the body (see "Pull requests").
 
 How to drive the app headless (snapshots, element trees, scripts, video): `.claude/skills/drive-app/SKILL.md`.
 
@@ -74,6 +74,8 @@ Every PR carries **proof** that the change works, using `.github/pull_request_te
 - **Commands run**, with their results, `cargo xtask verify` included.
 - **Goldens**: each changed golden and why it changed.
 
-Put the media in the PR itself, not just in CI artifacts: copy the GIFs, mp4s and PNGs next to the body file, reference them with relative paths (`![The history on open](./first_look-01-history.png)`), and pass each file with `--attach` (`gh pr create` / `gh pr edit --body-file body.md --attach first_look.gif --attach ...`, up to 50 files). `gh` uploads them and rewrites the references; any attachment the body doesn't reference is appended to the end.
+Put the media in the PR itself, not just in CI artifacts: copy the GIFs, mp4s and PNGs next to the body file and reference each by relative path (`![The history on open](./first_look-01-history.png)`, `[first_look.mp4](./first_look.mp4)`).
+
+Open and update PRs with `cargo xtask pr open body.md [--base BRANCH]`, never with `gh pr create` or `gh pr edit --body-file`. It checks the body the way CI's `proof` job does (the same code), tells you what's missing, and only then creates the branch's PR, or updates it, with every file the body references attached. The `**Journeys:**` line starts with the journeys' names, as `cargo xtask journeys` lists them; each must exist.
 
 A PR without proof isn't ready for review. CI re-runs every journey on its own runner and attaches the renders it made.

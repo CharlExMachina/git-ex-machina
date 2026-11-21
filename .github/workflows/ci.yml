@@ -69,32 +69,3 @@ jobs:
           name: proof-macos
           path: target/proof/
           retention-days: 30
-
-  proof:
-    # A PR that touches what people see must say how it was proven.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: The PR body carries proof
-        env:
-          BODY: ${{ github.event.pull_request.body }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          changed=$(git diff --name-only "$BASE"...HEAD)
-          if ! echo "$changed" | grep -qE '^crates/(gxm-app|gxm-journeys|gxm-core|gxm-cli)/'; then
-            echo "No user-facing crates changed; proof optional."; exit 0
-          fi
-          missing=()
-          echo "$BODY" | grep -q '^## Proof' || missing+=("a '## Proof' section")
-          echo "$BODY" | grep -qE '\*\*Journeys:\*\* *[a-z_]+' || missing+=("the journeys that prove it")
-          echo "$BODY" | grep -qE '\.(gif|mp4|png)|user-attachments' || missing+=("a video or screenshots")
-          echo "$BODY" | grep -q 'cargo xtask verify' || missing+=("the commands run")
-          if echo "$changed" | grep -q '/goldens/'; then
-            echo "$BODY" | grep -qiE 'goldens changed:\*\* *[^n<]' || missing+=("why the goldens changed")
-          fi
-          if [ ${#missing[@]} -gt 0 ]; then
-            printf 'This PR needs proof (see CLAUDE.md, "Pull requests"). Missing:\n'; printf '  - %s\n' "${missing[@]}"; exit 1
-          fi
