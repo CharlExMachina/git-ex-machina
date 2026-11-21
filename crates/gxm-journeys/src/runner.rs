@@ -231,10 +231,28 @@ struct Driver {
 
 impl Driver {
     fn advance_to(&mut self, t: f64) {
+        // Every step acts, then advances: its first frame takes the input, so it's one frame.
+        let mut first = true;
         while self.now + DT / 2.0 < t {
-            self.animating = self.rt.frame(DT);
-            self.now += DT;
+            let frames = if std::mem::take(&mut first) { 1 } else { self.frames_until(t) };
+            let dt = frames as f64 * DT;
+            self.animating = self.rt.frame(dt);
+            self.now += dt;
         }
+    }
+
+    /// How many 60 Hz frames the next frame covers. While something moves or a background read
+    /// runs, one. At rest a window draws nothing until input, a timer or a read's answer wakes
+    /// it, so neither does the runner: one frame spans the rest, up to the runtime's next wake
+    /// (`Runtime::wake_deadline`) or `t`. That's most of a journey's time, and the screen is the
+    /// same either way.
+    fn frames_until(&self, t: f64) -> usize {
+        if self.animating || self.rt.state.busy() {
+            return 1;
+        }
+        let left = ((t - self.now) / DT).round();
+        let wake = self.rt.wake_deadline().map_or(f64::INFINITY, |at| ((at - self.rt.clock) / DT).ceil());
+        left.min(wake).max(1.0) as usize
     }
 
     /// Runs frames until nothing animates, for at most [`MARK_SETTLE`] (a caret blinks forever).
