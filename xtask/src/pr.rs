@@ -296,7 +296,7 @@ mod tests {
             missing_for(&body("none")),
             strings(&["a journey named `none`: there's none (`cargo xtask journeys` lists them)"])
         );
-        assert_eq!(missing_for(&body("get_startd (new)")).len(), 1);
+        assert_eq!(missing_for(&body("sign_up (new)")).len(), 1);
         assert_eq!(missing_for(&body("")).len(), 1);
     }
 
