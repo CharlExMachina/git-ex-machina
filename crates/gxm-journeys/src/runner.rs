@@ -23,17 +23,31 @@ const AFTER_TYPE: f64 = 0.5;
 const AFTER_PRESS: f64 = 0.5;
 /// A mark's screenshot is taken at its time; the next step waits this long so it can't leak in.
 const AFTER_MARK: f64 = 0.3;
+/// The longest a mark waits for the screen to come to rest before its screenshot.
+const MARK_SETTLE: f64 = 1.0;
 /// One wheel step of a [`Step::ScrollTo`], in points.
 const WHEEL: f32 = 60.0;
 /// The video runs this long past the last step.
 const TAIL: f64 = 1.2;
 
-/// A journey as Rune input: replay it with `--script` to get the same run on screen.
+/// A journey as Rune input (replay it with `--script` to get the same run on screen), and what
+/// the screen showed at each mark.
 #[derive(Clone, Debug)]
 pub struct Recording {
     pub events: Vec<Value>,
-    pub marks: Vec<(&'static str, f64)>,
+    pub marks: Vec<Mark>,
     pub end: f64,
+}
+
+/// A moment worth a screenshot, as the journey saw it.
+#[derive(Clone, Debug)]
+pub struct Mark {
+    pub name: &'static str,
+    pub t: f64,
+    /// The element tree, as JSON.
+    pub tree: Value,
+    /// The screen, drawn from the journey's own runtime.
+    pub pixels: crate::paint::Pixels,
 }
 
 impl Recording {
@@ -66,10 +80,13 @@ impl std::error::Error for Failure {}
 
 /// Runs `j` against the real app inside `world` (already built with `j.world`).
 pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
-    let env = rune::Env { system_dark: j.dark, scale: 1.0 };
+    // At the screenshots' scale, so layout snaps to the pixels the screenshots show.
+    let env = rune::Env { system_dark: j.dark, scale: crate::paint::SCALE };
     let mut rt = gxm_app::app().headless_runtime(gxm_app::SIZE, env);
+    rt.set_font_smoothing(gxm_app::FONT_SMOOTHING);
     rt.state = App::new(world.env().clone());
-    let mut d = Driver { rt, now: 0.0, events: Vec::new(), marks: Vec::new() };
+    let painter = crate::paint::Painter::new(&mut rt);
+    let mut d = Driver { rt, painter, now: 0.0, animating: true, dark: j.dark, events: Vec::new(), marks: Vec::new() };
     d.advance_to(START);
     for (i, step) in j.steps.iter().enumerate() {
         let fail = |why: String, d: &Driver| Failure {
@@ -159,8 +176,15 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                 d.advance_to(d.now + AFTER_PRESS);
             }
             Step::Mark(name) => {
+                // A screenshot shows the screen at rest, not an animation's last frames.
+                d.settle_motion();
+                let t = d.now;
                 d.events.push(json!({ "t": t, "type": "mark", "name": name }));
-                d.marks.push((name, t));
+                let pixels = d.painter.paint(&mut d.rt);
+                if pixels.is_blank() {
+                    return Err(fail("its screenshot is blank: the renderer drew nothing".to_owned(), &d));
+                }
+                d.marks.push(Mark { name, t, tree: crate::tree::tree(&d.rt, t, d.dark), pixels });
                 d.advance_to(t + AFTER_MARK);
             }
             Step::See(text) => {
@@ -196,16 +220,46 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
 
 struct Driver {
     rt: Runtime<App>,
+    painter: crate::paint::Painter,
     now: f64,
+    /// Whether the last frame was still animating.
+    animating: bool,
+    dark: bool,
     events: Vec<Value>,
-    marks: Vec<(&'static str, f64)>,
+    marks: Vec<Mark>,
 }
 
 impl Driver {
     fn advance_to(&mut self, t: f64) {
+        // Every step acts, then advances: its first frame takes the input, so it's one frame.
+        let mut first = true;
         while self.now + DT / 2.0 < t {
-            self.rt.frame(DT);
-            self.now += DT;
+            let frames = if std::mem::take(&mut first) { 1 } else { self.frames_until(t) };
+            let dt = frames as f64 * DT;
+            self.animating = self.rt.frame(dt);
+            self.now += dt;
+        }
+    }
+
+    /// How many 60 Hz frames the next frame covers. While something moves or a background read
+    /// runs, one. At rest a window draws nothing until input, a timer or a read's answer wakes
+    /// it, so neither does the runner: one frame spans the rest, up to the runtime's next wake
+    /// (`Runtime::wake_deadline`) or `t`. That's most of a journey's time, and the screen is the
+    /// same either way.
+    fn frames_until(&self, t: f64) -> usize {
+        if self.animating || self.rt.state.busy() {
+            return 1;
+        }
+        let left = ((t - self.now) / DT).round();
+        let wake = self.rt.wake_deadline().map_or(f64::INFINITY, |at| ((at - self.rt.clock) / DT).ceil());
+        left.min(wake).max(1.0) as usize
+    }
+
+    /// Runs frames until nothing animates, for at most [`MARK_SETTLE`] (a caret blinks forever).
+    fn settle_motion(&mut self) {
+        let until = self.now + MARK_SETTLE;
+        while self.animating && self.now + DT / 2.0 < until {
+            self.advance_to(self.now + DT);
         }
     }
 

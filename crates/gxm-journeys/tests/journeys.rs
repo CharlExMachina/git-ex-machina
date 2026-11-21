@@ -1,17 +1,17 @@
 //! Every journey in the catalog, run against the real app, headless, in its own world.
 //!
-//! One test per journey, so a failure names the workflow that broke.
+//! One test per journey, so a failure names the workflow that broke. A run that holds writes
+//! its proof (a screenshot and element tree at every mark) to `target/proof/NAME/`.
 
-use gxm_journeys::{catalog, run};
+use gxm_journeys::{catalog, proof_dir, run, write_proof};
 use gxm_world::World;
 
 fn journey(name: &str) {
     let j = catalog::find(name).unwrap_or_else(|| panic!("no journey named {name:?}"));
     let world = World::new();
     (j.world)(&world);
-    if let Err(f) = run(&j, &world) {
-        panic!("{f}");
-    }
+    let recording = run(&j, &world).unwrap_or_else(|f| panic!("{f}"));
+    write_proof(&recording, &proof_dir().join(name)).unwrap_or_else(|e| panic!("{name}'s proof: {e}"));
 }
 
 #[test]

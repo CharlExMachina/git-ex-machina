@@ -15,14 +15,25 @@ env:
 
 jobs:
   verify:
-    # Linux with Mesa's software Vulkan (lavapipe): Rune renders headless without a GPU, the
-    # same pixels on every run.
+    # Linux with Mesa's software Vulkan (lavapipe): the journeys draw every mark's screenshot
+    # without a GPU, the same pixels on every run.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: System libraries
-        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev mesa-vulkan-drivers ffmpeg
+        uses: awalsh128/cache-apt-pkgs-action@v1.4.3
+        with:
+          packages: libxkbcommon-dev libwayland-dev mesa-vulkan-drivers
+          version: 1
+      - name: Toolchain
+        run: rustup show active-toolchain
       - uses: Swatinem/rust-cache@v2
+        with:
+          # `proof.yml` builds xtask from this cache too; it runs only on PRs, so it can't seed one.
+          shared-key: linux-debug
+          # Saving takes up to 40 s and the check waits for it, so only main saves; every PR
+          # starts from main's cache.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny,typos-cli,cargo-machete
@@ -30,42 +41,35 @@ jobs:
         env:
           VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.json
         run: cargo xtask verify
-      - name: Render every journey (proof)
-        env:
-          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.json
-        run: |
-          for j in $(cargo xtask journeys | awk '{print $1}'); do
-            cargo xtask journey "$j" --video
-          done
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: proof
           path: target/proof/
+          if-no-files-found: ignore
           retention-days: 30
 
   macos:
-    # macOS, the other platform the app ships for (the `verify` job covers Linux): everything
-    # `verify` checks, and the journeys rendered with macOS text. GitHub-hosted, so no machine
-    # of ours runs a stranger's PR; free for a public repository.
+    # macOS, the other platform the app ships for: everything `verify` checks, with the journeys'
+    # screenshots drawn by Metal and macOS text. GitHub-hosted, so no machine of ours runs a
+    # stranger's PR; free for a public repository.
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: ffmpeg
-        run: brew install ffmpeg
+      - name: Toolchain
+        run: rustup show active-toolchain
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny,typos-cli,cargo-machete
       - name: cargo xtask verify
         run: cargo xtask verify
-      - name: Render every journey (proof)
-        run: |
-          for j in $(cargo xtask journeys | awk '{print $1}'); do
-            cargo xtask journey "$j" --video
-          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: proof-macos
           path: target/proof/
+          if-no-files-found: ignore
           retention-days: 30

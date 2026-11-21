@@ -30,6 +30,10 @@ jobs:
       - name: System libraries
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev
       - uses: Swatinem/rust-cache@v2
+        with:
+          # ci.yml's verify job builds everything xtask needs, on main too, and saves it there.
+          shared-key: linux-debug
+          save-if: false
       - name: The PR body carries proof
         env:
           GH_TOKEN: ${{ github.token }}

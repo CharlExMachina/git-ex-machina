@@ -4527,7 +4527,6 @@ version = "0.1.0"
 dependencies = [
  "gxm-journeys",
  "gxm-world",
- "serde_json",
 ]
 
 [[package]]

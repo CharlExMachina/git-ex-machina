@@ -19,7 +19,7 @@ The app runs headless with Rune's real renderer, on a fixed virtual clock, insid
 1. Add the steps to `crates/gxm-journeys/src/catalog.rs`. Steps are `tap(key)`, `tap_text`, `type_text`, `press`, `scroll_to(key)` (wheels until it's in view, as a person scrolls to something below the fold), `wait` and `mark`. Expectations are `see`, `see_in(key, text)`, `not_see`, `gone(key)` and `world_check`. Put a `mark` at every moment worth a screenshot.
 2. A new journey also needs its `#[test]` in `crates/gxm-journeys/tests/journeys.rs`, and a world: a fixture in `gxm-world` or inline in the catalog.
 3. `cargo test -p gxm-journeys` runs it. A failure names the step and prints the screen as text: `[key] "text"`, one element per line.
-4. `cargo xtask journey NAME` writes `target/proof/NAME/NN-mark.png` and `.json` for each mark, plus `script.json`. Adding `--video` also writes the keycapped `NAME.mp4` and a GIF small enough to embed.
+4. `cargo xtask journey NAME` writes `target/proof/NAME/NN-mark.png` and `.json` for each mark, plus `script.json`. A journey draws each mark from its own runtime as it passes it (one frame on Rune's renderer, no replay), so its test writes the same files. Adding `--video` also replays the script through the app binary into the keycapped `NAME.mp4` and a GIF small enough to embed. Drawing needs Vulkan or Metal: without a GPU, install Mesa's lavapipe and set `VK_ICD_FILENAMES` to its `lvp_icd.json`, as CI does.
 
 ## The world's GitHub
 
@@ -29,11 +29,13 @@ Every world serves a fake GitHub GraphQL API on 127.0.0.1 (`gxm_world::hub`), an
 
 The tree JSON (`--tree`, or the `.json` written next to each mark) lists every element with its `path` (keys joined by `/`), `role`, `key`, `text` and `rect` as `[x, y, w, h]` in points. Use it to answer layout questions exactly: an element with a 0-height `rect` collapsed, two rects that overlap clash. Then fix the cause and re-snap.
 
+A mark's `.json` comes from the journey's own run, the screen its expectations checked, with the element fields of Rune's tree. Rune's full tree adds the accessibility tree and key warnings; for those at one mark, replay it: `cargo xtask app NAME -- --script target/proof/NAME/script.json --realtime --at mark:MARK --tree out.json` (add `--theme light` for a light journey).
+
 ## Gotchas
 
 - A text field's placeholder isn't in the element tree; a hint a journey must read is a text of its own (see the review summary in `view/cockpit_side.rs`).
 - A Rune key can't contain `/`, because `/` separates key paths. `keys::repo` and `keys::changed_file` swap it for `:`.
 - `.grow(1.0)` inside an auto-height column resolves to 0 pt. Give the column a bounded height and `.min_h(0.0)`.
-- Marks pause the timeline briefly, so the next step doesn't leak into a mark's screenshot.
+- A mark waits for the screen to come to rest (at most a second) before its screenshot, and the next step waits briefly after it, so neither an animation's tail nor the next step leaks in.
 - Work off the UI thread (fetch, pull, push, the provider's API) runs in real time while the journey's clock is virtual: follow it with `wait_for(key, text)`, never a fixed `wait`. Every replay rebuilds the world, since a journey's git operations change it.
 - `hold("shift")` / `hold("cmd")` before a tap makes it a ⇧- or ⌘-click; `hold("")` lets go.

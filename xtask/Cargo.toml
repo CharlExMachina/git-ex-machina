@@ -9,7 +9,6 @@ publish.workspace = true
 [dependencies]
 gxm-journeys = { path = "../crates/gxm-journeys" }
 gxm-world.workspace = true
-serde_json.workspace = true
 
 [lints]
 workspace = true

@@ -26,6 +26,9 @@ pub const TITLE: &str = "git-ex-machina";
 /// The window's size, and the size headless renders and journeys use.
 pub const SIZE: (f32, f32) = (1552.0, 852.0);
 /// The traffic lights sit 12 in from the left, centred in the 48-point bar.
+/// CoreText without outline dilation (what browsers call `antialiased`): lighter, crisper text.
+/// Journeys draw their screenshots with it too.
+pub const FONT_SMOOTHING: rune::FontSmoothing = rune::FontSmoothing::Off;
 pub const CHROME: Chrome = Chrome { full_size_content: true, traffic_lights: Some((12.0, 18.0)), drag_regions: true };
 
 fn init() -> App {
@@ -111,6 +114,5 @@ pub fn app() -> rune::App<App> {
         ..AppSpec::new(TITLE, SIZE, init, view::view)
     })
     .chrome(CHROME)
-    // CoreText without outline dilation (what browsers call `antialiased`): lighter, crisper text.
-    .font_smoothing(rune::FontSmoothing::Off)
+    .font_smoothing(FONT_SMOOTHING)
 }
