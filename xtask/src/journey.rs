@@ -1,15 +1,13 @@
-//! `cargo xtask journey NAME [--video]`: runs a journey headless (the same run its test does),
-//! then replays its recording through the app binary to render proof: a screenshot at every
-//! mark, and with `--video` a keycapped mp4 plus a GIF small enough to embed in a PR.
+//! `cargo xtask journey NAME [--video]`: runs a journey headless (the same run its test does)
+//! and writes its proof: a screenshot and element tree at every mark, drawn from the journey's
+//! own runtime. With `--video` it also replays the run through the app binary into a keycapped
+//! mp4, plus a GIF small enough to embed in a PR.
 
 use std::process::Command;
 
-use gxm_journeys::{catalog, run as run_journey};
+use gxm_journeys::{catalog, run as run_journey, write_proof};
 
 use crate::{build_world, build_world_in, cargo_bin, proof_dir, run};
-
-/// How many replays render at once.
-const REPLAYS_AT_ONCE: usize = 4;
 
 pub fn list() -> Result<(), String> {
     for j in catalog::all() {
@@ -26,63 +24,29 @@ pub fn journey(args: &[String]) -> Result<(), String> {
         catalog::find(name).ok_or_else(|| format!("no journey named {name:?} (cargo xtask journeys lists them)"))?;
     let world = build_world(name)?;
     let dir = proof_dir().join(name);
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
-    }
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-
     let recording = run_journey(&j, &world).map_err(|f| f.to_string())?;
-    let script = dir.join("script.json");
-    let text = serde_json::to_string_pretty(&recording.script()).map_err(|e| e.to_string())?;
-    std::fs::write(&script, text).map_err(|e| e.to_string())?;
-
-    let bin = cargo_bin("gxm-app", "git-ex-machina")?;
-    let theme = if j.dark { "dark" } else { "light" };
-    // Each replay runs the script from the start and its git operations change the world (a
-    // push moves the remote), so every replay gets a freshly built world. The app reads off its
-    // UI thread in real time, so replays keep pace with the wall clock as the journey did
-    // (`--realtime`), and run side by side to make up for it. A world also serves its GitHub,
-    // so each replay keeps its world until the app exits.
-    let app = |replay: usize| -> Result<(Command, gxm_world::World), String> {
-        let fresh = build_world_in(name, &crate::target().join("worlds").join(format!("{name}-replay-{replay}")))?;
-        let mut c = Command::new(&bin);
-        c.envs(fresh.env().child_vars()).arg("--script").arg(&script).args(["--theme", theme, "--realtime"]);
-        // `--realtime` announces each mark on stdout; the renders are what matter here.
-        c.stdout(std::process::Stdio::null());
-        Ok((c, fresh))
-    };
-    let shots: Vec<(std::path::PathBuf, String)> = recording
-        .marks
-        .iter()
-        .enumerate()
-        .map(|(i, (mark, _))| (dir.join(format!("{:02}-{mark}.png", i + 1)), format!("mark:{mark}")))
-        .collect();
-    for batch in shots.chunks(REPLAYS_AT_ONCE) {
-        let mut cmds = Vec::new();
-        let mut worlds = Vec::new();
-        for (replay, (png, at)) in batch.iter().enumerate() {
-            let (mut c, world) = app(replay)?;
-            c.arg("--snap").arg(png).arg("--tree").arg(png.with_extension("json")).args(["--scale", "2", "--at", at]);
-            cmds.push(c);
-            worlds.push(world);
-        }
-        std::thread::scope(|scope| {
-            let runs: Vec<_> = cmds.into_iter().map(|mut c| scope.spawn(move || run(&mut c))).collect();
-            runs.into_iter().try_for_each(|r| r.join().map_err(|_| "a replay panicked".to_owned())?)
-        })?;
-        for (png, _) in batch {
-            println!("{}", png.display());
-        }
+    for png in write_proof(&recording, &dir)? {
+        println!("{}", png.display());
     }
     if video {
+        let bin = cargo_bin("gxm-app", "git-ex-machina")?;
+        let theme = if j.dark { "dark" } else { "light" };
+        // The replay's git operations change its world (a push moves the remote), so it gets a
+        // freshly built one, which also serves its GitHub until the app exits. The app reads off
+        // its UI thread in real time, so the replay keeps pace with the wall clock as the journey
+        // did (`--realtime`), which announces each mark on stdout.
+        let replay = build_world_in(name, &crate::target().join("worlds").join(format!("{name}-video")))?;
         let mp4 = dir.join(format!("{name}.mp4"));
-        let (mut c, _world) = app(0)?;
+        let mut c = Command::new(&bin);
+        c.envs(replay.env().child_vars()).arg("--script").arg(dir.join("script.json"));
+        c.args(["--theme", theme, "--realtime"]).stdout(std::process::Stdio::null());
         run(c.arg("--video").arg(&mp4).args(["--keys", "--pointer", "--scale", "1", "--fps", "30"]))?;
+        drop(replay);
         let gif = dir.join(format!("{name}.gif"));
         let filter = "fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4";
         run(Command::new("ffmpeg").args(["-loglevel", "error", "-y", "-i"]).arg(&mp4).args(["-vf", filter]).arg(&gif))?;
         println!("{}\n{}", mp4.display(), gif.display());
     }
-    println!("{}", script.display());
+    println!("{}", dir.join("script.json").display());
     Ok(())
 }

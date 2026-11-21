@@ -4,19 +4,25 @@
 //! A [`Journey`] is what a person does, step by step, with what they should see after each step.
 //! [`run`] drives the real app (the same `rune::App` the window runs) headless, on a fixed clock,
 //! inside a hermetic [`World`], and fails on the first expectation that doesn't hold, naming the
-//! step and listing what was on screen. It also returns a [`Recording`]: the same steps as a
-//! Rune input script, so `cargo xtask journey NAME --video` replays exactly what the test did
-//! into a keycapped video and a screenshot at every mark.
+//! step and listing what was on screen. At every mark it draws the screen on Rune's renderer.
+//! It returns a [`Recording`]: those screenshots and element trees, and the same steps as a Rune
+//! input script, so `cargo xtask journey NAME --video` replays exactly what the test did into a
+//! keycapped video.
 //!
 //! Write fewer, longer journeys (see CLAUDE.md): one per workflow, with expectations at every
 //! step, never one per assertion.
 
 pub mod catalog;
 mod merge;
+mod paint;
+mod proof;
 mod review;
 mod runner;
+mod tree;
 
-pub use runner::{Failure, Recording, run};
+pub use paint::{Pixels, SCALE};
+pub use proof::{proof_dir, write_proof};
+pub use runner::{Failure, Mark, Recording, run};
 
 use gxm_world::World;
 

@@ -18,7 +18,7 @@ Every change goes through these steps, in order:
 
 1. **Journey first.** Extend the journey for the workflow you're changing (or start one, if the person's goal is new). Run it with `cargo test -p gxm-journeys` and watch it go red for the reason you expect.
 2. **Make it green.** Put logic in `gxm-core`, where the CLI and the app can both verify it.
-3. **See it.** `cargo xtask journey <name>`, then open every mark PNG in `target/proof/<name>/`. For a visual change, render the same mark before and after (the base branch too) and look at both zoomed in. This step is done when you've looked at every mark and each one shows what the journey claims.
+3. **See it.** `cargo xtask journey <name>` (or the journey's test: each journey draws its marks as it runs), then open every mark PNG in `target/proof/<name>/`. For a visual change, render the same mark before and after (the base branch too) and look at both zoomed in. This step is done when you've looked at every mark and each one shows what the journey claims.
 4. **Verify.** `cargo xtask verify` is green.
 5. **Proof.** Open the PR with `cargo xtask pr open body.md`, with its proof in the body (see "Pull requests").
 
@@ -78,4 +78,4 @@ Put the media in the PR itself, not just in CI artifacts: copy the GIFs, mp4s an
 
 Open and update PRs with `cargo xtask pr open body.md [--base BRANCH]`, never with `gh pr create` or `gh pr edit --body-file`. It checks the body the way CI's `proof` job does (the same code), tells you what's missing, and only then creates the branch's PR, or updates it, with every file the body references attached. The `**Journeys:**` line starts with the journeys' names, as `cargo xtask journeys` lists them; each must exist.
 
-A PR without proof isn't ready for review. CI re-runs every journey on its own runner and attaches the renders it made.
+A PR without proof isn't ready for review. CI runs every journey on Linux and macOS, each drawing its marks as it goes, and attaches those screenshots to the run (`proof` and `proof-macos`).
