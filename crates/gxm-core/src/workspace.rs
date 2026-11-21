@@ -43,7 +43,9 @@ impl std::error::Error for WorkspaceError {}
 pub enum AddError {
     /// Nothing is there.
     Missing(PathBuf),
-    /// It isn't inside a git working copy (a file, a plain folder, a bare repository).
+    /// A file, not a folder.
+    NotAFolder(PathBuf),
+    /// A folder that isn't inside a git working copy (a plain folder, a bare repository).
     NotARepo(PathBuf),
     Workspace(WorkspaceError),
 }
@@ -52,6 +54,7 @@ impl std::fmt::Display for AddError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AddError::Missing(path) => write!(f, "nothing is at {}", path.display()),
+            AddError::NotAFolder(path) => write!(f, "{} is a file, not a folder", path.display()),
             AddError::NotARepo(path) => write!(f, "{} isn't a git repository", path.display()),
             AddError::Workspace(e) => e.fmt(f),
         }
@@ -68,7 +71,7 @@ pub fn working_copy(env: &Env, path: &Path) -> Result<PathBuf, AddError> {
         return Err(AddError::Missing(path.to_path_buf()));
     }
     if !path.is_dir() {
-        return Err(AddError::NotARepo(path.to_path_buf()));
+        return Err(AddError::NotAFolder(path.to_path_buf()));
     }
     match git::run(env, path, &["rev-parse", "--show-toplevel"]) {
         Ok(top) if !top.trim().is_empty() => Ok(PathBuf::from(top.trim())),
