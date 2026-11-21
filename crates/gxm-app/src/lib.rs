@@ -11,6 +11,7 @@ pub mod ops;
 pub mod pull_disk;
 pub mod pulls;
 pub mod review;
+pub mod sheet;
 pub mod state;
 pub mod theme;
 pub mod ui;
@@ -48,10 +49,15 @@ fn poll(s: &mut App, _t: f64, tx: &mut Tx) -> bool {
         // A pull request's index can arrive after its commit was selected: read it now.
         s.prefetch_pull();
     }
-    s.land() | landed | pulled
+    let sheet = s.land_sheet(tx);
+    s.land() | landed | pulled | sheet
 }
 
 fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
+    // A sheet has the keyboard: its fields take the keys, Escape dismisses it.
+    if !matches!(s.sheet, sheet::Sheet::Closed) {
+        return false;
+    }
     if shell::is_sidebar_toggle(ev) {
         s.sidebar_open = !s.sidebar_open;
         return true;
@@ -105,6 +111,7 @@ pub fn app() -> rune::App<App> {
         setup: Some(|s: &mut App, waker| {
             s.ops.set_waker(waker.clone());
             s.pulls.set_waker(&waker);
+            s.sheet_jobs.set_waker(waker.clone());
             s.loads.set_waker(waker);
         }),
         on_key: Some(on_key),

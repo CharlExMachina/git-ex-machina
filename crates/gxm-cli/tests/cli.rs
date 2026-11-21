@@ -10,7 +10,7 @@ fn gxm(w: &World, args: &[&str]) -> String {
     let out = Command::new(env!("CARGO_BIN_EXE_gxm"))
         .args(args)
         .envs(w.env().child_vars())
-        .current_dir(w.root().join("code"))
+        .current_dir(w.code())
         .output()
         .expect("gxm runs");
     assert!(out.status.success(), "gxm {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
@@ -57,4 +57,26 @@ fn someone_checks_their_workspace_and_reads_a_history_from_the_terminal() {
         "{prs}"
     );
     assert!(prs.contains("#128   Merged  feature/graph-virtualization → main"), "{prs}");
+}
+
+#[test]
+fn someone_adds_and_clones_repositories_from_the_terminal() {
+    use gxm_world::fixtures::ANA;
+    let w = World::new();
+    let notes = w.repo("github.com", "personal", "field-notes");
+    notes.commit(ANA, w.ago(gxm_world::days(2)), "Start the field notes", &["README.md"]);
+    notes.push("main");
+    let site = w.repo("github.com", "studio", "site");
+    site.commit(ANA, w.ago(gxm_world::days(1)), "Scaffold the site", &["index.html"]);
+    site.push("main");
+    std::fs::remove_dir_all(site.path()).unwrap();
+
+    // A folder inside a repository adds the repository.
+    std::fs::create_dir_all(w.code().join("field-notes/drafts")).unwrap();
+    assert_eq!(gxm(&w, &["add", "~/code/field-notes/drafts"]), "Added ~/code/field-notes\n");
+    // A GitHub page clones over SSH, into ~/code.
+    let cloned = gxm(&w, &["clone", "https://github.com/studio/site"]);
+    assert_eq!(cloned, "Cloning git@github.com:studio/site.git into ~/code/site\nAdded ~/code/site\n");
+    let repos = gxm(&w, &["repos"]);
+    assert!(repos.contains("field-notes") && repos.contains("site"), "{repos}");
 }

@@ -35,6 +35,20 @@ pub const INSPECTOR_TITLE: &str = "inspector-title";
 pub const INSPECTOR_FILES: &str = "inspector-files";
 pub const HUNK: &str = "hunk";
 pub const EMPTY_STATE: &str = "empty-state";
+/// The empty workspace's own Add and Clone buttons.
+pub const EMPTY_ADD: &str = "empty-add";
+pub const EMPTY_CLONE: &str = "empty-clone";
+/// The sheet over the window (Add, Clone), and what it says went wrong.
+pub const SHEET: &str = "sheet";
+pub const SHEET_ERROR: &str = "sheet-error";
+pub const SHEET_CANCEL: &str = "sheet-cancel";
+pub const ADD_PATH: &str = "add-path";
+pub const ADD_CONFIRM: &str = "add-confirm";
+pub const CLONE_URL: &str = "clone-url";
+pub const CLONE_INTO: &str = "clone-into";
+/// What Clone will do: the URL it clones over SSH, and the folder it clones into.
+pub const CLONE_PLAN: &str = "clone-plan";
+pub const CLONE_CONFIRM: &str = "clone-confirm";
 
 /// A repository's row in the sidebar.
 pub fn repo(name: &str) -> String {

@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::env::Env;
+use crate::git;
 
 /// Saved as `workspace.json` in [`Env::config_dir`].
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -36,6 +37,56 @@ impl std::fmt::Display for WorkspaceError {
 }
 
 impl std::error::Error for WorkspaceError {}
+
+/// Why a folder couldn't be added to the workspace.
+#[derive(Debug)]
+pub enum AddError {
+    /// Nothing is there.
+    Missing(PathBuf),
+    /// It isn't inside a git working copy (a file, a plain folder, a bare repository).
+    NotARepo(PathBuf),
+    Workspace(WorkspaceError),
+}
+
+impl std::fmt::Display for AddError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AddError::Missing(path) => write!(f, "nothing is at {}", path.display()),
+            AddError::NotARepo(path) => write!(f, "{} isn't a git repository", path.display()),
+            AddError::Workspace(e) => e.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for AddError {}
+
+/// The top folder of the working copy `path` is in, as git names it: a folder inside a
+/// repository means the repository.
+pub fn working_copy(env: &Env, path: &Path) -> Result<PathBuf, AddError> {
+    env.off_ui_thread(&format_args!("looking for a repository at {}", path.display()));
+    if !path.exists() {
+        return Err(AddError::Missing(path.to_path_buf()));
+    }
+    if !path.is_dir() {
+        return Err(AddError::NotARepo(path.to_path_buf()));
+    }
+    match git::run(env, path, &["rev-parse", "--show-toplevel"]) {
+        Ok(top) if !top.trim().is_empty() => Ok(PathBuf::from(top.trim())),
+        _ => Err(AddError::NotARepo(path.to_path_buf())),
+    }
+}
+
+/// Saves the repository at `path` (or around it) in the workspace, unpinned, unless it's
+/// already there. Returns its top folder.
+pub fn add_repo(env: &Env, path: &Path) -> Result<PathBuf, AddError> {
+    let top = working_copy(env, path)?;
+    let mut ws = Workspace::load(env).map_err(AddError::Workspace)?;
+    if !ws.repos.iter().any(|r| r.path == top) {
+        ws.repos.push(WorkspaceRepo { path: top.clone(), pinned: false });
+        ws.save(env).map_err(AddError::Workspace)?;
+    }
+    Ok(top)
+}
 
 impl Workspace {
     pub fn file(env: &Env) -> PathBuf {

@@ -6,6 +6,7 @@ use rune::{El, col, icon, row, text};
 use super::bar;
 use crate::icons;
 use crate::keys;
+use crate::sheet::Event;
 use crate::state::{App, RepoEntry};
 use crate::theme::{Theme, size, ty};
 use crate::ui::{self, Variant};
@@ -15,7 +16,6 @@ use crate::ui::{self, Variant};
 pub const LIGHTS_W: f32 = if cfg!(target_os = "macos") { 52.0 } else { 0.0 };
 
 pub fn sidebar(s: &App, t: &Theme) -> El {
-    let soon = "Coming next: add a repository from disk";
     let mut top = bar(t).px(12.0);
     if LIGHTS_W > 0.0 {
         top = top.child(rune::el().w(LIGHTS_W).h(12.0).key("traffic-lights"));
@@ -29,7 +29,10 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
                 .on_press(|s: &mut App| s.sidebar_open = false),
         )
         .child(
-            ui::button(t, Variant::Ghost, Some(&icons::PLUS), "", None).key(keys::ADD_REPO).help(soon).disabled(true),
+            ui::button(t, Variant::Ghost, Some(&icons::PLUS), "", None)
+                .key(keys::ADD_REPO)
+                .help("Add a repository from this computer")
+                .on_press_tx(|s: &mut App, tx| s.sheet_event(Event::OpenAdd, Some(tx))),
         );
     let filter = row().pt(12.0).px(8.0).child(
         ui::search_field(
@@ -66,8 +69,8 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
         .child(
             ui::button(t, Variant::Ghost, Some(&icons::PLUS), "Clone repository", None)
                 .key(keys::CLONE)
-                .help("Coming next: clone over SSH, with the setup wizard if you need one")
-                .disabled(true),
+                .help("Clone a repository over SSH")
+                .on_press_tx(|s: &mut App, tx| s.sheet_event(Event::OpenClone, Some(tx))),
         );
     col().fill(t.chrome).border_sides([0.0, 1.0, 0.0, 0.0], t.line).border_layout().child(list).child(footer)
 }
