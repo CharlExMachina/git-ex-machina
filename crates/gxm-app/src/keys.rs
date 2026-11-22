@@ -69,6 +69,8 @@ pub const SIGNIN_CODE: &str = "signin-code";
 pub const SIGNIN_COPY: &str = "signin-copy";
 pub const SIGNIN_OPEN: &str = "signin-open";
 pub const SIGNIN_RETRY: &str = "signin-retry";
+/// The window's lower right corner, where toasts say something just happened.
+pub const TOASTS: &str = "toasts";
 pub const SIGN_OUT: &str = "sign-out";
 /// The update's icon button at the sidebar's foot: check for one, download it, restart into
 /// it. Its label says which.
@@ -220,4 +222,9 @@ pub fn setting_item(kind: &str, id: &str) -> String {
 /// `Pull requests` → `pull-requests`, `fix/avatar-cache` → `fix:avatar-cache`.
 fn slug(s: &str) -> String {
     sanitize(&s.to_lowercase().replace(' ', "-"))
+}
+
+/// Toast `id` in [`TOASTS`].
+pub fn toast(id: u64) -> String {
+    format!("toast-{id}")
 }

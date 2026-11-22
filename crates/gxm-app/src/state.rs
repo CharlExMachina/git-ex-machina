@@ -59,6 +59,8 @@ pub struct App {
     /// The repository settings dialog, and its work off the UI thread.
     pub settings: crate::settings::Model,
     pub settings_jobs: crate::settings::Jobs,
+    /// What just happened, in the window's corner for a moment.
+    pub toasts: crate::toast::Toasts,
 }
 
 /// Loading is an explicit machine: nothing is read before the first frame is up, and the
@@ -201,6 +203,7 @@ impl App {
             update_jobs: UpdateJobs::default(),
             settings: crate::settings::Model::default(),
             settings_jobs: crate::settings::Jobs::default(),
+            toasts: crate::toast::Toasts::default(),
         }
     }
 

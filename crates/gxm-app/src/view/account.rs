@@ -70,7 +70,10 @@ pub fn sheet(t: &Theme, state: &SignIn) -> (String, String, Vec<El>, El) {
             let uri = code.verification_uri.clone();
             let copy = ui::button(t, Variant::Secondary, Some(&icons::COPY), "Copy code", None)
                 .key(keys::SIGNIN_COPY)
-                .on_press_tx(move |_: &mut App, tx| tx.copy(user_code.clone()));
+                .on_press_tx(move |s: &mut App, tx| {
+                    tx.copy(user_code.clone());
+                    s.toasts.show("Code copied", tx);
+                });
             let open = ui::button(t, Variant::Primary, None, "Approve on GitHub", None)
                 .key(keys::SIGNIN_OPEN)
                 .on_press_tx(move |_: &mut App, tx| {

@@ -503,12 +503,23 @@ pub fn sign_in() -> Journey {
     // Sign in asks GitHub for a code and shows it, with where to enter it.
     .tap(keys::ACCOUNT)
     .wait_for(keys::SIGNIN_CODE, gxm_world::hub::USER_CODE)
+    .copied(gxm_world::hub::USER_CODE)
     .see_in(keys::SHEET, "Sign in to GitHub")
     .see_in(keys::SHEET, "github.com/login/device")
     .see_in(keys::SIGNIN_OPEN, "Approve on GitHub")
     .tap(keys::SIGNIN_OPEN)
     .opened("https://github.com/login/device")
     .mark("code")
+    // Copy code sinks while it's held, copies the code again, and says so in the corner.
+    .mouse_down(keys::SIGNIN_COPY)
+    .mark("copy-held")
+    .mouse_up()
+    .copied(gxm_world::hub::USER_CODE)
+    .see_in(keys::TOASTS, "Code copied")
+    .mark("copied")
+    // The toast goes on its own.
+    .wait(3.0)
+    .not_see("Code copied")
     // Ana enters the code on github.com and approves; the app notices on its own.
     .wait_for(keys::ACCOUNT, "ana-ruiz")
     .gone(keys::SHEET)
