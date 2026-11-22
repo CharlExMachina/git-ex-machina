@@ -1,3 +1,6 @@
+<img width="1040" height="426" alt="Asset-2@2x" src="https://github.com/user-attachments/assets/7c6119f2-be00-4f33-b977-e90f444e8ae2" />
+
+
 # Git Ex Machina
 
 A clean, no-nonsense Git GUI client, plus a no-nonsense, simple-to-use CLI. It lets you manage your repos, review PRs, clone projects, push, pull, and do everything else you'd expect from a Git client, with world-class performance. It's stress-tested to handle your biggest repos.
