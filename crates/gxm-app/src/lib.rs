@@ -27,8 +27,10 @@ use rune_kit::shell;
 use crate::state::{App, Load};
 
 pub const TITLE: &str = "git-ex-machina";
-/// The window's application id, which is also the name of its desktop entry and icon.
-pub const APP_ID: &str = "git-ex-machina";
+/// The window's application id, which is also the name of its desktop entry and icon. Reverse
+/// DNS with no dash: KDE shortens an icon name it can't find in the person's theme at each dash,
+/// before it looks in hicolor, and `git-ex-machina` came up as the theme's `git` icon.
+pub const APP_ID: &str = "com.charlexmachina.GitExMachina";
 /// The window's size, and the size headless renders and journeys use.
 pub const SIZE: (f32, f32) = (1552.0, 852.0);
 /// The traffic lights sit 12 in from the left, centred in the 48-point bar.
