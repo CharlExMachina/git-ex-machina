@@ -268,6 +268,11 @@ fn merge(s: &mut State, vars: &Value) -> Value {
         Ok(commit) => {
             p.merged = true;
             p.merge_commit = Some(commit);
+            let head = format!("refs/heads/{}", p.head_ref);
+            // A repository set to delete merged branches deletes this one, as GitHub does.
+            if s.settings_mut(&owner, &name).is_some_and(|st| st.delete_branch_on_merge) {
+                git(&["update-ref", "-d", &head]).ok();
+            }
             json!({ "data": { "mergePullRequest": { "pullRequest": { "state": "MERGED" } } } })
         }
         Err(e) => error(&format!("Merge conflict: {e}")),

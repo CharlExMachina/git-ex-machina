@@ -50,6 +50,9 @@ pub struct App {
     /// Who's signed in to GitHub; None when no one is.
     pub account: Option<gxm_core::forge::model::User>,
     pub account_jobs: AccountJobs,
+    /// The repository settings dialog, and its work off the UI thread.
+    pub settings: crate::settings::Model,
+    pub settings_jobs: crate::settings::Jobs,
 }
 
 /// Loading is an explicit machine: nothing is read before the first frame is up, and the
@@ -187,12 +190,14 @@ impl App {
             sheet_jobs: SheetJobs::default(),
             account: None,
             account_jobs: AccountJobs::new(env_token),
+            settings: crate::settings::Model::default(),
+            settings_jobs: crate::settings::Jobs::default(),
         }
     }
 
     /// A read, a write or a provider call is in flight: what's on screen may be about to change.
     pub fn busy(&self) -> bool {
-        self.loads.busy() || self.pulls.busy() || self.account_jobs.reading()
+        self.loads.busy() || self.pulls.busy() || self.account_jobs.reading() || self.settings_jobs.busy()
     }
 
     /// Lights the open pull request's commits in the graph, or clears the light.

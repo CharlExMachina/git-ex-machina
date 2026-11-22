@@ -11,9 +11,11 @@ use crate::{Author, RepoBuilder, World};
 
 mod atlas;
 mod pulls;
+mod settings;
 
 pub use atlas::atlas_web;
 pub use pulls::{DESCRIPTION, atlas_pulls, dotfiles_pull};
+pub use settings::{atlas_branches, atlas_settings};
 
 // The app colours people by a hash of their email; these addresses give the colours the
 // design gives them (Ana blue, Kenji teal, Lea rose).

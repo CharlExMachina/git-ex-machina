@@ -85,7 +85,11 @@ impl World {
         );
         for host in HOSTS {
             let base = root.join("remotes").join(host);
-            cfg.push_str(&format!("[url \"file://{}/\"]\n\tinsteadOf = git@{host}:\n", base.display()));
+            // HTTPS too, for someone who switches a remote to it.
+            cfg.push_str(&format!(
+                "[url \"file://{}/\"]\n\tinsteadOf = git@{host}:\n\tinsteadOf = https://{host}/\n",
+                base.display()
+            ));
         }
         std::fs::write(home.join(".gitconfig"), cfg).unwrap_or_else(|e| fail("write the world's .gitconfig", e));
         World { root, env, hub, _tmp: None }

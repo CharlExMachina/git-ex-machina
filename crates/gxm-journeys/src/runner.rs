@@ -110,6 +110,11 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
         let t = d.now;
         match step {
             Step::Tap(key) => {
+                // A person scrolls to what they click when it's below the fold.
+                if !d.wholly_visible(key) {
+                    d.scroll_into_view(key).map_err(|why| fail(why, &d))?;
+                }
+                let t = d.now;
                 let (x, y) = d.rt.find(key).ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
                 d.tap(x, y);
                 d.events.push(json!({ "t": t, "type": "tap", "key": key }));
@@ -153,23 +158,7 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
             }
             Step::Wait(s) => d.advance_to(t + s),
             Step::ScrollTo(key) => {
-                for _ in 0..80 {
-                    let e =
-                        d.rt.elements()
-                            .into_iter()
-                            .find(|e| e.key.as_deref() == Some(key.as_str()) && !e.exiting)
-                            .ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
-                    if e.visible[3] >= e.rect[3] - 0.5 {
-                        break;
-                    }
-                    // Positive moves the content down, showing what's above.
-                    let dy = if e.rect[1] < e.visible[1] { WHEEL } else { -WHEEL };
-                    let (x, y) = (e.rect[0] + e.rect[2] / 2.0, (e.rect[1]).clamp(80.0, gxm_app::SIZE.1 - 40.0));
-                    d.rt.pointer_move(x, y);
-                    d.rt.wheel(x, y, dy);
-                    d.events.push(json!({ "t": d.now, "type": "wheel", "x": x, "y": y, "dy": dy }));
-                    d.advance_to(d.now + DT * 2.0);
-                }
+                d.scroll_into_view(key).map_err(|why| fail(why, &d))?;
                 d.advance_to(d.now + AFTER_PRESS);
             }
             Step::WaitFor { key, text } => {
@@ -302,6 +291,51 @@ impl Driver {
             if quiet < 2 {
                 self.advance_to(self.now + DT);
             }
+        }
+        Ok(())
+    }
+
+    /// Whether the element keyed `key` is on screen in full.
+    fn wholly_visible(&self, key: &str) -> bool {
+        self.rt
+            .elements()
+            .into_iter()
+            .find(|e| e.key.as_deref() == Some(key) && !e.exiting)
+            .is_none_or(|e| e.visible[3] >= e.rect[3] - 0.5)
+    }
+
+    /// Wheels, as a person would, until the element keyed `key` is wholly in view.
+    fn scroll_into_view(&mut self, key: &str) -> Result<(), String> {
+        for _ in 0..80 {
+            let all = self.rt.elements();
+            let i = all
+                .iter()
+                .position(|e| e.key.as_deref() == Some(key) && !e.exiting)
+                .ok_or_else(|| format!("no element is keyed {key:?}"))?;
+            let e = &all[i];
+            if e.visible[3] >= e.rect[3] - 0.5 {
+                break;
+            }
+            // Positive moves the content down, showing what's above.
+            let dy = if e.rect[1] < e.visible[1] { WHEEL } else { -WHEEL };
+            // The wheel turns over what's showing of the element, or of the nearest thing
+            // holding it that shows (its scroll view, inside a dialog, say).
+            let mut shown = Some(i);
+            while let Some(j) = shown.filter(|j| all[*j].visible[3] <= 1.0) {
+                shown = all[j].parent;
+            }
+            let (x, y) = match shown {
+                Some(j) => {
+                    let v = all[j].visible;
+                    let edge = if dy < 0.0 { v[1] + v[3] - 4.0 } else { v[1] + 4.0 };
+                    (v[0] + v[2] / 2.0, edge.clamp(v[1], v[1] + v[3]))
+                }
+                None => (e.rect[0] + e.rect[2] / 2.0, (e.rect[1]).clamp(80.0, gxm_app::SIZE.1 - 40.0)),
+            };
+            self.rt.pointer_move(x, y);
+            self.rt.wheel(x, y, dy);
+            self.events.push(json!({ "t": self.now, "type": "wheel", "x": x, "y": y, "dy": dy }));
+            self.advance_to(self.now + DT * 2.0);
         }
         Ok(())
     }

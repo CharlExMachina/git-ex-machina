@@ -27,6 +27,10 @@ tempfile = "3"
 # HTTPS to the providers' APIs: rustls on ring, verified by the platform's trust store (webpki-roots
 # is CDLA-licensed, which deny.toml doesn't allow).
 ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "_ring", "platform-verifier"] }
+# Secrets for Actions, Dependabot and codespaces are sealed (libsodium's sealed box) with the
+# repository's public key before they're sent, as GitHub requires.
+crypto_box = { version = "0.9", features = ["seal"] }
+base64 = "0.22"
 # Tokens in the macOS Keychain and the Linux Secret Service (over zbus, no libdbus).
 keyring = { version = "3", default-features = false, features = ["apple-native", "async-secret-service", "async-io", "crypto-rust"] }
 

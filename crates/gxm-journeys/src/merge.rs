@@ -1,7 +1,8 @@
 //! Merging a pull request from the app: the person's own green pull request, squashed into
-//! main on the provider, then fetched, so the squash commit shows in the history as #12's.
+//! main on the provider, then fetched, so the squash commit shows in the history as #12's. The
+//! repository is set to delete merged branches, on GitHub and here, so the branch goes from both.
 
-use gxm_app::keys;
+use gxm_app::keys::{self, setting};
 use gxm_world::World;
 use gxm_world::hub::Hub;
 
@@ -19,8 +20,16 @@ pub fn merge_pull_request() -> Journey {
         "Someone opens their own green pull request from its commit, squashes and merges it, and sees the squash commit arrive in the history.",
         mockup_world,
     )
-    // The branch's tip belongs to #12, which is ready: every check green, no conflicts.
+    // First, dotfiles deletes merged branches: on GitHub, and the local copy too.
     .tap(keys::repo("dotfiles"))
+    .tap(keys::SETTINGS)
+    .tap(keys::settings_section("Branches"))
+    .wait_for(setting("delete-branch-on-merge"), "On GitHub")
+    .tap(setting("delete-branch-on-merge"))
+    .tap(setting("delete-local-merged"))
+    .wait_for(keys::SETTINGS_STATUS, "Saved")
+    .tap(keys::SETTINGS_CLOSE)
+    // The branch's tip belongs to #12, which is ready: every check green, no conflicts.
     .tap_text("Add the branch to the right prompt")
     .tap(keys::TAB_OVERVIEW)
     .wait_for(keys::PULL_REQUEST_ROW, "#12 Shorter zsh prompt")
@@ -66,4 +75,14 @@ pub fn merge_pull_request() -> Journey {
     .wait_for(keys::PULL_REQUEST_ROW, "Merged")
     .see_in(keys::PULL_REQUEST_ROW, "#12 Shorter zsh prompt")
     .mark("history")
+    .world_check("prompt is gone from GitHub and from this computer", |w| {
+        let bare = w.root().join("remotes/github.com/personal/dotfiles.git");
+        let remote = w.git(&bare, &["branch", "--format=%(refname:short)"]);
+        let local = w.git(&w.code().join("dotfiles"), &["branch", "--format=%(refname:short)"]);
+        if remote.lines().any(|b| b == "prompt") || local.lines().any(|b| b == "prompt") {
+            Err(format!("remote {remote:?}, local {local:?}"))
+        } else {
+            Ok(())
+        }
+    })
 }

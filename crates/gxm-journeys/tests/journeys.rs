@@ -51,6 +51,16 @@ fn merge_pull_request() {
 }
 
 #[test]
+fn repository_settings() {
+    journey("repository_settings");
+}
+
+#[test]
+fn settings_without_admin() {
+    journey("settings_without_admin");
+}
+
+#[test]
 fn every_journey_is_tested() {
     let tested = include_str!("journeys.rs");
     for j in catalog::all() {

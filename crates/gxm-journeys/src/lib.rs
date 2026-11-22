@@ -18,6 +18,7 @@ mod paint;
 mod proof;
 mod review;
 mod runner;
+mod settings;
 mod tree;
 
 pub use paint::{Pixels, SCALE};

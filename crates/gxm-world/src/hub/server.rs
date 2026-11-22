@@ -84,8 +84,13 @@ fn serve(stream: TcpStream, handle: &impl Fn(Request) -> (u16, String)) -> std::
     let (status, json) = handle(request);
     let reason = match status {
         200 => "OK",
+        201 => "Created",
+        202 => "Accepted",
+        204 => "No Content",
         401 => "Unauthorized",
+        403 => "Forbidden",
         404 => "Not Found",
+        422 => "Unprocessable Entity",
         _ => "Error",
     };
     let mut stream = stream;
