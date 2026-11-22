@@ -510,7 +510,7 @@ pub fn sign_in() -> Journey {
     .tap(keys::SIGNIN_OPEN)
     .opened("https://github.com/login/device")
     .mark("code")
-    // Copy code sinks while it's held, copies the code again, and says so in the corner.
+    // Copy code darkens while held, at full size, copies the code again, and says so in the corner.
     .mouse_down(keys::SIGNIN_COPY)
     .mark("copy-held")
     .mouse_up()

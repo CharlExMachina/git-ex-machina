@@ -6,9 +6,6 @@ use rune::{Color, El, Icon, TextEdit, icon, row, text, text_input};
 use crate::icons;
 use crate::theme::{Theme, size, ty};
 
-/// How small a button draws while it's held down, so a click shows as it happens.
-const PRESS_SCALE: f32 = 0.96;
-
 /// `.gu-btn` variants.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Variant {
@@ -74,7 +71,6 @@ fn build(
         }
         Variant::Ghost => b.hover(t.control_hover).press(t.control_press),
     };
-    b = b.press_scale(PRESS_SCALE);
     if pressed {
         b = b.mt(0.5);
         for s in t.shadow_pressed() {
