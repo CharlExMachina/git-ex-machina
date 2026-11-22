@@ -225,6 +225,11 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                     return Err(fail(format!("the app asked to open {asked:?}"), &d));
                 }
             }
+            Step::Quits => {
+                if d.rt.shell_request != Some(rune::Shell::Quit) {
+                    return Err(fail(format!("the app asked the window for {:?}", d.rt.shell_request), &d));
+                }
+            }
             Step::World { check, .. } => check(world).map_err(|why| fail(why, &d))?,
         }
     }

@@ -34,6 +34,27 @@ pub struct Env {
     pub forge: ForgeAccess,
     /// Where tokens are kept.
     pub secrets: Secrets,
+    /// Which version is running, and the file it runs from when it can replace itself.
+    pub install: Install,
+}
+
+/// The running app as an installation: its version, and the AppImage it was started from. Only
+/// an AppImage updates itself (see `update`); anything else, a `cargo run` or a package a
+/// package manager owns, leaves updating to whoever installed it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Install {
+    /// `0.1.0`.
+    pub version: String,
+    /// The AppImage file the app runs from (the AppImage runtime's `APPIMAGE`), which an update
+    /// replaces.
+    pub appimage: Option<PathBuf>,
+}
+
+impl Install {
+    /// This build's version, run from nothing it could replace.
+    pub fn this_build() -> Install {
+        Install { version: env!("CARGO_PKG_VERSION").to_owned(), appimage: None }
+    }
 }
 
 /// Where tokens are kept.
@@ -99,6 +120,8 @@ pub const CONFIG_DIR_VAR: &str = "GXM_CONFIG_DIR";
 pub const GITHUB_API_VAR: &str = "GXM_GITHUB_API";
 pub const GITHUB_TOKEN_VAR: &str = "GXM_GITHUB_TOKEN";
 pub const GITHUB_WEB_VAR: &str = "GXM_GITHUB_WEB";
+pub const VERSION_VAR: &str = "GXM_VERSION";
+pub const APPIMAGE_VAR: &str = "GXM_APPIMAGE";
 
 impl Env {
     /// The real environment, with the `GXM_*` overrides a sandboxed run sets.
@@ -119,7 +142,17 @@ impl Env {
         let github_web = var(GITHUB_WEB_VAR).unwrap_or_else(|| ForgeAccess::GITHUB_WEB.to_owned());
         let forge = ForgeAccess { github_api, github_web, github_token };
         let secrets = if isolated { Secrets::File(config_dir.join("secrets.json")) } else { Secrets::Keychain };
-        Env { home, config_dir, clock, tz, isolated, git_vars, forge, secrets, ui_thread: None }
+        // A sandboxed run says which version it plays and which file it would replace; a real one
+        // is this build, from the AppImage the AppImage runtime names.
+        let install = if isolated {
+            Install {
+                version: var(VERSION_VAR).unwrap_or_else(|| Install::this_build().version),
+                appimage: var(APPIMAGE_VAR).map(PathBuf::from),
+            }
+        } else {
+            Install { appimage: var("APPIMAGE").map(PathBuf::from), ..Install::this_build() }
+        };
+        Env { home, config_dir, clock, tz, isolated, git_vars, forge, secrets, install, ui_thread: None }
     }
 
     /// A sandboxed environment rooted at `home`, at a fixed time, in UTC.
@@ -133,6 +166,7 @@ impl Env {
             git_vars: sandbox_git_vars(home),
             forge: ForgeAccess::none(),
             secrets: Secrets::File(home.join(".config/git-ex-machina/secrets.json")),
+            install: Install::this_build(),
             ui_thread: None,
         }
     }
@@ -198,6 +232,10 @@ impl Env {
         vars.push((GITHUB_WEB_VAR.into(), self.forge.github_web.clone().into()));
         if let Some(token) = &self.forge.github_token {
             vars.push((GITHUB_TOKEN_VAR.into(), token.clone().into()));
+        }
+        vars.push((VERSION_VAR.into(), self.install.version.clone().into()));
+        if let Some(appimage) = &self.install.appimage {
+            vars.push((APPIMAGE_VAR.into(), appimage.clone().into()));
         }
         vars
     }

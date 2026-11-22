@@ -1,5 +1,5 @@
 //! The window before there's a repository: what to do, and the two ways to do it, with signing
-//! in to GitHub offered quietly at the foot. The sidebar, toolbar and inspector stay away until
+//! in to GitHub offered quietly at the foot, and a newer version in its corner. The sidebar, toolbar and inspector stay away until
 //! there's something for them to act on.
 
 use rune::{El, col, row, text};
@@ -10,6 +10,9 @@ use crate::sheet::Event;
 use crate::state::App;
 use crate::theme::{Theme, size, ty};
 use crate::ui::{self, Variant};
+
+/// Wide enough for "Downloading 0.20.0… 100%".
+const CORNER: f32 = 220.0;
 
 pub fn screen(s: &App, t: &Theme) -> El {
     let add = ui::button(t, Variant::Secondary, Some(&icons::PLUS), "Add repository", None)
@@ -32,6 +35,25 @@ pub fn screen(s: &App, t: &Theme) -> El {
         // The band the window's title bar and traffic lights sit in.
         .child(rune::el().w_full().h(size::TOOLBAR + 1.0))
         .child(col().w_full().grow(1.0).center().child(ask))
-        // As tall as the band above, so the question sits at the window's centre.
-        .child(row().w_full().h(size::TOOLBAR + 1.0).justify_center().center_y().child(super::account::control(s, t)))
+        // As tall as the band above, so the question sits at the window's centre. A newer version
+        // is offered in its left corner, as the sidebar's foot offers it once there's a sidebar.
+        .child(
+            row()
+                .w_full()
+                .h(size::TOOLBAR + 1.0)
+                .px(12.0)
+                .center_y()
+                .child(corner(super::update::control(s, t)))
+                .child(row().grow(1.0).justify_center().child(super::account::control(s, t)))
+                .child(corner(None)),
+        )
+}
+
+/// One of the foot's corners, the same width either side so the account stays centred.
+fn corner(content: Option<El>) -> El {
+    let c = col().w(CORNER).justify_center();
+    match content {
+        Some(content) => c.child(content),
+        None => c,
+    }
 }

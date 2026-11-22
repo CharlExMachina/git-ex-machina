@@ -67,6 +67,14 @@ pub const SIGNIN_COPY: &str = "signin-copy";
 pub const SIGNIN_OPEN: &str = "signin-open";
 pub const SIGNIN_RETRY: &str = "signin-retry";
 pub const SIGN_OUT: &str = "sign-out";
+/// The sidebar's update button: Update to …, its download's progress, Restart to update.
+pub const UPDATE: &str = "update";
+/// Why the last download of an update failed, under its button.
+pub const UPDATE_ERROR: &str = "update-error";
+/// The restart sheet's release notes, and its two answers.
+pub const UPDATE_NOTES: &str = "update-notes";
+pub const UPDATE_LATER: &str = "update-later";
+pub const UPDATE_RESTART: &str = "update-restart";
 
 /// A repository's row in the sidebar.
 pub fn repo(name: &str) -> String {

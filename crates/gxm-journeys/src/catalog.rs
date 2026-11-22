@@ -15,6 +15,7 @@ pub fn all() -> Vec<Journey> {
         shape_history(),
         crate::review::review_pull_request(),
         crate::merge::merge_pull_request(),
+        crate::update::update_app(),
     ]
 }
 

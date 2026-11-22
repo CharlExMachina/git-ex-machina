@@ -16,6 +16,7 @@ pub mod sheet;
 pub mod state;
 pub mod theme;
 pub mod ui;
+pub mod update;
 pub mod view;
 
 use gxm_core::env::Env;
@@ -25,6 +26,8 @@ use rune_kit::shell;
 use crate::state::{App, Load};
 
 pub const TITLE: &str = "git-ex-machina";
+/// The window's application id, which is also the name of its desktop entry and icon.
+pub const APP_ID: &str = "git-ex-machina";
 /// The window's size, and the size headless renders and journeys use.
 pub const SIZE: (f32, f32) = (1552.0, 852.0);
 /// The traffic lights sit 12 in from the left, centred in the 48-point bar.
@@ -42,6 +45,7 @@ fn init() -> App {
 fn poll(s: &mut App, _t: f64, tx: &mut Tx) -> bool {
     if s.load == Load::NotStarted {
         s.load_workspace();
+        s.update_event(update::UpdateEvent::Boot, Some(tx));
         return true;
     }
     let landed = s.land_loads(tx);
@@ -52,7 +56,8 @@ fn poll(s: &mut App, _t: f64, tx: &mut Tx) -> bool {
     }
     let sheet = s.land_sheet(tx);
     let account = s.land_account(tx);
-    s.land() | landed | pulled | sheet | account
+    let update = s.land_update(tx);
+    s.land() | landed | pulled | sheet | account | update
 }
 
 fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
@@ -115,6 +120,7 @@ pub fn app() -> rune::App<App> {
             s.pulls.set_waker(&waker);
             s.sheet_jobs.set_waker(waker.clone());
             s.account_jobs.set_waker(waker.clone());
+            s.update_jobs.set_waker(waker.clone());
             s.loads.set_waker(waker);
         }),
         on_key: Some(on_key),

@@ -1,0 +1,81 @@
+name: release
+
+# A tag `vX.Y.Z` releases that version: the Linux AppImage is built, then published as a GitHub
+# release with `docs/releases/vX.Y.Z.md` as its notes. The app updates itself from the latest
+# release (crates/gxm-core/src/update.rs), looking for `git-ex-machina-<arch>.AppImage` and the
+# SHA-256 GitHub keeps for it, and shows those notes when it offers the restart.
+#
+# A pull request that changes how the AppImage is made builds it too, without publishing, so a
+# broken release is caught before a tag needs it.
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - xtask/src/appimage.rs
+      - assets/**
+      - docs/releases/**
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CI: "true"
+
+jobs:
+  appimage:
+    # The oldest Ubuntu GitHub hosts: the binary needs only the glibc it was built against
+    # (2.35), so the AppImage runs on any distribution since.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev
+      - name: Toolchain
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: linux-release
+          save-if: ${{ github.ref_type == 'tag' }}
+      - name: cargo xtask appimage
+        # On a tag, the tag must name the workspace's version and its notes must be written.
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            cargo xtask appimage --tag "$GITHUB_REF_NAME"
+          else
+            cargo xtask appimage
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: target/appimage/*.AppImage
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: appimage
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: appimage
+          path: dist
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.AppImage \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "git-ex-machina ${GITHUB_REF_NAME#v}" \
+            --notes-file "docs/releases/$GITHUB_REF_NAME.md" \
+            --verify-tag

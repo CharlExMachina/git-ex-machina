@@ -13,6 +13,7 @@ mod pull_parts;
 mod sheet;
 mod sidebar;
 mod toolbar;
+mod update;
 mod welcome;
 
 use rune::{Cx, El, row, text};

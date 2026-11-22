@@ -1,11 +1,13 @@
 //! A fake GitHub for a world: its GraphQL API, served on 127.0.0.1, holding pull requests,
 //! reviews, threads and checks that fixtures put there, and recording the reviews the app
-//! sends, so a journey can check what reached "GitHub".
+//! sends, so a journey can check what reached "GitHub". It also publishes git-ex-machina's own
+//! releases, for the app to update itself from ([`releases`]).
 //!
 //! Only the network edge is fake. The commits a pull request points at are real commits in the
 //! world's repositories, and the app reads its diff from git.
 
 mod graphql;
+mod releases;
 mod server;
 
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -138,6 +140,12 @@ struct State {
     sign_ins: std::collections::VecDeque<Answer>,
     /// The sign-in under way: its answer, and how many more asks see "pending".
     signing_in: Option<(Answer, u32)>,
+    /// git-ex-machina's releases, oldest first.
+    releases: Vec<releases::ReleaseData>,
+    /// How many of the coming downloads arrive damaged.
+    damaged: u32,
+    /// The API root, for the download links a release hands out.
+    url: String,
 }
 
 /// The world's GitHub. Stops when the world is dropped.
@@ -158,25 +166,35 @@ impl Hub {
             next_id: 1,
             sign_ins: std::collections::VecDeque::new(),
             signing_in: None,
+            releases: Vec::new(),
+            damaged: 0,
+            url: String::new(),
         }));
         let shared = Arc::clone(&state);
         let server = server::Server::start(move |req| {
-            // Signing in is the one thing done without a token.
+            // Signing in, and a public repository's releases, are done without a token.
             if req.method == "POST" && req.path.starts_with("/login/") {
                 let mut s = shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                return sign_in(&mut s, &req.path);
+                return sign_in(&mut s, &req.path).into();
+            }
+            if req.method == "GET" {
+                let mut s = shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                return releases::answer(&mut s, &req.path);
             }
             if req.authorization.as_deref() != Some(&format!("bearer {TOKEN}")) {
-                return (401, r#"{"message":"Bad credentials"}"#.to_owned());
+                return (401, r#"{"message":"Bad credentials"}"#.to_owned()).into();
             }
             if req.method != "POST" || req.path != "/graphql" {
-                return (404, r#"{"message":"Not Found"}"#.to_owned());
+                return (404, r#"{"message":"Not Found"}"#.to_owned()).into();
             }
             let mut s = shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            (200, graphql::answer(&mut s, &req.body).to_string())
+            (200, graphql::answer(&mut s, &req.body).to_string()).into()
         })
         .unwrap_or_else(|e| panic!("gxm-world couldn't start its GitHub: {e}"));
-        Hub { state, server }
+        let hub = Hub { state, server };
+        let url = hub.url();
+        hub.lock().url = url;
+        hub
     }
 
     /// The hub of `w`.
@@ -196,6 +214,21 @@ impl Hub {
     /// How the next sign-ins go, in order.
     pub fn answer_sign_ins(&self, answers: &[Answer]) {
         self.lock().sign_ins.extend(answers);
+    }
+
+    /// Publishes git-ex-machina `version` with these notes, carrying `appimage` as this
+    /// machine's AppImage.
+    pub fn publish(&self, version: &str, notes: &str, appimage: &str) {
+        self.lock().releases.push(releases::ReleaseData {
+            version: version.to_owned(),
+            notes: notes.to_owned(),
+            appimage: appimage.to_owned(),
+        });
+    }
+
+    /// The next `n` downloads of an AppImage arrive damaged: their bytes don't match the digest.
+    pub fn damage_downloads(&self, n: u32) {
+        self.lock().damaged = n;
     }
 
     /// Adds a pull request to `owner/name`.

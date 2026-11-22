@@ -1,5 +1,6 @@
 //! The repository sidebar: the traffic-light bar, the filter, pinned repositories, the rest,
-//! and, at the foot, the GitHub account and "Clone repository".
+//! and, at the foot, the GitHub account, "Clone repository" and, when there's a newer version,
+//! the update.
 
 use rune::{El, col, icon, row, text};
 
@@ -59,7 +60,7 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
         }
         list = list.child(rows);
     }
-    let footer = col()
+    let mut footer = col()
         .w_full()
         .padding(12.0)
         .gap(4.0)
@@ -74,6 +75,10 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
                     .on_press_tx(|s: &mut App, tx| s.sheet_event(Event::OpenClone, Some(tx))),
             ),
         );
+    // Lowest of all, in the window's corner: a newer version, when there is one.
+    if let Some(update) = super::update::control(s, t) {
+        footer = footer.child(update.mt(6.0));
+    }
     col().fill(t.chrome).border_sides([0.0, 1.0, 0.0, 0.0], t.line).border_layout().child(list).child(footer)
 }
 

@@ -68,3 +68,11 @@ icon!(
 );
 icon!(CHEVRON, "gxm-chevron", r#"<path d="M4.5 6.5 8 10l3.5-3.5"/>"#);
 icon!(CHEVRON_RIGHT, "gxm-chevron-right", r#"<path d="M6.5 4.5 10 8l-3.5 3.5"/>"#);
+// An arrow down into a tray: take an update.
+icon!(
+    DOWNLOAD,
+    "gxm-download",
+    r#"<path d="M8 2.5v7.5"/><path d="M5 7 8 10l3-3"/><path d="M2.5 10.5v1.5a1.5 1.5 0 0 0 1.5 1.5h8a1.5 1.5 0 0 0 1.5-1.5v-1.5"/>"#
+);
+// A circling arrow: restart into an update.
+icon!(RESTART, "gxm-restart", r#"<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.5 1.5v3h-3"/>"#);
