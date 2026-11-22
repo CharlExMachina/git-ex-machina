@@ -23,6 +23,8 @@ rune-kit = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4
 jiff = { version = "0.2", default-features = false, features = ["std", "alloc", "serde", "tz-system", "tzdb-bundle-platform", "tzdb-zoneinfo"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Checking a downloaded update against the digest GitHub keeps for it.
+sha2 = "0.10"
 tempfile = "3"
 # HTTPS to the providers' APIs: rustls on ring, verified by the platform's trust store (webpki-roots
 # is CDLA-licensed, which deny.toml doesn't allow).

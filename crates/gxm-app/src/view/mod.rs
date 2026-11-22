@@ -14,6 +14,7 @@ mod settings;
 mod sheet;
 mod sidebar;
 mod toolbar;
+mod update;
 mod welcome;
 
 use rune::{Cx, El, row, text};
@@ -50,6 +51,9 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
             None => inspector::inspector(s, &t),
         };
         shell = shell.child(right.w(INSPECTOR_W).h_full());
+    }
+    if s.add_menu && s.sidebar_open && !cockpit {
+        shell = shell.children(sidebar::add_menu(&t));
     }
     shell.children(settings::layer(s, &t)).children(sheet::layer(s, &t))
 }

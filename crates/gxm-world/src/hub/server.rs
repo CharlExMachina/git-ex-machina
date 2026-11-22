@@ -1,5 +1,6 @@
-//! A tiny HTTP/1.1 server on 127.0.0.1: one request per connection, JSON in and out. Enough to
-//! stand in for a provider's API at the network edge, and nothing more.
+//! A tiny HTTP/1.1 server on 127.0.0.1: one request per connection, JSON in and out (or a
+//! download, sent slowly enough to watch it arrive). Enough to stand in for a provider's API at
+//! the network edge, and nothing more.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -15,6 +16,24 @@ pub struct Request {
     pub body: String,
 }
 
+/// An answer: its status and body, and whether to send the body slowly, as a download over a
+/// real connection arrives, so its progress shows.
+pub struct Reply {
+    pub status: u16,
+    pub body: String,
+    pub paced: bool,
+}
+
+impl From<(u16, String)> for Reply {
+    fn from((status, body): (u16, String)) -> Reply {
+        Reply { status, body, paced: false }
+    }
+}
+
+/// How a paced body is sent: this many pieces, this far apart.
+const PIECES: usize = 12;
+const PACE: std::time::Duration = std::time::Duration::from_millis(120);
+
 /// Serves until dropped.
 pub struct Server {
     pub port: u16,
@@ -23,8 +42,8 @@ pub struct Server {
 }
 
 impl Server {
-    /// Listens on a free port and answers each request with `handle`'s status and JSON.
-    pub fn start(handle: impl Fn(Request) -> (u16, String) + Send + 'static) -> std::io::Result<Server> {
+    /// Listens on a free port and answers each request with `handle`'s reply.
+    pub fn start(handle: impl Fn(Request) -> Reply + Send + 'static) -> std::io::Result<Server> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         let port = listener.local_addr()?.port();
         let stop = Arc::new(AtomicBool::new(false));
@@ -55,7 +74,7 @@ impl Drop for Server {
     }
 }
 
-fn serve(stream: TcpStream, handle: &impl Fn(Request) -> (u16, String)) -> std::io::Result<()> {
+fn serve(stream: TcpStream, handle: &impl Fn(Request) -> Reply) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut line = String::new();
     reader.read_line(&mut line)?;
@@ -81,7 +100,7 @@ fn serve(stream: TcpStream, handle: &impl Fn(Request) -> (u16, String)) -> std::
     let mut body = vec![0; length];
     reader.read_exact(&mut body)?;
     let request = Request { method, path, authorization, body: String::from_utf8_lossy(&body).into_owned() };
-    let (status, json) = handle(request);
+    let Reply { status, body, paced } = handle(request);
     let reason = match status {
         200 => "OK",
         201 => "Created",
@@ -94,10 +113,19 @@ fn serve(stream: TcpStream, handle: &impl Fn(Request) -> (u16, String)) -> std::
         _ => "Error",
     };
     let mut stream = stream;
+    let kind = if paced { "application/octet-stream" } else { "application/json" };
     write!(
         stream,
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{json}",
-        json.len()
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
     )?;
+    let piece = if paced { body.len().div_ceil(PIECES).max(1) } else { body.len().max(1) };
+    for (i, chunk) in body.as_bytes().chunks(piece).enumerate() {
+        if i > 0 {
+            std::thread::sleep(PACE);
+        }
+        stream.write_all(chunk)?;
+        stream.flush()?;
+    }
     stream.flush()
 }

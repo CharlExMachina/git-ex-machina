@@ -11,7 +11,7 @@
 
 use std::path::{Path, PathBuf};
 
-use gxm_core::env::{Env, ForgeAccess};
+use gxm_core::env::{Env, ForgeAccess, Install};
 use gxm_core::git::{self, GitError};
 use gxm_core::workspace::Workspace;
 use jiff::{SignedDuration, Timestamp};
@@ -21,6 +21,10 @@ pub mod hub;
 
 /// "Now" in every world unless a test picks another time: Wednesday, Nov 11 2026, 15:00 UTC.
 pub const NOW: &str = "2026-11-11T15:00:00Z";
+
+/// The version of git-ex-machina every world plays, so an update a world publishes is newer
+/// whatever the build's own version.
+pub const VERSION: &str = "0.1.0";
 
 /// Hosts whose SSH URLs the world serves locally.
 pub const HOSTS: &[&str] = &["github.com", "gitlab.com", "bitbucket.org"];
@@ -74,6 +78,11 @@ impl World {
         let mut env = Env::sandbox(&home, now);
         let hub = hub::Hub::start(env.clone(), root.join("remotes"));
         env.forge = ForgeAccess { github_api: hub.url(), github_web: hub.url(), github_token: None };
+        // Installed as an AppImage in `~/Applications`, so it updates itself from the world's
+        // releases (there are none until a fixture publishes one). The file itself is there only
+        // once a fixture installs it.
+        env.install =
+            Install { version: VERSION.to_owned(), appimage: Some(home.join("Applications/git-ex-machina.AppImage")) };
         let ana = gxm_core::forge::model::User { login: hub::ANA.login.to_owned(), name: hub::ANA.name.to_owned() };
         gxm_core::auth::remember(&env, &ana, hub::TOKEN).unwrap_or_else(|e| fail("sign Ana in", e));
         let mut cfg = String::from(
@@ -102,6 +111,11 @@ impl World {
     /// Forgets Ana's sign-in, so the world starts signed out of GitHub.
     pub fn sign_out(&self) {
         gxm_core::auth::sign_out(&self.env).unwrap_or_else(|e| fail("sign Ana out", e));
+    }
+
+    /// The AppImage the world's app runs from, which an update replaces.
+    pub fn appimage(&self) -> PathBuf {
+        self.env.install.appimage.clone().unwrap_or_else(|| self.env.home.join("Applications/git-ex-machina.AppImage"))
     }
 
     /// The world's GitHub (see [`hub`]).

@@ -9,7 +9,10 @@ pub const REPO_FILTER: &str = "repo-filter";
 pub const COMMIT_SEARCH: &str = "commit-search";
 pub const SIDEBAR_TOGGLE: &str = "sidebar-toggle";
 pub const ADD_REPO: &str = "add-repo";
-pub const CLONE: &str = "clone";
+/// The menu the sidebar's + opens, and its two ways in: Add (from disk) and Clone.
+pub const ADD_MENU: &str = "add-menu";
+pub const ADD_MENU_ADD: &str = "add-menu-add";
+pub const ADD_MENU_CLONE: &str = "add-menu-clone";
 pub const FETCH: &str = "fetch";
 pub const PULL: &str = "pull";
 pub const PUSH: &str = "push";
@@ -67,6 +70,15 @@ pub const SIGNIN_COPY: &str = "signin-copy";
 pub const SIGNIN_OPEN: &str = "signin-open";
 pub const SIGNIN_RETRY: &str = "signin-retry";
 pub const SIGN_OUT: &str = "sign-out";
+/// The update's icon button at the sidebar's foot: check for one, download it, restart into
+/// it. Its label says which.
+pub const UPDATE: &str = "update";
+/// Why the last download of an update failed, under its button.
+pub const UPDATE_ERROR: &str = "update-error";
+/// The restart sheet's release notes, and its two answers.
+pub const UPDATE_NOTES: &str = "update-notes";
+pub const UPDATE_LATER: &str = "update-later";
+pub const UPDATE_RESTART: &str = "update-restart";
 
 /// A repository's row in the sidebar.
 pub fn repo(name: &str) -> String {

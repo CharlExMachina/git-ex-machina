@@ -3,6 +3,7 @@
 
 #![expect(clippy::print_stdout, clippy::print_stderr, reason = "xtask is a terminal tool")]
 
+mod appimage;
 mod journey;
 mod pr;
 mod verify;
@@ -30,6 +31,9 @@ Seeing it
   journey NAME [--video]    Run a journey headless, then render its marks (and a keycapped video) to target/proof/NAME/
   journeys                  List the journeys
 
+Releases
+  appimage [--tag vX.Y.Z]   Build the Linux AppImage into target/appimage/ and try it (--tag: check it names this version and has docs/releases/TAG.md)
+
 Pull requests
   pr open BODY.md [--base BRANCH] [--title TITLE]   Check the body's proof, then create or update this branch's PR with every file it references attached
   pr check BODY.md [--base REF]                     Check a PR body carries proof (what CI runs on every PR)
@@ -48,6 +52,7 @@ fn main() -> ExitCode {
         Some("journey") => journey::journey(rest),
         Some("journeys") => journey::list(),
         Some("pr") => pr::pr(rest),
+        Some("appimage") => appimage::appimage(rest),
         Some("help" | "--help" | "-h") | None => {
             print!("{USAGE}");
             Ok(())

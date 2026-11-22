@@ -1,12 +1,14 @@
 //! A fake GitHub for a world: its GraphQL API, served on 127.0.0.1, holding pull requests,
 //! reviews, threads and checks that fixtures put there, and recording the reviews the app
-//! sends, so a journey can check what reached "GitHub".
+//! sends, so a journey can check what reached "GitHub". It also publishes git-ex-machina's own
+//! releases, for the app to update itself from ([`releases`]).
 //!
 //! Only the network edge is fake. The commits a pull request points at are real commits in the
 //! world's repositories, and the app reads its diff from git.
 
 pub mod admin;
 mod graphql;
+mod releases;
 mod rest;
 mod rest_more;
 mod server;
@@ -149,6 +151,12 @@ struct State {
     settings: Vec<((String, String), admin::Settings)>,
     /// Repositories renamed: their old name and the new one.
     renamed: Vec<((String, String), String)>,
+    /// git-ex-machina's releases, oldest first.
+    releases: Vec<releases::ReleaseData>,
+    /// How many of the coming downloads arrive damaged.
+    damaged: u32,
+    /// The API root, for the download links a release hands out.
+    url: String,
 }
 
 /// The world's GitHub. Stops when the world is dropped.
@@ -171,26 +179,37 @@ impl Hub {
             signing_in: None,
             settings: Vec::new(),
             renamed: Vec::new(),
+            releases: Vec::new(),
+            damaged: 0,
+            url: String::new(),
         }));
         let shared = Arc::clone(&state);
         let server = server::Server::start(move |req| {
-            // Signing in is the one thing done without a token.
+            // Signing in, and a public repository's releases, are done without a token.
             if req.method == "POST" && req.path.starts_with("/login/") {
                 let mut s = shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                return sign_in(&mut s, &req.path, &req.body);
+                return sign_in(&mut s, &req.path, &req.body).into();
+            }
+            // Releases are public, as GitHub's are: no token.
+            if req.method == "GET" && (req.path.starts_with("/releases/") || req.path.ends_with("/releases/latest")) {
+                let mut s = shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                return releases::answer(&mut s, &req.path);
             }
             let token = req.authorization.as_deref().and_then(|a| a.strip_prefix("bearer "));
             if token != Some(TOKEN) && token != Some(TOKEN_DELETE) {
-                return (401, r#"{"message":"Bad credentials"}"#.to_owned());
+                return (401, r#"{"message":"Bad credentials"}"#.to_owned()).into();
             }
             let mut s = shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             if req.method == "POST" && req.path == "/graphql" {
-                return (200, graphql::answer(&mut s, &req.body).to_string());
+                return (200, graphql::answer(&mut s, &req.body).to_string()).into();
             }
-            rest::answer(&mut s, &req.method, &req.path, &req.body, token == Some(TOKEN_DELETE))
+            rest::answer(&mut s, &req.method, &req.path, &req.body, token == Some(TOKEN_DELETE)).into()
         })
         .unwrap_or_else(|e| panic!("gxm-world couldn't start its GitHub: {e}"));
-        Hub { state, server }
+        let hub = Hub { state, server };
+        let url = hub.url();
+        hub.lock().url = url;
+        hub
     }
 
     /// The hub of `w`.
@@ -210,6 +229,21 @@ impl Hub {
     /// How the next sign-ins go, in order.
     pub fn answer_sign_ins(&self, answers: &[Answer]) {
         self.lock().sign_ins.extend(answers);
+    }
+
+    /// Publishes git-ex-machina `version` with these notes, carrying `appimage` as this
+    /// machine's AppImage.
+    pub fn publish(&self, version: &str, notes: &str, appimage: &str) {
+        self.lock().releases.push(releases::ReleaseData {
+            version: version.to_owned(),
+            notes: notes.to_owned(),
+            appimage: appimage.to_owned(),
+        });
+    }
+
+    /// The next `n` downloads of an AppImage arrive damaged: their bytes don't match the digest.
+    pub fn damage_downloads(&self, n: u32) {
+        self.lock().damaged = n;
     }
 
     /// Adds a pull request to `owner/name`.

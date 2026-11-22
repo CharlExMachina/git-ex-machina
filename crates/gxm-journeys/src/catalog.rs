@@ -17,6 +17,7 @@ pub fn all() -> Vec<Journey> {
         crate::merge::merge_pull_request(),
         crate::settings::repository_settings(),
         crate::settings::settings_without_admin(),
+        crate::update::update_app(),
     ]
 }
 
@@ -96,7 +97,13 @@ pub fn get_started() -> Journey {
     .gone(keys::INSPECTOR)
     // Signing in can wait (cloning goes over SSH), so it's offered quietly, apart.
     .see_in(keys::ACCOUNT, "Sign in to GitHub")
+    // Updates, in the corner: none found on start, so it offers to check, as an icon.
+    .see_in(keys::UPDATE, "Check for updates")
+    .not_see("Check for updates")
     .mark("empty")
+    // Checking by hand says what it found: this is the latest.
+    .tap(keys::UPDATE)
+    .wait_for(keys::UPDATE, "Up to date: git-ex-machina 0.1.0 is the latest")
     // Add asks for a folder, starting where repositories usually live.
     .tap(keys::EMPTY_ADD)
     .see_in(keys::SHEET, "Add a repository")
@@ -160,8 +167,15 @@ pub fn get_started() -> Journey {
         if files == ["icon.png", "music/theme.ogg"] { Ok(()) } else { Err(format!("LFS has {files:?}")) }
     })
     .mark("first-commit")
-    // A repository that's already there is added as it is.
+    // The sidebar's foot is the account and updates; adding and cloning are the + above.
+    .not_see("Clone repository")
+    // + offers both ways in. A repository that's already there is added as it is.
     .tap(keys::ADD_REPO)
+    .see_in(keys::ADD_MENU, "Add repository")
+    .see_in(keys::ADD_MENU, "Clone repository")
+    .mark("add-menu")
+    .tap(keys::ADD_MENU_ADD)
+    .gone(keys::ADD_MENU)
     .see_in(keys::ADD_PATH, "~/code/")
     .type_text("field-notes")
     .tap(keys::ADD_CONFIRM)
@@ -177,7 +191,8 @@ pub fn get_started() -> Journey {
     })
     .mark("added")
     // Clone takes the URL as GitHub's page shows it, and clones over SSH beside the others.
-    .tap(keys::CLONE)
+    .tap(keys::ADD_REPO)
+    .tap(keys::ADD_MENU_CLONE)
     .see_in(keys::SHEET, "Clone a repository")
     .see_in(keys::CLONE_INTO, "~/code")
     .type_text("https://github.com/studio/site")
@@ -195,7 +210,8 @@ pub fn get_started() -> Journey {
     })
     .mark("cloned")
     // Cloning it again would land on the copy that's there, so it says so.
-    .tap(keys::CLONE)
+    .tap(keys::ADD_REPO)
+    .tap(keys::ADD_MENU_CLONE)
     .type_text("git@github.com:studio/site.git")
     .tap(keys::CLONE_CONFIRM)
     .wait_for(keys::SHEET_ERROR, "~/code/site already exists")

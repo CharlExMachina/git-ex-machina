@@ -1,5 +1,6 @@
-//! The repository sidebar: the traffic-light bar, the filter, pinned repositories, the rest,
-//! and, at the foot, the GitHub account and "Clone repository".
+//! The repository sidebar: the traffic-light bar (with + for adding or cloning a repository),
+//! the filter, pinned repositories, the rest, and, at the foot, the GitHub account beside the
+//! update's icon button.
 
 use rune::{El, col, icon, row, text};
 
@@ -31,8 +32,9 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
         .child(
             ui::button(t, Variant::Ghost, Some(&icons::PLUS), "", None)
                 .key(keys::ADD_REPO)
-                .help("Add a repository from this computer")
-                .on_press_tx(|s: &mut App, tx| s.sheet_event(Event::OpenAdd, Some(tx))),
+                .label("Add or clone a repository".to_owned())
+                .help("Add a repository from this computer, or clone one")
+                .on_press(|s: &mut App| s.add_menu = !s.add_menu),
         );
     let filter = row().pt(12.0).px(8.0).child(
         ui::search_field(
@@ -59,21 +61,18 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
         }
         list = list.child(rows);
     }
-    let footer = col()
-        .w_full()
-        .padding(12.0)
-        .gap(4.0)
-        .border_sides([1.0, 0.0, 0.0, 0.0], t.line)
-        .border_layout()
-        .child(row().child(super::account::control(s, t)))
-        .child(
-            row().child(
-                ui::button(t, Variant::Ghost, Some(&icons::PLUS), "Clone repository", None)
-                    .key(keys::CLONE)
-                    .help("Clone a repository over SSH")
-                    .on_press_tx(|s: &mut App, tx| s.sheet_event(Event::OpenClone, Some(tx))),
-            ),
-        );
+    // One row: who's signed in, and in the window's corner, updates.
+    let mut foot = row().w_full().gap(8.0).center_y().child(super::account::control(s, t)).child(rune::el().grow(1.0));
+    let mut under = None;
+    if let Some((update, below)) = super::update::control(s, t) {
+        foot = foot.child(update);
+        under = below;
+    }
+    let mut footer =
+        col().w_full().padding(12.0).gap(8.0).border_sides([1.0, 0.0, 0.0, 0.0], t.line).border_layout().child(foot);
+    if let Some(under) = under {
+        footer = footer.child(under);
+    }
     col().fill(t.chrome).border_sides([0.0, 1.0, 0.0, 0.0], t.line).border_layout().child(list).child(footer)
 }
 
@@ -127,4 +126,63 @@ fn repo_row(s: &App, i: usize, r: &RepoEntry, t: &Theme) -> El {
         row_el = row_el.hover(t.control_hover);
     }
     row_el
+}
+
+/// Where the + menu opens: under the sidebar's bar, inside the sidebar.
+const MENU_AT: (f32, f32) = (8.0, size::TOOLBAR - 2.0);
+const MENU_W: f32 = size::SIDEBAR - 16.0;
+
+/// The + menu over the window: Add (a repository on this computer) and Clone. Escape or a click
+/// outside closes it.
+pub fn add_menu(t: &Theme) -> Vec<El> {
+    let item = |glyph, title: &str, about: &str| {
+        row()
+            .w_full()
+            .px(8.0)
+            .py(6.0)
+            .gap(10.0)
+            .center_y()
+            .radius(size::RADIUS_SM)
+            .role("menuitem")
+            .hover(t.control_hover)
+            .child(icon(glyph, 14.0).color(t.ink_muted))
+            .child(
+                col()
+                    .grow(1.0)
+                    .min_w(0.0)
+                    .child(text(title.to_owned()).font(ty::BODY_STRONG).color(t.ink))
+                    .child(text(about.to_owned()).font(ty::CAPTION).color(t.ink_muted).truncate()),
+            )
+    };
+    let mut menu = col()
+        .key(keys::ADD_MENU)
+        .role("menu")
+        .label("Add or clone a repository".to_owned())
+        .absolute(MENU_AT.0, MENU_AT.1)
+        .w(MENU_W)
+        .padding(4.0)
+        .gap(2.0)
+        .radius(size::RADIUS_MD)
+        .fill(t.raised)
+        .modal(true, |s: &mut App| s.add_menu = false)
+        .child(
+            item(&icons::PLUS, "Add repository…", "One already on this computer").key(keys::ADD_MENU_ADD).on_press_tx(
+                |s: &mut App, tx| {
+                    s.add_menu = false;
+                    s.sheet_event(Event::OpenAdd, Some(tx));
+                },
+            ),
+        )
+        .child(
+            item(&icons::FETCH, "Clone repository…", "From its URL, over SSH").key(keys::ADD_MENU_CLONE).on_press_tx(
+                |s: &mut App, tx| {
+                    s.add_menu = false;
+                    s.sheet_event(Event::OpenClone, Some(tx));
+                },
+            ),
+        );
+    for sh in t.shadow_overlay() {
+        menu = menu.box_shadow(sh);
+    }
+    vec![rune::el().key("add-menu-layer").absolute(0.0, 0.0).w_full().h_full().child(menu)]
 }

@@ -19,4 +19,5 @@ pub mod repo;
 pub mod secrets;
 pub mod tidy;
 pub mod time;
+pub mod update;
 pub mod workspace;

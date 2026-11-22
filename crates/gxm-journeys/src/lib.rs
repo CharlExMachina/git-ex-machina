@@ -20,6 +20,7 @@ mod review;
 mod runner;
 mod settings;
 mod tree;
+mod update;
 
 pub use paint::{Pixels, SCALE};
 pub use proof::{proof_dir, write_proof};
@@ -74,6 +75,8 @@ pub enum Step {
     Gone(String),
     /// The app asked the system to open this URL (in a browser) since the last step.
     Opened(String),
+    /// The app asked to quit (as restarting into an update does) since the journey began.
+    Quits,
     /// Something about the world itself, such as what a remote now holds.
     World { what: &'static str, check: fn(&World) -> Result<(), String> },
 }
@@ -178,6 +181,11 @@ impl Journey {
         self.step(Step::World { what, check })
     }
 
+    /// The app has asked to quit.
+    pub fn quits(self) -> Journey {
+        self.step(Step::Quits)
+    }
+
     pub fn opened(self, url: impl Into<String>) -> Journey {
         self.step(Step::Opened(url.into()))
     }
@@ -203,6 +211,7 @@ impl std::fmt::Display for Step {
             Step::NotSee(t) => write!(f, "don't see {t:?}"),
             Step::Gone(k) => write!(f, "[{k}] is gone"),
             Step::Opened(u) => write!(f, "opened {u}"),
+            Step::Quits => write!(f, "the app quits"),
             Step::World { what, .. } => write!(f, "world: {what}"),
         }
     }
