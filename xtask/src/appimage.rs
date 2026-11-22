@@ -13,7 +13,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::{root, run, target};
+use crate::{release, root, run, target};
 
 /// The appimagetool and the runtime it prepends (the static type-2 runtime, which mounts with
 /// FUSE 3 and needs no libfuse2 on the person's machine), for each architecture we release.
@@ -46,13 +46,7 @@ const ID: &str = gxm_app::APP_ID;
 /// `appimage [--tag vX.Y.Z]`. With a tag (as the release workflow passes it), the tag must name
 /// this version and its notes must be written.
 pub fn appimage(args: &[String]) -> Result<(), String> {
-    let version = env!("CARGO_PKG_VERSION");
-    if let Some(tag) = flag(args, "--tag") {
-        if tag != format!("v{version}") {
-            return Err(format!("the tag {tag} isn't this version, v{version}: bump the workspace version first"));
-        }
-        notes(&tag)?;
-    }
+    let version = release::version(args)?;
     let arch = std::env::consts::ARCH;
     let tools = TOOLS.iter().find(|t| t.arch == arch).ok_or_else(|| format!("no AppImage tools pinned for {arch}"))?;
     let out = target().join("appimage");
@@ -185,21 +179,6 @@ fn try_it(file: &Path, dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// The release notes for `tag`, which the app shows when it offers the update.
-pub fn notes(tag: &str) -> Result<PathBuf, String> {
-    let path = root().join("docs/releases").join(format!("{tag}.md"));
-    let text = std::fs::read_to_string(&path).map_err(|e| {
-        format!(
-            "{}: {e}. Write the release's notes there: the app shows them when it offers the update",
-            path.display()
-        )
-    })?;
-    if text.trim().is_empty() {
-        return Err(format!("{} is empty", path.display()));
-    }
-    Ok(path)
-}
-
 /// Downloads a pinned file into `dir` (once) and checks its SHA-256.
 fn fetch(dir: &Path, (url, sha256): (&str, &str)) -> Result<PathBuf, String> {
     let name = url.rsplit('/').next().unwrap_or("tool");
@@ -237,10 +216,6 @@ fn executable(path: &Path) -> Result<(), String> {
 /// The value of `key` in a desktop entry.
 fn desktop_key<'a>(entry: &'a str, key: &str) -> Option<&'a str> {
     entry.lines().find_map(|l| l.strip_prefix(key)?.strip_prefix('=')).map(str::trim)
-}
-
-fn flag(args: &[String], name: &str) -> Option<String> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned()
 }
 
 #[cfg(test)]

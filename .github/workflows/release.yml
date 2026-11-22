@@ -1,14 +1,24 @@
 name: release
 
 # A tag `vX.Y.Z` releases that version, and nothing else releases anything. The Linux AppImage is
-# built and tried (`cargo xtask appimage`: it must extract, hold what it should, and start), then
-# published as a GitHub release with `docs/releases/vX.Y.Z.md` as its notes. If the build or the
-# try fails, nothing is published: fix it on main, then move the tag to the fix (or tag the next
-# patch version).
+# built and tried (`cargo xtask appimage`: it must extract, hold what it should, and start), and so
+# is the macOS disk image (`cargo xtask macapp`: signed with the Developer ID, notarized by Apple,
+# accepted by Gatekeeper, and it starts). Then both are published as a GitHub release with
+# `docs/releases/vX.Y.Z.md` as its notes. If either build or try fails, nothing is published: fix
+# it on main, then move the tag to the fix (or tag the next patch version).
 #
-# The app updates itself from the latest release (crates/gxm-core/src/update.rs), looking for
+# The AppImage updates itself from the latest release (crates/gxm-core/src/update.rs), looking for
 # `git-ex-machina-<arch>.AppImage` and the SHA-256 GitHub keeps for it, and shows those notes
 # when it offers the restart.
+#
+# Signing and notarizing need these repository secrets (Settings → Secrets and variables →
+# Actions):
+#   MACOS_CERT_P12        the "Developer ID Application" certificate and its private key, exported
+#                         from Keychain Access as a .p12, then base64-encoded
+#   MACOS_CERT_PASSWORD   the password the .p12 was exported with
+#   APPLE_API_KEY_P8      the App Store Connect API key (Developer access): the .p8 file's text
+#   APPLE_API_KEY_ID      that key's Key ID
+#   APPLE_API_ISSUER_ID   the Issuer ID above App Store Connect's keys table
 on:
   push:
     tags: ["v*"]
@@ -48,9 +58,59 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  macos:
+    # GitHub's macOS runners are Apple Silicon, so this is the aarch64 disk image. macOS 26's
+    # image has the Xcode whose actool compiles the Icon Composer icon (assets/macos/AppIcon.icon).
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: macos-release
+      - name: The signing certificate, in a keychain of its own
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          # codesign may use the key without a prompt nobody is there to answer.
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+      - name: The notarization key
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          printf '%s' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/notary.p8"
+          echo "GXM_NOTARY_KEY=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
+      - name: cargo xtask macapp
+        env:
+          GXM_NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          GXM_NOTARY_ISSUER: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: cargo xtask macapp --tag "$GITHUB_REF_NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macapp
+          path: target/macapp/*.dmg
+          if-no-files-found: error
+          retention-days: 30
+      - name: Forget the keys
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/notary.p8"
+
   publish:
-    # Only once the AppImage was built and tried.
-    needs: appimage
+    # Only once every platform's build was built and tried.
+    needs: [appimage, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -58,13 +118,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: appimage
           path: dist
+          merge-multiple: true
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/*.AppImage \
+          gh release create "$GITHUB_REF_NAME" dist/*.AppImage dist/*.dmg \
             --repo "$GITHUB_REPOSITORY" \
             --title "git-ex-machina ${GITHUB_REF_NAME#v}" \
             --notes-file "docs/releases/$GITHUB_REF_NAME.md" \
