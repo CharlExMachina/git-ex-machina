@@ -32,7 +32,7 @@ Seeing it
   journeys                  List the journeys
 
 Releases
-  appimage [--tag vX.Y.Z]   Build the Linux AppImage into target/appimage/ (--tag: check it names this version and has docs/releases/TAG.md)
+  appimage [--tag vX.Y.Z]   Build the Linux AppImage into target/appimage/ and try it (--tag: check it names this version and has docs/releases/TAG.md)
 
 Pull requests
   pr open BODY.md [--base BRANCH] [--title TITLE]   Check the body's proof, then create or update this branch's PR with every file it references attached

@@ -2,6 +2,9 @@
 //! `git-ex-machina-<arch>.AppImage`. The release workflow runs it on a tag, and the app's
 //! updater looks for exactly that name on GitHub's latest release (`gxm_core::update`).
 //!
+//! Before it's done, it tries the AppImage it made (see `try_it`), so the release workflow
+//! publishes nothing that doesn't start.
+//!
 //! The AppImage holds the release binary, its desktop entry and icons, and nothing else: the app
 //! draws with the system's Vulkan and Wayland/X11 libraries and runs the system's git, as a
 //! person's machine has them. It's built with a pinned appimagetool and runtime, each checked
@@ -78,6 +81,7 @@ pub fn appimage(args: &[String]) -> Result<(), String> {
         // CI's runners have no FUSE: appimagetool runs from its own extracted copy.
         .env("APPIMAGE_EXTRACT_AND_RUN", "1")
         .env("VERSION", version))?;
+    try_it(&file, &out.join("check"))?;
     println!("appimage: {} ({version})", file.display());
     Ok(())
 }
@@ -110,6 +114,65 @@ fn lay_out(dir: &Path, binary: &Path) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
     executable(&app_run)
+}
+
+/// Opens the AppImage as a person's machine would, so a broken one never gets released: what it
+/// holds is all there, and it starts. With no display to open a window on, a good AppImage
+/// mounts, its binary loads, and it stops only where it would open the window.
+fn try_it(file: &Path, dir: &Path) -> Result<(), String> {
+    println!("appimage: trying {}", file.display());
+    if dir.exists() {
+        std::fs::remove_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let extracted = Command::new(file)
+        .arg("--appimage-extract")
+        .current_dir(dir)
+        .output()
+        .map_err(|e| format!("{} --appimage-extract: {e}", file.display()))?;
+    if !extracted.status.success() {
+        return Err(format!("{} doesn't extract: {}", file.display(), String::from_utf8_lossy(&extracted.stderr)));
+    }
+    let root = dir.join("squashfs-root");
+    let wanted = [
+        "AppRun".to_owned(),
+        ".DirIcon".to_owned(),
+        format!("{APP}.desktop"),
+        format!("{APP}.png"),
+        format!("usr/bin/{APP}"),
+        format!("usr/share/icons/hicolor/256x256/apps/{APP}.png"),
+    ];
+    let missing: Vec<&String> = wanted.iter().filter(|w| !root.join(w).exists()).collect();
+    if !missing.is_empty() {
+        return Err(format!("the AppImage is missing {missing:?}"));
+    }
+    let mut child = Command::new(file)
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("WAYLAND_SOCKET")
+        .env_remove("DISPLAY")
+        // CI's runners have no FUSE; the runtime runs it from an extracted copy instead.
+        .env("APPIMAGE_EXTRACT_AND_RUN", "1")
+        .current_dir(dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("{}: {e}", file.display()))?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while child.try_wait().map_err(|e| e.to_string())?.is_none() {
+        if std::time::Instant::now() > deadline {
+            child.kill().ok();
+            return Err(format!("{} didn't stop within a minute with no display", file.display()));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let said = child.wait_with_output().map_err(|e| e.to_string())?;
+    let said = format!("{}{}", String::from_utf8_lossy(&said.stdout), String::from_utf8_lossy(&said.stderr));
+    // winit's words for "no display": everything before opening a window worked.
+    if !said.contains("neither WAYLAND_DISPLAY nor WAYLAND_SOCKET nor DISPLAY is set") {
+        return Err(format!("{} didn't start as far as opening its window. It said:\n{said}", file.display()));
+    }
+    println!("appimage: it extracts, holds what it should, and starts");
+    Ok(())
 }
 
 /// The release notes for `tag`, which the app shows when it offers the update.

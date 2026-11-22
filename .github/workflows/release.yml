@@ -1,21 +1,17 @@
 name: release
 
-# A tag `vX.Y.Z` releases that version: the Linux AppImage is built, then published as a GitHub
-# release with `docs/releases/vX.Y.Z.md` as its notes. The app updates itself from the latest
-# release (crates/gxm-core/src/update.rs), looking for `git-ex-machina-<arch>.AppImage` and the
-# SHA-256 GitHub keeps for it, and shows those notes when it offers the restart.
+# A tag `vX.Y.Z` releases that version, and nothing else releases anything. The Linux AppImage is
+# built and tried (`cargo xtask appimage`: it must extract, hold what it should, and start), then
+# published as a GitHub release with `docs/releases/vX.Y.Z.md` as its notes. If the build or the
+# try fails, nothing is published: fix it on main, then move the tag to the fix (or tag the next
+# patch version).
 #
-# A pull request that changes how the AppImage is made builds it too, without publishing, so a
-# broken release is caught before a tag needs it.
+# The app updates itself from the latest release (crates/gxm-core/src/update.rs), looking for
+# `git-ex-machina-<arch>.AppImage` and the SHA-256 GitHub keeps for it, and shows those notes
+# when it offers the restart.
 on:
   push:
     tags: ["v*"]
-  pull_request:
-    paths:
-      - .github/workflows/release.yml
-      - xtask/src/appimage.rs
-      - assets/**
-      - docs/releases/**
 
 concurrency:
   group: release-${{ github.ref }}
@@ -42,15 +38,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: linux-release
-          save-if: ${{ github.ref_type == 'tag' }}
       - name: cargo xtask appimage
-        # On a tag, the tag must name the workspace's version and its notes must be written.
-        run: |
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
-            cargo xtask appimage --tag "$GITHUB_REF_NAME"
-          else
-            cargo xtask appimage
-          fi
+        # The tag must name the workspace's version and its notes must be written.
+        run: cargo xtask appimage --tag "$GITHUB_REF_NAME"
       - uses: actions/upload-artifact@v4
         with:
           name: appimage
@@ -59,7 +49,7 @@ jobs:
           retention-days: 30
 
   publish:
-    if: github.ref_type == 'tag'
+    # Only once the AppImage was built and tried.
     needs: appimage
     runs-on: ubuntu-24.04
     permissions:
