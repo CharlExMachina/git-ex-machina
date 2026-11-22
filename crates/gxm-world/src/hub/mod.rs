@@ -9,7 +9,6 @@
 pub mod admin;
 mod graphql;
 mod notes;
-mod published;
 mod releases;
 mod rest;
 mod rest_more;
@@ -39,9 +38,6 @@ pub enum Answer {
     Approve,
     Decline,
 }
-
-/// A published release: its notes, and its files with their bytes.
-pub type Release = (String, Vec<(String, Vec<u8>)>);
 
 /// A person on the fake GitHub.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -163,10 +159,6 @@ struct State {
     damaged: u32,
     /// The API root, for the download links a release hands out.
     url: String,
-    /// The world's repositories' releases, as their workflows published them.
-    published: Vec<published::Published>,
-    /// How many times each tag's release was asked for before there was one.
-    release_asks: std::collections::HashMap<String, u32>,
 }
 
 /// The world's GitHub. Stops when the world is dropped.
@@ -192,8 +184,6 @@ impl Hub {
             releases: Vec::new(),
             damaged: 0,
             url: String::new(),
-            published: Vec::new(),
-            release_asks: std::collections::HashMap::new(),
         }));
         let shared = Arc::clone(&state);
         let server = server::Server::start(move |req| {
@@ -212,9 +202,6 @@ impl Hub {
                 return (401, r#"{"message":"Bad credentials"}"#.to_owned()).into();
             }
             let mut s = shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            if req.method == "POST" && req.path.starts_with("/uploads/") {
-                return published::upload(&mut s, &req.path, &req.bytes).into();
-            }
             if req.method == "POST" && req.path == "/graphql" {
                 return (200, graphql::answer(&mut s, &req.body).to_string()).into();
             }
@@ -268,14 +255,6 @@ impl Hub {
             Some((_, _, pulls)) => pulls.push(pull),
             None => s.repos.push((owner.to_owned(), name.to_owned(), vec![pull])),
         }
-    }
-
-    /// `tag`'s release on `owner/name`, once its workflow published it: its notes, and its
-    /// files with their bytes.
-    pub fn release(&self, owner: &str, name: &str, tag: &str) -> Option<Release> {
-        let s = self.lock();
-        let r = s.published.iter().find(|r| r.owner == owner && r.name == name && r.tag == tag)?;
-        Some((r.notes.clone(), r.assets.clone()))
     }
 
     /// Who's signed in to the world's GitHub from now on (Ana unless a fixture says otherwise).

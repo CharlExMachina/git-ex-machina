@@ -49,11 +49,18 @@ pub fn editor(s: &App, t: &Theme, tag: &TagSheet, caret: Option<[f32; 4]>) -> El
         .child(draft)
         .child(ui::segmented(t, vec![(write, !shown), (source, shown)]));
     let inside = if shown {
-        let markdown = n.markdown(tag.assets(s.tag_fields.name.text.trim()).as_deref());
-        col()
-            .w_full()
-            .padding(12.0)
-            .child(text(markdown).key(keys::NOTES_MARKDOWN).font(ty::MONO).color(t.ink_muted).wrap().selectable(true))
+        // The files' links name their commit, made as they're attached ("…" until it is).
+        let commit = n.files_commit.as_deref().unwrap_or("…");
+        let markdown = n.markdown(tag.files_base(commit).as_deref());
+        col().w_full().padding(12.0).child(
+            text(markdown)
+                .key(keys::NOTES_MARKDOWN)
+                .font(ty::MONO)
+                .color(t.ink_muted)
+                .wrap()
+                .wrap_anywhere()
+                .selectable(true),
+        )
     } else {
         parts(t, n, caret)
     };
@@ -62,7 +69,7 @@ pub fn editor(s: &App, t: &Theme, tag: &TagSheet, caret: Option<[f32; 4]>) -> El
         well = well.box_shadow(sh);
     }
     if !shown {
-        well = well.child(bar(t, n, tag.assets("").is_some())).child(el().w_full().h(1.0).fill(t.line));
+        well = well.child(bar(t, n, tag.files_base("").is_some())).child(el().w_full().h(1.0).fill(t.line));
     }
     well = well.child(
         col().w_full().max_h(size::NOTES_MAX_H).min_h(0.0).scroll(ScrollSpec { stick_bottom: false }).child(inside),
@@ -72,6 +79,7 @@ pub fn editor(s: &App, t: &Theme, tag: &TagSheet, caret: Option<[f32; 4]>) -> El
             for f in files {
                 s.tag_fields.notes.add_file(f.clone());
             }
+            s.tag_event(TagEvent::FilesChanged, None);
             refocus(s, tx);
         });
     if let Some(url) = &n.link {
@@ -134,12 +142,13 @@ fn bar(t: &Theme, n: &NotesEditor, attaches: bool) -> El {
             tx.open_file(options, |s: &mut App, picked, tx| {
                 if let Ok(Some(path)) = picked {
                     s.tag_fields.notes.add_file(path);
+                    s.tag_event(TagEvent::FilesChanged, None);
                 }
                 refocus(s, tx);
             });
         })
     } else {
-        attach.disabled(true).opacity(0.5).help("Files attach to the release on GitHub")
+        attach.disabled(true).opacity(0.5).help("Attached files go up to GitHub, with the tag")
     };
     row()
         .w_full()

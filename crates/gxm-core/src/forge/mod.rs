@@ -9,7 +9,6 @@
 //! cached on disk ([`cache`]), so a pull request opens at once and refreshes behind the scenes.
 
 pub mod admin;
-pub mod assets;
 pub mod cache;
 pub mod drafts;
 pub(crate) mod github;

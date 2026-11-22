@@ -23,13 +23,14 @@ pub struct Tagging {
 }
 
 /// A tag to make: on `commit`, annotated with `message` (the name when it's empty), and pushed
-/// when `push` says so.
+/// when `push` says so, with the commit of its notes' files (`crate::attach`) when it has one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewTag {
     pub name: String,
     pub commit: String,
     pub message: String,
     pub push: bool,
+    pub files: Option<String>,
 }
 
 /// Reads what tagging needs: the release trigger, the tags, the remote and the main branch.
@@ -170,7 +171,17 @@ pub fn create(env: &Env, repo: &Path, tag: &NewTag) -> Result<Option<String>, Gi
         return Ok(None);
     }
     let remote = crate::ops::publish_remote(env, repo)?;
-    git::run(env, repo, &["push", "--quiet", &remote, &format!("refs/tags/{}", tag.name)])?;
+    let mut refs = vec![format!("refs/tags/{}", tag.name)];
+    if let Some(files) = &tag.files {
+        // Kept here too, so the files stay in the repository the notes were written in.
+        let files_ref = crate::attach::files_ref(&tag.name);
+        git::run(env, repo, &["update-ref", &files_ref, files])?;
+        refs.push(files_ref);
+    }
+    // One push: the tag never goes up without its files.
+    let mut args = vec!["push", "--quiet", "--atomic", remote.as_str()];
+    args.extend(refs.iter().map(String::as_str));
+    git::run(env, repo, &args)?;
     Ok(Some(remote))
 }
 

@@ -47,8 +47,10 @@ pub struct NotesEditor {
     /// The link's address while one is being made.
     pub link: Option<TextEdit>,
     pub draft: Draft,
-    /// Files attached: each one's name as a release asset, and where it is.
+    /// Files attached: each one's name in the notes, and where it is.
     pub files: Vec<(String, std::path::PathBuf)>,
+    /// The commit holding them, once made: the notes link the files by it.
+    pub files_commit: Option<String>,
     /// The `@` or `#` popup, while one is open.
     pub pick: Option<Pick>,
     /// Where each part's field was last drawn, in window points: whether the caret is on its
@@ -72,6 +74,7 @@ impl NotesEditor {
             link: None,
             draft: Draft::Idle,
             files: Vec::new(),
+            files_commit: None,
             pick: None,
             rects: std::collections::HashMap::new(),
         };

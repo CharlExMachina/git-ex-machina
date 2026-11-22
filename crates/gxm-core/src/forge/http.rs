@@ -83,18 +83,6 @@ pub fn post_json(url: &str, token: &str, body: &Value) -> Result<Value, ForgeErr
     read(response)
 }
 
-/// POSTs `bytes` (a file, `content_type`) to `url` with a bearer token, as GitHub takes a
-/// release's asset, and reads the JSON answer.
-pub fn upload(url: &str, token: &str, content_type: &str, bytes: &[u8]) -> Result<Value, ForgeError> {
-    let response = download_agent()
-        .post(url)
-        .header("Authorization", format!("bearer {token}"))
-        .header("Accept", "application/vnd.github+json")
-        .content_type(content_type)
-        .send(bytes);
-    read(response)
-}
-
 /// POSTs `fields` as a form, as OAuth's sign-in endpoints take them, and reads the JSON answer.
 pub fn post_form(url: &str, fields: &[(&str, &str)]) -> Result<Value, ForgeError> {
     read(agent().post(url).header("Accept", "application/json").send_form(fields.iter().copied()))

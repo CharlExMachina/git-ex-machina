@@ -64,7 +64,7 @@ pub fn tag(env: &Env, args: &[String], out: &mut impl Write) -> Result<(), Strin
         }
     }
     let short = commit.get(..7).unwrap_or(&commit).to_owned();
-    let new = NewTag { name: name.clone(), commit, message, push };
+    let new = NewTag { name: name.clone(), commit, message, push, files: None };
     let pushed = tag::create(env, &path, &new).map_err(|e| e.to_string())?;
     w(out, format!("Tagged {name} on {short}"))?;
     if let Some(remote) = pushed {

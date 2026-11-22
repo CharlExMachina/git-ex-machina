@@ -1,7 +1,7 @@
 //! Tagging a release: beacon releases whatever version tag is pushed (its `release.yml` runs on
 //! `v*` tags, and takes the release's notes from the tag), so a commit on main is tagged as the
 //! next version, with notes drafted by GitHub and written as rich text, and pushed, which is the
-//! release, with a screenshot attached once the workflow publishes it. A commit off main, and not
+//! release, a screenshot in the notes going up with the tag. A commit off main, and not
 //! on origin yet, says what tagging it would mean. field-notes doesn't release from tags, so
 //! there it's a plain tag that stays on this computer.
 
@@ -30,7 +30,7 @@ jobs:
 ";
 
 /// What v0.1.2's tag says, as GitHub will show it: the summary and highlight written in the
-/// sheet, then GitHub's draft folded away.
+/// sheet, then GitHub's draft folded away. `{files}` is the commit the screenshot went up in.
 const NOTES: &str = "\
 **v0.1.2** · 2 changes from 2 contributors
 
@@ -43,7 +43,7 @@ Thanks to @kenji-mori for #5 and to everyone who tried the nightlies.
 - [x] Linux AppImage
 - [ ] macOS disk image
 
-![progress.png](https://github.com/studio/beacon/releases/download/v0.1.2/progress.png)
+![progress.png](https://github.com/studio/beacon/raw/{files}/progress.png)
 
 <details>
 <summary>Full changelog</summary>
@@ -247,32 +247,36 @@ pub fn tag_a_release() -> Journey {
     .see_in(keys::NOTES_MARKDOWN, "<summary>Full changelog</summary>")
     .see_in(keys::NOTES_MARKDOWN, "Thanks to @kenji-mori for #5")
     .see_in(keys::NOTES_MARKDOWN, "- [x] Linux AppImage")
-    .see_in(keys::NOTES_MARKDOWN, "![progress.png](https://github.com/studio/beacon/releases/download/v0.1.2/progress.png)")
+    .see_in(keys::NOTES_MARKDOWN, "![progress.png](https://github.com/studio/beacon/raw/")
     .mark("markdown")
     .tap(keys::NOTES_WRITE)
     .see_in(keys::NOTES, "Plus a steadier progress bar")
     // Tag a release tags the commit and pushes the tag: that push is the release.
     .tap(keys::TAG_CONFIRM)
-    .wait_for(keys::TOASTS, "Pushed v0.1.2 to origin · progress.png attaches when the release is published")
+    // The screenshot goes up in the same push as the tag: nothing waits for the workflow.
+    .wait_for(keys::TOASTS, "Pushed v0.1.2 and progress.png to origin")
     .gone(keys::SHEET)
     .see_in(keys::HISTORY, "v0.1.2")
-    // The workflow publishes the release; the screenshot goes up to it.
-    .wait_for(keys::TOASTS, "Attached progress.png to v0.1.2")
-    .world_check("v0.1.2's release has the notes, and the screenshot as it was", |w| {
-        let (notes, assets) = w.hub().release("studio", "beacon", "v0.1.2").ok_or("there's no v0.1.2 release")?;
-        let names: Vec<&str> = assets.iter().map(|(n, _)| n.as_str()).collect();
-        match assets.first() {
-            Some((name, bytes)) if name == "progress.png" && bytes == SCREENSHOT && notes == NOTES => Ok(()),
-            _ => Err(format!("assets {names:?}, notes:\n{notes}")),
-        }
+    .world_check("origin has the screenshot, as it was, under refs/release-files/v0.1.2", |w| {
+        let remote = w.remote("github.com", "studio", "beacon");
+        let files = w.git(&remote, &["ls-tree", "--name-only", "refs/release-files/v0.1.2"]);
+        let blob = w.git(&remote, &["rev-parse", "refs/release-files/v0.1.2:progress.png"]);
+        let bytes = std::process::Command::new("git")
+            .args(["-C", &remote.to_string_lossy(), "cat-file", "blob", blob.trim()])
+            .output()
+            .map_err(|e| e.to_string())?
+            .stdout;
+        if files.trim() == "progress.png" && bytes == SCREENSHOT { Ok(()) } else { Err(format!("files {files:?}, {} bytes", bytes.len())) }
     })
     .world_check("origin has v0.1.2 on Fix the --json flag, its message the notes as markdown", |w| {
         let remote = w.remote("github.com", "studio", "beacon");
         let kind = w.git(&remote, &["cat-file", "-t", "v0.1.2"]);
         let subject = w.git(&remote, &["log", "-1", "--format=%s", "v0.1.2^{commit}"]);
         let message = w.git(&remote, &["tag", "-l", "--format=%(contents)", "v0.1.2"]);
+        let files = w.git(&remote, &["rev-parse", "refs/release-files/v0.1.2"]);
+        let notes = NOTES.replace("{files}", files.trim());
         match (kind.trim(), subject.trim()) {
-            ("tag", "Fix the --json flag (#6)") if message == NOTES => Ok(()),
+            ("tag", "Fix the --json flag (#6)") if message == notes => Ok(()),
             other => Err(format!("origin's v0.1.2 (kind, commit) {other:?}, message:\n{message}")),
         }
     })
