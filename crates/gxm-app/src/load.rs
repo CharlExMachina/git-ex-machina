@@ -76,6 +76,8 @@ impl App {
     /// Starts reading the workspace: the saved list, then every repository's summary.
     pub fn load_workspace(&mut self) {
         self.load = Load::Loading;
+        // Who's signed in to GitHub, and the token that lets the pull requests in.
+        self.account_jobs.remembered.request(self.env.clone(), |env| gxm_core::auth::stored(&env));
         self.loads.workspace.request(self.env.clone(), |env| {
             let ws = Workspace::load(&env).map_err(|e| e.to_string())?;
             let summaries: Vec<Option<RepoSummary>> = std::thread::scope(|scope| {

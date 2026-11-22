@@ -4,6 +4,7 @@
 //! headless inside a fixture world; `cargo xtask journey <name>` records a journey to video
 //! (journeys live in `gxm-journeys`, so this crate never links test scaffolding).
 
+pub mod account;
 pub mod icons;
 pub mod keys;
 pub mod load;
@@ -50,7 +51,8 @@ fn poll(s: &mut App, _t: f64, tx: &mut Tx) -> bool {
         s.prefetch_pull();
     }
     let sheet = s.land_sheet(tx);
-    s.land() | landed | pulled | sheet
+    let account = s.land_account(tx);
+    s.land() | landed | pulled | sheet | account
 }
 
 fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
@@ -112,6 +114,7 @@ pub fn app() -> rune::App<App> {
             s.ops.set_waker(waker.clone());
             s.pulls.set_waker(&waker);
             s.sheet_jobs.set_waker(waker.clone());
+            s.account_jobs.set_waker(waker.clone());
             s.loads.set_waker(waker);
         }),
         on_key: Some(on_key),

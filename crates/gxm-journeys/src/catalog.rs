@@ -9,6 +9,7 @@ use crate::{Journey, Press};
 pub fn all() -> Vec<Journey> {
     vec![
         get_started(),
+        sign_in(),
         first_look(),
         push_and_pull(),
         shape_history(),
@@ -32,6 +33,8 @@ fn mockup_world(w: &World) {
 fn first_run_world(w: &World) {
     use gxm_world::fixtures::{ANA, KENJI, LEA};
     use gxm_world::{days, hours};
+    // A first run: not signed in to GitHub either.
+    w.sign_out();
     let notes = w.repo("github.com", "personal", "field-notes");
     notes.commit(ANA, w.ago(days(9)), "Start the field notes", &["README.md"]);
     notes.commit(KENJI, w.ago(days(6)), "Notes from the Lisbon workshop", &["2026/lisbon.md"]);
@@ -89,6 +92,8 @@ pub fn get_started() -> Journey {
     .gone(keys::REPO_FILTER)
     .gone(keys::FETCH)
     .gone(keys::INSPECTOR)
+    // Signing in can wait (cloning goes over SSH), so it's offered quietly, apart.
+    .see_in(keys::ACCOUNT, "Sign in to GitHub")
     .mark("empty")
     // Add asks for a folder, starting where repositories usually live.
     .tap(keys::EMPTY_ADD)
@@ -453,4 +458,72 @@ pub fn shape_history() -> Journey {
         if stashes.contains(gxm_core::ops::DISCARD_STASH) { Ok(()) } else { Err(format!("stash list: {stashes:?}")) }
     })
     .mark("discarded")
+}
+
+/// The demo workspace, signed out of GitHub. The first sign-in is approved on github.com, the
+/// second declined.
+fn signed_out_world(w: &World) {
+    gxm_world::fixtures::mockup(w);
+    w.sign_out();
+    w.hub().answer_sign_ins(&[gxm_world::hub::Answer::Approve, gxm_world::hub::Answer::Decline]);
+}
+
+/// Signing in to GitHub with a one-time code, seeing who's signed in, signing out, and a
+/// sign-in declined on github.com.
+pub fn sign_in() -> Journey {
+    Journey::new(
+        "sign_in",
+        "Someone signs in to GitHub with a one-time code, sees who they're signed in as, signs out, and sees a declined sign-in explained.",
+        signed_out_world,
+    )
+    .see_in(keys::ACCOUNT, "Sign in to GitHub")
+    // Signed out, a commit in a pull request can't say which one.
+    .tap_text("Evict avatars by last paint, not insert")
+    .tap(keys::TAB_OVERVIEW)
+    .see_in(keys::PULL_NOTICE, "Sign in to GitHub to see pull requests.")
+    .mark("signed-out")
+    // Sign in asks GitHub for a code and shows it, with where to enter it.
+    .tap(keys::ACCOUNT)
+    .wait_for(keys::SIGNIN_CODE, gxm_world::hub::USER_CODE)
+    .see_in(keys::SHEET, "Sign in to GitHub")
+    .see_in(keys::SHEET, "github.com/login/device")
+    .see_in(keys::SIGNIN_OPEN, "Approve on GitHub")
+    .tap(keys::SIGNIN_OPEN)
+    .opened("https://github.com/login/device")
+    .mark("code")
+    // Ana enters the code on github.com and approves; the app notices on its own.
+    .wait_for(keys::ACCOUNT, "ana-ruiz")
+    .gone(keys::SHEET)
+    // The pull requests come in with the sign-in.
+    .wait_for(keys::PULL_REQUEST_ROW, "#131")
+    .world_check("the token is in the sandbox's secrets, and the account beside it", |w| {
+        let token = gxm_core::auth::token(w.env()).map_err(|e| e.to_string())?;
+        let account = gxm_core::auth::signed_in(w.env());
+        match (token.as_deref(), account.map(|a| a.login)) {
+            (Some(gxm_world::hub::TOKEN), Some(login)) if login == "ana-ruiz" => Ok(()),
+            (token, login) => Err(format!("token {token:?}, account {login:?}")),
+        }
+    })
+    .mark("signed-in")
+    // The account control says who it is, and signs out.
+    .tap(keys::ACCOUNT)
+    .see_in(keys::SHEET, "Signed in to GitHub as ana-ruiz")
+    .see_in(keys::SHEET, "Ana Ruiz")
+    .mark("account")
+    .tap(keys::SIGN_OUT)
+    .wait_for(keys::ACCOUNT, "Sign in to GitHub")
+    .gone(keys::SHEET)
+    .wait_for(keys::PULL_NOTICE, "Sign in to GitHub to see pull requests.")
+    .world_check("the token is gone", |w| match gxm_core::auth::token(w.env()) {
+        Ok(None) => Ok(()),
+        other => Err(format!("the token is still there: {other:?}")),
+    })
+    // A sign-in declined on github.com says so, and offers another go.
+    .tap(keys::ACCOUNT)
+    .wait_for(keys::SHEET_ERROR, "declined")
+    .see_in(keys::SIGNIN_RETRY, "Try again")
+    .mark("declined")
+    .press(Press::ESCAPE)
+    .gone(keys::SHEET)
+    .see_in(keys::ACCOUNT, "Sign in to GitHub")
 }

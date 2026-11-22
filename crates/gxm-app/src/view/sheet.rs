@@ -1,4 +1,4 @@
-//! A sheet over the window (Add, Init, Clone): a 460-wide panel raised over a dimmed window, with a
+//! A sheet over the window (Add, Init, Clone, Account): a 460-wide panel raised over a dimmed window, with a
 //! title, what it's for, its fields, what went wrong, and Cancel beside the primary button.
 
 use rune::{El, col, el, row, text};
@@ -14,6 +14,10 @@ pub fn layer(s: &App, t: &Theme) -> Vec<El> {
     let f = &s.fields;
     let (title, about, fields, phase, confirm) = match &s.sheet {
         Sheet::Closed => return Vec::new(),
+        Sheet::Account(state) => {
+            let (title, about, body, footer) = super::account::sheet(t, state);
+            return panel(t, title, about, body, footer);
+        }
         Sheet::Add(phase) => (
             "Add a repository".to_owned(),
             "A repository already on this computer: its folder, or any folder inside it.".to_owned(),
@@ -63,6 +67,20 @@ pub fn layer(s: &App, t: &Theme) -> Vec<El> {
             ("Clone", keys::CLONE_CONFIRM),
         ),
     };
+    let mut body = fields;
+    if let Phase::Editing { error: Some(e) } = phase {
+        body.push(error(t, e));
+    }
+    panel(t, title, about, body, buttons(t, phase, confirm))
+}
+
+/// What went wrong, in the sheet.
+pub(super) fn error(t: &Theme, e: &str) -> El {
+    text(e.to_owned()).key(keys::SHEET_ERROR).font(ty::CAPTION).color(t.removed).wrap()
+}
+
+/// The panel and its scrim: title, what it's for, the body, and the buttons at the foot.
+fn panel(t: &Theme, title: String, about: String, body: Vec<El>, footer: El) -> Vec<El> {
     let mut panel = col()
         .key(keys::SHEET)
         .role("dialog")
@@ -80,14 +98,11 @@ pub fn layer(s: &App, t: &Theme) -> Vec<El> {
                 .child(text(title).font(ty::TITLE).color(t.ink))
                 .child(text(about).font(ty::CAPTION).color(t.ink_muted).wrap()),
         )
-        .children(fields);
+        .children(body);
     for sh in t.shadow_overlay() {
         panel = panel.box_shadow(sh);
     }
-    if let Phase::Editing { error: Some(e) } = phase {
-        panel = panel.child(text(e.clone()).key(keys::SHEET_ERROR).font(ty::CAPTION).color(t.removed).wrap());
-    }
-    panel = panel.child(buttons(t, phase, confirm));
+    panel = panel.child(footer);
     vec![
         el().key("sheet-scrim").absolute(0.0, 0.0).w_full().h_full().fill(t.scrim).a11y_hidden(),
         el().key("sheet-layer").absolute(0.0, 0.0).w_full().h_full().padding(16.0).center().child(panel),

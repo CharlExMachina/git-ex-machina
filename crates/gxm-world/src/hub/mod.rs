@@ -14,8 +14,20 @@ use jiff::Timestamp;
 
 use crate::World;
 
-/// The token the world's app presents; any other is refused with a 401.
+/// The token the world's app presents; any other is refused with a 401. A world starts signed
+/// in with it, kept as a sign-in keeps it; a sign-in through the hub hands it out again.
 pub const TOKEN: &str = "gxm-world-token";
+/// The one-time code every sign-in shows.
+pub const USER_CODE: &str = "WDJB-MJHT";
+/// How many times the app asks before the person has answered on "github.com".
+const POLLS_BEFORE_ANSWER: u32 = 2;
+
+/// What the person does on github.com with a sign-in code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Answer {
+    Approve,
+    Decline,
+}
 
 /// A person on the fake GitHub.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -122,6 +134,10 @@ struct State {
     viewer: Person,
     repos: Vec<(String, String, Vec<PullData>)>,
     next_id: u32,
+    /// How the coming sign-ins go, in order; any past these are approved.
+    sign_ins: std::collections::VecDeque<Answer>,
+    /// The sign-in under way: its answer, and how many more asks see "pending".
+    signing_in: Option<(Answer, u32)>,
 }
 
 /// The world's GitHub. Stops when the world is dropped.
@@ -133,9 +149,23 @@ pub struct Hub {
 impl Hub {
     pub(crate) fn start(env: gxm_core::env::Env, remotes: std::path::PathBuf) -> Hub {
         let now = env.now();
-        let state = Arc::new(Mutex::new(State { remotes, env, now, viewer: ANA, repos: Vec::new(), next_id: 1 }));
+        let state = Arc::new(Mutex::new(State {
+            remotes,
+            env,
+            now,
+            viewer: ANA,
+            repos: Vec::new(),
+            next_id: 1,
+            sign_ins: std::collections::VecDeque::new(),
+            signing_in: None,
+        }));
         let shared = Arc::clone(&state);
         let server = server::Server::start(move |req| {
+            // Signing in is the one thing done without a token.
+            if req.method == "POST" && req.path.starts_with("/login/") {
+                let mut s = shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                return sign_in(&mut s, &req.path);
+            }
             if req.authorization.as_deref() != Some(&format!("bearer {TOKEN}")) {
                 return (401, r#"{"message":"Bad credentials"}"#.to_owned());
             }
@@ -161,6 +191,11 @@ impl Hub {
 
     fn lock(&self) -> MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// How the next sign-ins go, in order.
+    pub fn answer_sign_ins(&self, answers: &[Answer]) {
+        self.lock().sign_ins.extend(answers);
     }
 
     /// Adds a pull request to `owner/name`.
@@ -193,5 +228,35 @@ impl Hub {
                 })
             })
             .collect()
+    }
+}
+
+/// The device flow's two endpoints: a code, then "pending" until the scripted answer.
+fn sign_in(s: &mut State, path: &str) -> (u16, String) {
+    match path {
+        "/login/device/code" => {
+            let answer = s.sign_ins.pop_front().unwrap_or(Answer::Approve);
+            s.signing_in = Some((answer, POLLS_BEFORE_ANSWER));
+            let body = format!(
+                r#"{{"device_code":"device-1","user_code":"{USER_CODE}","verification_uri":"https://github.com/login/device","expires_in":900,"interval":1}}"#
+            );
+            (200, body)
+        }
+        "/login/oauth/access_token" => match &mut s.signing_in {
+            Some((_, polls)) if *polls > 0 => {
+                *polls -= 1;
+                (200, r#"{"error":"authorization_pending"}"#.to_owned())
+            }
+            Some((Answer::Approve, _)) => {
+                s.signing_in = None;
+                (200, format!(r#"{{"access_token":"{TOKEN}","token_type":"bearer","scope":"repo,read:org"}}"#))
+            }
+            Some((Answer::Decline, _)) => {
+                s.signing_in = None;
+                (200, r#"{"error":"access_denied"}"#.to_owned())
+            }
+            None => (200, r#"{"error":"expired_token"}"#.to_owned()),
+        },
+        _ => (404, r#"{"message":"Not Found"}"#.to_owned()),
     }
 }

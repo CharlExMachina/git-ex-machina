@@ -27,6 +27,8 @@ tempfile = "3"
 # HTTPS to the providers' APIs: rustls on ring, verified by the platform's trust store (webpki-roots
 # is CDLA-licensed, which deny.toml doesn't allow).
 ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "_ring", "platform-verifier"] }
+# Tokens in the macOS Keychain and the Linux Secret Service (over zbus, no libdbus).
+keyring = { version = "3", default-features = false, features = ["apple-native", "async-secret-service", "async-io", "crypto-rust"] }
 
 [patch.crates-io]
 winit = { git = "https://github.com/anomalyco/rune", rev = "f3461ea8fc68a17b4ce653d49b19c9b6e65f0749" }

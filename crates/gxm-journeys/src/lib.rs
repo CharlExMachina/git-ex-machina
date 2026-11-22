@@ -71,6 +71,8 @@ pub enum Step {
     NotSee(String),
     /// No element has this key.
     Gone(String),
+    /// The app asked the system to open this URL (in a browser) since the last step.
+    Opened(String),
     /// Something about the world itself, such as what a remote now holds.
     World { what: &'static str, check: fn(&World) -> Result<(), String> },
 }
@@ -174,6 +176,10 @@ impl Journey {
     pub fn world_check(self, what: &'static str, check: fn(&World) -> Result<(), String>) -> Journey {
         self.step(Step::World { what, check })
     }
+
+    pub fn opened(self, url: impl Into<String>) -> Journey {
+        self.step(Step::Opened(url.into()))
+    }
 }
 
 impl std::fmt::Display for Step {
@@ -195,6 +201,7 @@ impl std::fmt::Display for Step {
             Step::SeeIn { key, text } => write!(f, "see {text:?} in [{key}]"),
             Step::NotSee(t) => write!(f, "don't see {t:?}"),
             Step::Gone(k) => write!(f, "[{k}] is gone"),
+            Step::Opened(u) => write!(f, "opened {u}"),
             Step::World { what, .. } => write!(f, "world: {what}"),
         }
     }
