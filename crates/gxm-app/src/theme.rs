@@ -15,6 +15,9 @@ pub struct Theme {
     /// Where a control's gradient ends: `linear-gradient(var(--control), var(--control-bottom))`.
     pub control_bottom: Color,
     pub control_hover: Color,
+    /// A control's fill while it's held down: a step below its resting fill, as hover is a step
+    /// above.
+    pub control_press: Color,
     pub well: Color,
     pub line: Color,
     /// `--edge`: a control's outline (the Viewed checkbox).
@@ -24,6 +27,8 @@ pub struct Theme {
     pub ink_faint: Color,
     pub accent: Color,
     pub accent_top: Color,
+    /// The primary button's fill while it's held down.
+    pub accent_press: Color,
     pub accent_soft: Color,
     pub on_accent: Color,
     pub focus: Color,
@@ -95,6 +100,7 @@ impl Theme {
             control: rgb(0x2a2725),
             control_bottom: rgb(0x2a2725),
             control_hover: rgb(0x322f2c),
+            control_press: rgb(0x1e1c1a),
             well: rgb(0x0e0d0c),
             line: rgb(0x2b2826),
             edge: rgb(0x7a736b),
@@ -103,6 +109,7 @@ impl Theme {
             ink_faint: rgb(0x7d766f),
             accent: rgb(0xe2ad62),
             accent_top: rgb(0xecbe7c),
+            accent_press: rgb(0xc4914a),
             accent_soft: rgb(0x3a2d1b),
             on_accent: rgb(0x1c1307),
             focus: rgb(0xeab872),
@@ -149,6 +156,7 @@ impl Theme {
             control: rgb(0xffffff),
             control_bottom: rgb(0xfaf8f5),
             control_hover: rgb(0xf3f0ec),
+            control_press: rgb(0xe9e5df),
             well: rgb(0xe6e2dc),
             line: rgb(0xe2ddd6),
             edge: rgb(0x877f75),
@@ -157,6 +165,7 @@ impl Theme {
             ink_faint: rgb(0x8a8278),
             accent: rgb(0x8f5a12),
             accent_top: rgb(0xb07628),
+            accent_press: rgb(0x75490c),
             accent_soft: rgb(0xf4e5ca),
             on_accent: rgb(0xffffff),
             focus: rgb(0x8a560f),

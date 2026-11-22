@@ -50,6 +50,10 @@ pub enum Step {
     Tap(String),
     /// Click the element showing this text.
     TapText(String),
+    /// Press the mouse button on the element with this key and keep it held, until [`Step::Up`].
+    Down(String),
+    /// Let go of the mouse button [`Step::Down`] pressed, where it was: that completes the click.
+    Up,
     /// Type into whatever has focus.
     Type(String),
     /// Press a key.
@@ -77,6 +81,8 @@ pub enum Step {
     Opened(String),
     /// The app asked to quit (as restarting into an update does) since the journey began.
     Quits,
+    /// The clipboard holds this text, put there since the last `Copied` looked.
+    Copied(String),
     /// Something about the world itself, such as what a remote now holds.
     World { what: &'static str, check: fn(&World) -> Result<(), String> },
 }
@@ -128,6 +134,16 @@ impl Journey {
 
     pub fn tap_text(self, text: impl Into<String>) -> Journey {
         self.step(Step::TapText(text.into()))
+    }
+
+    /// Presses the mouse button on the element keyed `key` and holds it, so a mark can show the
+    /// press; [`Journey::mouse_up`] lets go and completes the click.
+    pub fn mouse_down(self, key: impl Into<String>) -> Journey {
+        self.step(Step::Down(key.into()))
+    }
+
+    pub fn mouse_up(self) -> Journey {
+        self.step(Step::Up)
     }
 
     pub fn type_text(self, text: impl Into<String>) -> Journey {
@@ -189,6 +205,11 @@ impl Journey {
     pub fn opened(self, url: impl Into<String>) -> Journey {
         self.step(Step::Opened(url.into()))
     }
+
+    /// The app copied `text` to the clipboard since the last `copied` looked.
+    pub fn copied(self, text: impl Into<String>) -> Journey {
+        self.step(Step::Copied(text.into()))
+    }
 }
 
 impl std::fmt::Display for Step {
@@ -196,6 +217,8 @@ impl std::fmt::Display for Step {
         match self {
             Step::Tap(k) => write!(f, "tap [{k}]"),
             Step::TapText(t) => write!(f, "tap {t:?}"),
+            Step::Down(k) => write!(f, "press the mouse down on [{k}]"),
+            Step::Up => write!(f, "let go of the mouse"),
             Step::Type(t) => write!(f, "type {t:?}"),
             Step::Press(p) => {
                 write!(f, "press {}{}{}", if p.cmd { "⌘" } else { "" }, if p.shift { "⇧" } else { "" }, p.name)
@@ -212,6 +235,7 @@ impl std::fmt::Display for Step {
             Step::Gone(k) => write!(f, "[{k}] is gone"),
             Step::Opened(u) => write!(f, "opened {u}"),
             Step::Quits => write!(f, "the app quits"),
+            Step::Copied(t) => write!(f, "copied {t:?}"),
             Step::World { what, .. } => write!(f, "world: {what}"),
         }
     }

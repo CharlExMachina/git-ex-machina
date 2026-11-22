@@ -27,8 +27,9 @@ pub const TOKEN: &str = "gxm-world-token";
 pub const TOKEN_DELETE: &str = "gxm-world-token-delete";
 /// The one-time code every sign-in shows.
 pub const USER_CODE: &str = "WDJB-MJHT";
-/// How many times the app asks before the person has answered on "github.com".
-const POLLS_BEFORE_ANSWER: u32 = 2;
+/// How many times the app asks (a second apart) before the person has answered on
+/// "github.com": long enough for a replay, in real time, to copy the code while it shows.
+const POLLS_BEFORE_ANSWER: u32 = 6;
 
 /// What the person does on github.com with a sign-in code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

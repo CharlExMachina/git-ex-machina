@@ -85,10 +85,15 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
     let mut rt = gxm_app::app().headless_runtime(gxm_app::SIZE, env);
     rt.set_font_smoothing(gxm_app::FONT_SMOOTHING);
     rt.state = App::new(world.env().clone());
+    // The person's own clipboard stays theirs: copies land here, for `Copied` to read.
+    let clipboard = rune::clipboard::memory();
+    rt.use_clipboard(&clipboard);
     let painter = crate::paint::Painter::new(&mut rt);
     let mut d = Driver {
         rt,
         painter,
+        clipboard,
+        held: None,
         opened: Vec::new(),
         now: 0.0,
         animating: true,
@@ -124,6 +129,24 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                 let (x, y) = d.find_text(text).ok_or_else(|| fail(format!("nothing on screen shows {text:?}"), &d))?;
                 d.tap(x, y);
                 d.events.push(json!({ "t": t, "type": "tap", "x": x, "y": y }));
+                d.advance_to(t + AFTER_TAP);
+            }
+            Step::Down(key) => {
+                if !d.wholly_visible(key) {
+                    d.scroll_into_view(key).map_err(|why| fail(why, &d))?;
+                }
+                let t = d.now;
+                let (x, y) = d.rt.find(key).ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
+                d.rt.pointer_move(x, y);
+                d.rt.pointer_down(x, y);
+                d.held = Some((x, y));
+                d.events.push(json!({ "t": t, "type": "down", "key": key }));
+                d.advance_to(t + AFTER_PRESS);
+            }
+            Step::Up => {
+                let (x, y) = d.held.take().ok_or_else(|| fail("no mouse button is held".to_owned(), &d))?;
+                d.rt.pointer_up(x, y);
+                d.events.push(json!({ "t": t, "type": "up" }));
                 d.advance_to(t + AFTER_TAP);
             }
             Step::Type(text) => {
@@ -214,6 +237,14 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                     return Err(fail(format!("the app asked to open {asked:?}"), &d));
                 }
             }
+            Step::Copied(text) => {
+                let held = d.clipboard.text().map(|t| t.to_string());
+                if held.as_deref() != Some(text.as_str()) {
+                    return Err(fail(format!("the clipboard holds {held:?}"), &d));
+                }
+                // Cleared, so the next `Copied` sees only a copy made after this one.
+                d.clipboard.set_text("");
+            }
             Step::Quits => {
                 if d.rt.shell_request != Some(rune::Shell::Quit) {
                     return Err(fail(format!("the app asked the window for {:?}", d.rt.shell_request), &d));
@@ -230,6 +261,9 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
 struct Driver {
     rt: Runtime<App>,
     painter: crate::paint::Painter,
+    clipboard: rune::clipboard::MemoryClipboard,
+    /// Where a [`Step::Down`] pressed the mouse button, until [`Step::Up`] lets go.
+    held: Option<(f32, f32)>,
     /// URLs the app asked to open, since the last `Opened` step looked.
     opened: Vec<String>,
     now: f64,

@@ -16,6 +16,7 @@ pub mod settings;
 pub mod sheet;
 pub mod state;
 pub mod theme;
+pub mod toast;
 pub mod ui;
 pub mod update;
 pub mod view;
@@ -45,7 +46,7 @@ fn init() -> App {
 
 /// Nothing is read before the first frame; the workspace starts loading on the first poll, off
 /// the UI thread, and every read lands here.
-fn poll(s: &mut App, _t: f64, tx: &mut Tx) -> bool {
+fn poll(s: &mut App, t: f64, tx: &mut Tx) -> bool {
     if s.load == Load::NotStarted {
         s.load_workspace();
         s.update_event(update::UpdateEvent::Boot, Some(tx));
@@ -61,7 +62,8 @@ fn poll(s: &mut App, _t: f64, tx: &mut Tx) -> bool {
     let account = s.land_account(tx);
     let update = s.land_update(tx);
     let settings = s.land_settings();
-    s.land() | landed | pulled | sheet | account | update | settings
+    let toasts = s.toasts.tick(t, tx);
+    s.land() | landed | pulled | sheet | account | update | settings | toasts
 }
 
 fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {

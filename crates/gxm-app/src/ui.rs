@@ -6,6 +6,9 @@ use rune::{Color, El, Icon, TextEdit, icon, row, text, text_input};
 use crate::icons;
 use crate::theme::{Theme, size, ty};
 
+/// How small a button draws while it's held down, so a click shows as it happens.
+const PRESS_SCALE: f32 = 0.96;
+
 /// `.gu-btn` variants.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Variant {
@@ -65,12 +68,13 @@ fn build(
     let mut b = row().h(24.0).gap(6.0).center_y().radius(size::RADIUS_SM);
     b = if only_icon { b.w(24.0).center() } else { b.px(8.0) };
     b = match variant {
-        Variant::Primary => b.fill(t.accent).gradient(t.accent_top, t.accent).hover(t.accent_top),
+        Variant::Primary => lit(b, t.accent_top, t.accent).hover(t.accent_top).press(t.accent_press),
         Variant::Secondary | Variant::Danger => {
-            b.fill(t.control).gradient(t.control, t.control_bottom).hover(t.control_hover)
+            lit(b, t.control, t.control_bottom).hover(t.control_hover).press(t.control_press)
         }
-        Variant::Ghost => b.hover(t.control_hover),
+        Variant::Ghost => b.hover(t.control_hover).press(t.control_press),
     };
+    b = b.press_scale(PRESS_SCALE);
     if pressed {
         b = b.mt(0.5);
         for s in t.shadow_pressed() {
@@ -102,6 +106,13 @@ fn build(
         b = b.child(pill.child(text(n).font(ty::MONO_11).color(fg)));
     }
     b.role("button")
+}
+
+/// `linear-gradient(top, bottom)` as `bottom` lit by `top` fading out downwards. It looks the
+/// same at rest, but Rune paints a gradient over the hover and press tints, which tint only the
+/// fill: an opaque gradient would hide them.
+fn lit(b: El, top: Color, bottom: Color) -> El {
+    b.fill(bottom).gradient(top, top.alpha(0.0))
 }
 
 /// `.gu-kbd`: mono 11/16, 5 a side, radius 4, on a raised control.
