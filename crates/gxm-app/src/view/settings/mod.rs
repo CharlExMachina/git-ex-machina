@@ -6,6 +6,7 @@ mod access;
 mod automation;
 mod branches;
 mod local;
+mod pages;
 mod parts;
 mod repo;
 mod security;
@@ -197,7 +198,7 @@ fn section(s: &App, t: &Theme) -> Vec<El> {
         Section::Secrets => automation::secrets(s, t),
         Section::Environments => automation::environments(s, t),
         Section::Webhooks => automation::webhooks(s, t),
-        Section::Pages => automation::pages(s, t),
+        Section::Pages => pages::pages(s, t),
         Section::CodeSecurity => security::code_security(s, t),
         Section::DeployKeys => security::deploy_keys(s, t),
         Section::Autolinks => security::autolinks(s, t),
