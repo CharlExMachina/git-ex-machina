@@ -38,7 +38,10 @@ const TOOLS: &[Tools] = &[Tools {
 /// The icon sizes in `assets/icon/`, each installed into the hicolor theme.
 const ICON_SIZES: &[u32] = &[16, 32, 48, 64, 128, 256, 512, 1024];
 
-const APP: &str = "git-ex-machina";
+/// The binary, which also names the AppImage the updater looks for.
+const BIN: &str = "git-ex-machina";
+/// The window's id, which names its desktop entry and icon.
+const ID: &str = gxm_app::APP_ID;
 
 /// `appimage [--tag vX.Y.Z]`. With a tag (as the release workflow passes it), the tag must name
 /// this version and its notes must be written.
@@ -60,16 +63,16 @@ pub fn appimage(args: &[String]) -> Result<(), String> {
 
     println!("appimage: building the release binary");
     run(Command::new("cargo")
-        .args(["build", "--release", "--quiet", "-p", "gxm-app", "--bin", APP])
+        .args(["build", "--release", "--quiet", "-p", "gxm-app", "--bin", BIN])
         .current_dir(root()))?;
 
     let dir = out.join("AppDir");
     if dir.exists() {
         std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
     }
-    lay_out(&dir, &target().join("release").join(APP))?;
+    lay_out(&dir, &target().join("release").join(BIN))?;
 
-    let file = out.join(format!("{APP}-{arch}.AppImage"));
+    let file = out.join(format!("{BIN}-{arch}.AppImage"));
     println!("appimage: packing {}", file.display());
     run(Command::new(&appimagetool)
         .arg("--no-appstream")
@@ -96,21 +99,21 @@ fn lay_out(dir: &Path, binary: &Path) -> Result<(), String> {
         }
         std::fs::copy(from, to).map(drop).map_err(|e| format!("copy {} to {}: {e}", from.display(), to.display()))
     };
-    copy(binary, &dir.join("usr/bin").join(APP))?;
-    let desktop = assets.join(format!("linux/{APP}.desktop"));
-    copy(&desktop, &dir.join(format!("{APP}.desktop")))?;
-    copy(&desktop, &dir.join(format!("usr/share/applications/{APP}.desktop")))?;
+    copy(binary, &dir.join("usr/bin").join(BIN))?;
+    let desktop = assets.join(format!("linux/{ID}.desktop"));
+    copy(&desktop, &dir.join(format!("{ID}.desktop")))?;
+    copy(&desktop, &dir.join(format!("usr/share/applications/{ID}.desktop")))?;
     for size in ICON_SIZES {
-        let icon = assets.join(format!("icon/{APP}-{size}.png"));
-        copy(&icon, &dir.join(format!("usr/share/icons/hicolor/{size}x{size}/apps/{APP}.png")))?;
+        let icon = assets.join(format!("icon/{BIN}-{size}.png"));
+        copy(&icon, &dir.join(format!("usr/share/icons/hicolor/{size}x{size}/apps/{ID}.png")))?;
     }
-    let icon = assets.join(format!("icon/{APP}-256.png"));
-    copy(&icon, &dir.join(format!("{APP}.png")))?;
+    let icon = assets.join(format!("icon/{BIN}-256.png"));
+    copy(&icon, &dir.join(format!("{ID}.png")))?;
     copy(&icon, &dir.join(".DirIcon"))?;
     let app_run = dir.join("AppRun");
     std::fs::write(
         &app_run,
-        format!("#!/bin/sh\nHERE=\"$(dirname \"$(readlink -f \"$0\")\")\"\nexec \"$HERE/usr/bin/{APP}\" \"$@\"\n"),
+        format!("#!/bin/sh\nHERE=\"$(dirname \"$(readlink -f \"$0\")\")\"\nexec \"$HERE/usr/bin/{BIN}\" \"$@\"\n"),
     )
     .map_err(|e| e.to_string())?;
     executable(&app_run)
@@ -137,14 +140,21 @@ fn try_it(file: &Path, dir: &Path) -> Result<(), String> {
     let wanted = [
         "AppRun".to_owned(),
         ".DirIcon".to_owned(),
-        format!("{APP}.desktop"),
-        format!("{APP}.png"),
-        format!("usr/bin/{APP}"),
-        format!("usr/share/icons/hicolor/256x256/apps/{APP}.png"),
+        format!("{ID}.desktop"),
+        format!("{ID}.png"),
+        format!("usr/bin/{BIN}"),
+        format!("usr/share/icons/hicolor/256x256/apps/{ID}.png"),
     ];
     let missing: Vec<&String> = wanted.iter().filter(|w| !root.join(w).exists()).collect();
     if !missing.is_empty() {
         return Err(format!("the AppImage is missing {missing:?}"));
+    }
+    // The desktop matches the window to this entry by its id, and finds the icon by it.
+    let entry = std::fs::read_to_string(root.join(format!("{ID}.desktop"))).map_err(|e| e.to_string())?;
+    for key in ["Icon", "StartupWMClass"] {
+        if desktop_key(&entry, key) != Some(ID) {
+            return Err(format!("the AppImage's desktop entry has {key}={:?}, not {ID}", desktop_key(&entry, key)));
+        }
     }
     let mut child = Command::new(file)
         .env_remove("WAYLAND_DISPLAY")
@@ -224,6 +234,29 @@ fn executable(path: &Path) -> Result<(), String> {
         .map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// The value of `key` in a desktop entry.
+fn desktop_key<'a>(entry: &'a str, key: &str) -> Option<&'a str> {
+    entry.lines().find_map(|l| l.strip_prefix(key)?.strip_prefix('=')).map(str::trim)
+}
+
 fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// KDE looks an icon name up in the person's theme before hicolor, and inside the theme it
+    /// shortens a name it can't find at each dash: `git-ex-machina` became the theme's `git`
+    /// icon. An id with no dash finds ours.
+    #[test]
+    fn the_desktop_entry_names_the_window_and_its_icon_by_an_id_with_no_dash() {
+        assert!(!ID.contains('-'), "{ID} has a dash, so icon themes shorten it to one of theirs");
+        let entry = std::fs::read_to_string(root().join(format!("assets/linux/{ID}.desktop")))
+            .unwrap_or_else(|e| panic!("assets/linux/{ID}.desktop: {e}"));
+        assert_eq!(desktop_key(&entry, "Icon"), Some(ID));
+        assert_eq!(desktop_key(&entry, "StartupWMClass"), Some(ID));
+        assert_eq!(desktop_key(&entry, "Exec"), Some(format!("{BIN} %U").as_str()));
+    }
 }
