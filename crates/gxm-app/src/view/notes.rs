@@ -88,7 +88,7 @@ pub fn editor(s: &App, t: &Theme, tag: &TagSheet, caret: Option<[f32; 4]>) -> El
 /// Each lights while the caret is in what it makes, and none takes focus from the notes.
 fn bar(t: &Theme, n: &NotesEditor, attaches: bool) -> El {
     let (kind, block) = n.current_kind();
-    let task = n.on_task();
+    let task = matches!(kind, Kind::Task(_));
     let tool = |glyph: &'static Icon, label: &str, key: &str, on: bool, act: fn(&mut NotesEditor)| {
         ui::icon_button(t, Variant::Ghost, glyph, Some(if on { t.accent } else { t.ink_muted }), label, on)
             .key(key)
@@ -174,7 +174,7 @@ fn bar(t: &Theme, n: &NotesEditor, attaches: bool) -> El {
         .child(tool(&icons::NUMBERS, "Numbered list", keys::NOTES_NUMBERS, matches!(block, Block::Numbered(_)), |n| {
             n.toggle_block(Block::Numbered(0));
         }))
-        .child(tool(&icons::TASKS, "Task list (again checks it off)", keys::NOTES_TASKS, task, |n| n.toggle_task()))
+        .child(tool(&icons::TASKS, "Task list", keys::NOTES_TASKS, task, |n| n.toggle_task()))
         .child(tool(&icons::QUOTE, "Quote", keys::NOTES_QUOTE, block == Block::Quote, |n| n.toggle_block(Block::Quote)))
         .child(tool(&icons::CODE_BLOCK, "Code block", keys::NOTES_CODE_BLOCK, block == Block::Code, |n| {
             n.toggle_block(Block::Code);
@@ -202,11 +202,9 @@ fn chip_style(t: Theme) -> impl Fn(&str) -> PillStyle + 'static {
     move |id| match Chip::of_id(id) {
         Some(Chip::Mention(_)) => PillStyle::new().bg(t.accent_soft).fg(t.accent).icon(&icons::PERSON),
         Some(Chip::Pull(_)) => PillStyle::new().bg(t.accent_soft).fg(t.accent).icon(&icons::PULL_REQUEST),
-        Some(Chip::Task(true)) => PillStyle::new().bg(rune::Color::TRANSPARENT).fg(t.accent).icon(&icons::BOX_CHECKED),
-        Some(Chip::Task(false)) => PillStyle::new().bg(rune::Color::TRANSPARENT).fg(t.ink_faint).icon(&icons::BOX),
         Some(Chip::File(name)) if Chip::is_image(&name) => PillStyle::new().bg(t.control).fg(t.ink).icon(&icons::IMAGE),
         Some(Chip::File(_)) => PillStyle::new().bg(t.control).fg(t.ink).icon(&icons::FILE),
-        None => PillStyle::new(),
+        Some(Chip::Task(_)) | None => PillStyle::new(),
     }
 }
 
@@ -223,6 +221,7 @@ fn parts(t: &Theme, n: &NotesEditor, caret: Option<[f32; 4]>) -> El {
     // The parts under the open collapsed section, drawn together on one rule.
     let mut folded: Option<Vec<El>> = None;
     let empty = n.is_empty();
+    let mut tasks = 0;
     for (i, p) in n.parts.iter().enumerate() {
         let id = p.id;
         let font = match p.kind {
@@ -230,7 +229,7 @@ fn parts(t: &Theme, n: &NotesEditor, caret: Option<[f32; 4]>) -> El {
             Kind::Heading(2) => ty::NOTES_H2,
             Kind::Heading(_) => ty::NOTES_H3,
             Kind::Fold => ty::BODY_STRONG,
-            Kind::Body => ty::BODY,
+            Kind::Task(_) | Kind::Body => ty::BODY,
         };
         let edges = caret.filter(|_| p.edit.focused).zip(n.rects.get(&id)).map(|(c, r)| rows(c, *r));
         let mut field = text_input(&p.edit, font)
@@ -238,6 +237,7 @@ fn parts(t: &Theme, n: &NotesEditor, caret: Option<[f32; 4]>) -> El {
             .label(match p.kind {
                 Kind::Heading(_) => "Heading".to_owned(),
                 Kind::Fold => "Collapsed section's summary".to_owned(),
+                Kind::Task(_) => "Task".to_owned(),
                 Kind::Body => "Release notes".to_owned(),
             })
             .on_edit(move |s: &mut App| match s.tag_fields.notes.parts.iter().position(|p| p.id == id) {
@@ -290,6 +290,20 @@ fn parts(t: &Theme, n: &NotesEditor, caret: Option<[f32; 4]>) -> El {
                     .child(text("collapsed").font(ty::HINT).color(t.ink_faint))
             }
             Kind::Heading(_) => row().w_full().mt(if i > 0 { 6.0 } else { 0.0 }).child(field),
+            Kind::Task(done) => {
+                // The checkbox is a control of its own: a click checks the task off.
+                let check = ui::check_box(t, done)
+                    .key(keys::notes_task(tasks))
+                    .role("checkbox")
+                    .label(if done { "Done" } else { "Not done" })
+                    .focusable(false)
+                    .on_press_tx(move |s: &mut App, tx| {
+                        s.tag_fields.notes.check(id);
+                        refocus(s, tx);
+                    });
+                tasks += 1;
+                row().w_full().center_y().gap(8.0).pl(4.0).child(check).child(field.grow(1.0))
+            }
             Kind::Body => row().w_full().child(field),
         };
         match folded.as_mut() {

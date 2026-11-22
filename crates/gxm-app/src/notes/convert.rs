@@ -20,7 +20,7 @@ pub(super) fn configure(kind: Kind, edit: TextEdit) -> TextEdit {
             Block::Quote,
             Block::Code,
         ]),
-        Kind::Heading(_) => edit.rich().allow_marks(marks()).allow_blocks([]),
+        Kind::Heading(_) | Kind::Task(_) => edit.rich().allow_marks(marks()).allow_blocks([]),
         Kind::Fold => edit.rich().allow_marks([]).allow_blocks([]),
     }
 }

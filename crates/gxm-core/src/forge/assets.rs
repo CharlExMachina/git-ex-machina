@@ -72,8 +72,9 @@ pub fn queue(env: &Env, remote: &Remote, tag: &str, files: &[(String, PathBuf)])
     save(env, &list)
 }
 
-/// Uploads every queued release's files once GitHub has the release, waiting for it (asking
-/// every 15 seconds, for up to three hours). Says what it attached.
+/// Uploads every queued release's files once GitHub has the release, waiting for it for as
+/// long as the app runs: asking every 15 seconds for the first hour, then every minute. Says
+/// what it attached.
 pub fn attach_all(env: &Env) -> Result<String, String> {
     let mut said = Vec::new();
     for p in pending(env) {
@@ -101,21 +102,26 @@ fn attach(env: &Env, p: &Pending) -> Result<usize, String> {
         format!("https://{}/api/v3", p.host)
     };
     let url = format!("{api}/repos/{}/{}/releases/tags/{}", p.owner, p.name, p.tag);
-    // A world's GitHub answers at once; the real one's workflow takes minutes.
-    let (every, tries) = if env.isolated { (Duration::from_millis(200), 150) } else { (Duration::from_secs(15), 720) };
-    let mut release = None;
-    for _ in 0..tries {
+    let mut asked = 0u32;
+    let release = loop {
         match http::rest("GET", &url, token, None) {
-            Ok(r) => {
-                release = Some(r);
-                break;
-            }
-            Err(ForgeError::Status(404)) => std::thread::sleep(every),
+            Ok(r) => break r,
+            Err(ForgeError::Status(404)) => {}
             Err(e) => return Err(format!("GitHub couldn't say whether {} is published: {e}", p.tag)),
         }
-    }
-    let release =
-        release.ok_or_else(|| format!("{} still isn't published: its files go up at the next start", p.tag))?;
+        asked += 1;
+        // A world's GitHub publishes at once, so a test that waits long is broken; the real
+        // one's workflow takes minutes, or hours when it queues.
+        if env.isolated && asked > 150 {
+            return Err(format!("{} wasn't published", p.tag));
+        }
+        let every = match (env.isolated, asked) {
+            (true, _) => Duration::from_millis(200),
+            (false, 0..240) => Duration::from_secs(15),
+            (false, _) => Duration::from_secs(60),
+        };
+        std::thread::sleep(every);
+    };
     let upload = release["upload_url"].as_str().unwrap_or_default();
     let upload = upload.split('{').next().unwrap_or(upload);
     let there: Vec<&str> =

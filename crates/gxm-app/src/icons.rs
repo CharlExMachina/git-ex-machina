@@ -65,12 +65,6 @@ icon!(
     "gxm-tasks",
     r#"<rect x="2.5" y="3" width="4" height="4" rx="1"/><path d="M3.5 11 4.5 12 6.5 10M9 5h4.5M9 11h4.5"/>"#
 );
-icon!(BOX, "gxm-box", r#"<rect x="3" y="3" width="10" height="10" rx="2.5"/>"#);
-icon!(
-    BOX_CHECKED,
-    "gxm-box-checked",
-    r#"<rect x="3" y="3" width="10" height="10" rx="2.5"/><path d="M5.5 8.25 7.25 10 10.5 6.25"/>"#
-);
 icon!(
     ATTACH,
     "gxm-attach",

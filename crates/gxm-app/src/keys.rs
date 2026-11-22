@@ -63,6 +63,11 @@ pub const NOTES_PICKER: &str = "notes-picker";
 /// The link's address, under the formatting bar while a link is being made.
 pub const NOTES_LINK_URL: &str = "notes-link-url";
 
+/// A task's checkbox, by its place among the tasks.
+pub fn notes_task(i: usize) -> String {
+    format!("notes-task-{i}")
+}
+
 /// A row of the `@` or `#` popup, by its place.
 pub fn notes_pick(i: usize) -> String {
     format!("notes-pick-{i}")

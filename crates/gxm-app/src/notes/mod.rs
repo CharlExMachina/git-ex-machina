@@ -7,7 +7,7 @@ mod chips;
 mod convert;
 pub mod pad;
 
-use gxm_core::notes::{self, Line, Notes, Part, Rich};
+use gxm_core::notes::{self, Chip, Line, Notes, Part, Rich, Span};
 use rune::{Block, Key, KeyEvent, Mark, TextEdit};
 
 pub use chips::{Pick, PickKind};
@@ -18,6 +18,8 @@ pub enum Kind {
     Heading(u8),
     /// A collapsed section's summary: the parts after it, up to the next one, fold under it.
     Fold,
+    /// A task list's item, checked or not: a checkbox to click, and its words.
+    Task(bool),
     Body,
 }
 
@@ -75,10 +77,18 @@ impl NotesEditor {
         };
         for part in &notes.parts {
             match part {
-                Part::Heading(level, rich) => e.push(Kind::Heading(*level), rich),
-                Part::Fold(summary) => e.push(Kind::Fold, &Rich::plain(summary)),
-                Part::Body(rich) => e.push(Kind::Body, rich),
-            };
+                Part::Heading(level, rich) => {
+                    e.push(Kind::Heading(*level), rich);
+                }
+                Part::Fold(summary) => {
+                    e.push(Kind::Fold, &Rich::plain(summary));
+                }
+                Part::Body(rich) => {
+                    for (kind, rich) in split_tasks(rich) {
+                        e.push(kind, &rich);
+                    }
+                }
+            }
         }
         e.normalize();
         e.at = e.parts.first().map_or(0, |p| p.id);
@@ -86,15 +96,26 @@ impl NotesEditor {
     }
 
     pub fn notes(&self) -> Notes {
-        let parts = self
-            .parts
-            .iter()
-            .map(|p| match p.kind {
-                Kind::Heading(level) => Part::Heading(level, rich_of(&p.edit)),
-                Kind::Fold => Part::Fold(plain_text(&p.edit)),
-                Kind::Body => Part::Body(rich_of(&p.edit)),
-            })
-            .collect();
+        let mut parts: Vec<Part> = Vec::new();
+        for p in &self.parts {
+            let rich = match p.kind {
+                Kind::Heading(level) => {
+                    parts.push(Part::Heading(level, rich_of(&p.edit)));
+                    continue;
+                }
+                Kind::Fold => {
+                    parts.push(Part::Fold(plain_text(&p.edit)));
+                    continue;
+                }
+                // A task is a line of text led by its checkbox, among the text around it.
+                Kind::Task(done) => task_line(done, &rich_of(&p.edit)),
+                Kind::Body => rich_of(&p.edit),
+            };
+            match parts.last_mut() {
+                Some(Part::Body(before)) => before.append(&rich),
+                _ => parts.push(Part::Body(rich)),
+            }
+        }
         Notes { parts }
     }
 
@@ -165,8 +186,28 @@ impl NotesEditor {
         match self.index(id).map(|i| self.parts[i].kind) {
             Some(Kind::Body) => self.lift(id, Kind::Heading(3)),
             Some(Kind::Heading(_)) => self.lower(id),
-            Some(Kind::Fold) => self.rekind(id, Kind::Heading(3)),
+            Some(Kind::Fold | Kind::Task(_)) => self.rekind(id, Kind::Heading(3)),
             None => {}
+        }
+    }
+
+    /// The caret's line as a task, unchecked, or a task back to text.
+    pub fn toggle_task(&mut self) {
+        let id = self.current();
+        match self.index(id).map(|i| self.parts[i].kind) {
+            Some(Kind::Body) => self.lift(id, Kind::Task(false)),
+            Some(Kind::Task(_)) => self.lower(id),
+            Some(Kind::Heading(_) | Kind::Fold) => self.rekind(id, Kind::Task(false)),
+            None => {}
+        }
+    }
+
+    /// Task `id` checked, or unchecked.
+    pub fn check(&mut self, id: u64) {
+        let at = self.at;
+        if let Some(Kind::Task(done)) = self.index(id).map(|i| self.parts[i].kind) {
+            self.rekind(id, Kind::Task(!done));
+            self.at = at;
         }
     }
 
@@ -176,7 +217,7 @@ impl NotesEditor {
         match self.index(id).map(|i| self.parts[i].kind) {
             Some(Kind::Body) => self.lift(id, Kind::Fold),
             Some(Kind::Fold) => self.lower(id),
-            Some(Kind::Heading(_)) => self.rekind(id, Kind::Fold),
+            Some(Kind::Heading(_) | Kind::Task(_)) => self.rekind(id, Kind::Fold),
             None => {}
         }
     }
@@ -196,7 +237,6 @@ impl NotesEditor {
             self.lower(id);
         }
         let id = self.at;
-        self.untask(id);
         if let Some(p) = self.part_mut(id) {
             p.edit.toggle_block(block);
             pad::pad(&mut p.edit);
@@ -380,15 +420,22 @@ impl NotesEditor {
                 pad::pad(edit);
                 true
             }
+            Key::Enter if matches!(kind, Kind::Task(_)) && !ev.mods.shift && text.trim().is_empty() => {
+                // Return in an empty task ends the list: it's a line of text again.
+                self.lower(id);
+                true
+            }
             Key::Enter if kind != Kind::Body && !ev.mods.shift => {
-                // Return in a heading starts the text under it, taking what was after the caret.
+                // Return in a heading starts the text under it, and in a task the next task,
+                // taking what was after the caret.
                 let rich = rich_of(&self.parts[i].edit);
                 let mut tail = rich.slice(caret, rich.text.len());
                 tail.lines = vec![Line::Paragraph];
                 let head = rich.slice(0, caret);
                 self.parts[i].edit = edit_of(kind, &head);
+                let next = if matches!(kind, Kind::Task(_)) { Kind::Task(false) } else { Kind::Body };
                 let new = self.fresh();
-                self.parts.insert(i + 1, EditPart { id: new, kind: Kind::Body, edit: edit_of(Kind::Body, &tail) });
+                self.parts.insert(i + 1, EditPart { id: new, kind: next, edit: edit_of(next, &tail) });
                 caret_to(&mut self.parts[i + 1].edit, 0);
                 self.at = new;
                 self.normalize();
@@ -430,8 +477,65 @@ impl NotesEditor {
     }
 }
 
+/// A body's lines as text, with each task line (led by its checkbox) a task of its own.
+fn split_tasks(rich: &Rich) -> Vec<(Kind, Rich)> {
+    let mut out: Vec<(Kind, Rich)> = Vec::new();
+    for n in 0..rich.line_count() {
+        let Some(line) = rich.lines_between(n, n + 1) else { continue };
+        let task = line.marks.iter().find_map(|m| match m.mark {
+            notes::Mark::Chip(Chip::Task(done)) if m.start == 0 => Some((done, m.end)),
+            _ => None,
+        });
+        match task {
+            Some((done, end)) => {
+                let skip = end + line.text[end..].len() - line.text[end..].trim_start().len();
+                out.push((Kind::Task(done), line.slice(skip, line.text.len())));
+            }
+            None => match out.last_mut() {
+                Some((Kind::Body, before)) => before.append(&line),
+                _ => out.push((Kind::Body, line)),
+            },
+        }
+    }
+    out
+}
+
+/// A task's words as a line of text led by its checkbox.
+fn task_line(done: bool, words: &Rich) -> Rich {
+    let label = Chip::Task(done).label();
+    let shift = label.len();
+    let mut marks = vec![Span { start: 0, end: shift, mark: notes::Mark::Chip(Chip::Task(done)) }];
+    marks.extend(words.marks.iter().map(|m| Span { start: m.start + shift, end: m.end + shift, mark: m.mark.clone() }));
+    Rich { text: format!("{label}{}", words.text), marks, lines: vec![Line::Paragraph] }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_task_has_a_checkbox_to_click_and_its_own_line() {
+        let mut e = editor("Before\n\n- [ ] Ship it\n- [x] Tag it\n\nAfter\n");
+        let kinds: Vec<Kind> = e.parts.iter().map(|p| p.kind).collect();
+        assert_eq!(kinds, [Kind::Body, Kind::Task(false), Kind::Task(true), Kind::Body]);
+        assert_eq!(e.parts[1].edit.text, "Ship it");
+        let first = e.parts[1].id;
+        e.check(first);
+        assert_eq!(e.markdown(None), "Before\n\n- [x] Ship it\n- [x] Tag it\n\nAfter\n");
+        // Return starts the next task; in an empty one it ends the list.
+        let tag = at_line(&mut e, 2, 6);
+        assert!(e.key(tag, &key(Key::Enter), None));
+        assert_eq!(e.parts[3].kind, Kind::Task(false));
+        let empty = e.parts[3].id;
+        assert!(e.key(empty, &key(Key::Enter), None));
+        assert_eq!(e.parts[3].kind, Kind::Body);
+        assert_eq!(e.markdown(None), "Before\n\n- [x] Ship it\n- [x] Tag it\n\nAfter\n");
+        // The button makes a line a task, and a task a line again.
+        at_line(&mut e, 0, 3);
+        e.toggle_task();
+        assert_eq!(e.parts[0].kind, Kind::Task(false));
+        e.toggle_task();
+        assert_eq!(e.markdown(None), "Before\n\n- [x] Ship it\n- [x] Tag it\n\nAfter\n");
+    }
+
     use super::*;
 
     fn key(key: Key) -> KeyEvent {

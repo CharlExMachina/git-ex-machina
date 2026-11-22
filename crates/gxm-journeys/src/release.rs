@@ -226,11 +226,11 @@ pub fn tag_a_release() -> Journey {
     .gone(keys::notes_pick(1))
     .press(Press::ENTER)
     .type_text("and to everyone who tried the nightlies.")
-    // A task list: the button makes the line a task, and again checks it off.
+    // A task list: the button makes the line a task; a click on its checkbox checks it off.
     .press(Press::ENTER)
     .tap(keys::NOTES_TASKS)
     .type_text("Linux AppImage")
-    .tap(keys::NOTES_TASKS)
+    .tap(keys::notes_task(0))
     .press(Press::ENTER)
     .type_text("macOS disk image")
     .mark("tasks")
