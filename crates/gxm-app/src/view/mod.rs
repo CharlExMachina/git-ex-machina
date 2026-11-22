@@ -13,6 +13,7 @@ mod pull_parts;
 mod settings;
 mod sheet;
 mod sidebar;
+mod tag;
 mod toast;
 mod toolbar;
 mod update;

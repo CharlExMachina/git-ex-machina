@@ -84,7 +84,7 @@ fn publish(env: &Env, repo: &Path) -> Result<(), GitError> {
 }
 
 /// Where a new branch goes: `remote.pushDefault`, else `origin`, else the only remote.
-fn publish_remote(env: &Env, repo: &Path) -> Result<String, GitError> {
+pub(crate) fn publish_remote(env: &Env, repo: &Path) -> Result<String, GitError> {
     let configured = git::run(env, repo, &["config", "--get", "remote.pushDefault"]).unwrap_or_default();
     if !configured.trim().is_empty() {
         return Ok(configured.trim().to_owned());

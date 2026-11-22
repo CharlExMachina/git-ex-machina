@@ -40,6 +40,14 @@ impl Ops {
         }
     }
 
+    /// What git said when it failed: its output, else what kept it from running.
+    pub fn said(e: GitError) -> String {
+        match e {
+            GitError::Failed { stderr, .. } if !stderr.trim().is_empty() => stderr,
+            other => other.to_string(),
+        }
+    }
+
     /// Git's reason, from its output: the `fatal:` or `error:` line, else the first line.
     pub fn reason(message: &str) -> &str {
         let lines = || message.lines().map(str::trim).filter(|l| !l.is_empty());
@@ -59,12 +67,7 @@ impl App {
         let Some(path) = self.repo().map(|r| r.summary.path.clone()) else { return };
         self.ops.state = OpState::Running(op.clone());
         let env = self.env.clone();
-        self.ops.job.request((env, path, op), |(env, path, op)| {
-            ops::run(&env, &path, &op).map_err(|e| match e {
-                GitError::Failed { stderr, .. } if !stderr.trim().is_empty() => stderr,
-                other => other.to_string(),
-            })
-        });
+        self.ops.job.request((env, path, op), |(env, path, op)| ops::run(&env, &path, &op).map_err(Ops::said));
     }
 
     /// Takes a finished operation's result. True when the state changed; after a success the

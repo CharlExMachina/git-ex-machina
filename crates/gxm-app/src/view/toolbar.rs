@@ -45,7 +45,7 @@ pub fn toolbar(s: &App, t: &Theme) -> El {
         Some(Subject::Commit(id)) => vec![
             b.op(Variant::Secondary, None, keys::CHECKOUT, Op::Checkout(checkout_target(s, &id)), None),
             b.op(Variant::Secondary, None, keys::CHERRY_PICK, Op::CherryPick(vec![id.clone()]), None),
-            b.op(Variant::Secondary, None, keys::REVERT, Op::Revert(id), None),
+            b.op(Variant::Secondary, None, keys::REVERT, Op::Revert(id.clone()), None),
             b.soon(
                 Variant::Secondary,
                 Some(&icons::BRANCH),
@@ -53,6 +53,7 @@ pub fn toolbar(s: &App, t: &Theme) -> El {
                 "Branch from here",
                 "Coming next: name the new branch",
             ),
+            super::tag::button(s, t, &id),
         ],
         Some(Subject::Commits(ids)) => {
             let (bisect, squash) = (s.can_bisect(&ids), s.can_squash(&ids));

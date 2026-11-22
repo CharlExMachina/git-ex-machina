@@ -48,6 +48,8 @@ pub struct App {
     pub sheet: Sheet,
     pub fields: Fields,
     pub sheet_jobs: SheetJobs,
+    pub tag_fields: crate::tag::TagFields,
+    pub tag_jobs: crate::tag::TagJobs,
     /// Who's signed in to GitHub; None when no one is.
     pub account: Option<gxm_core::forge::model::User>,
     pub account_jobs: AccountJobs,
@@ -93,6 +95,8 @@ pub struct History {
     pub error: Option<String>,
     /// With a pull request open: which parts of each row are its (see [`App::relight`]).
     pub lit: Option<Vec<graph::Lit>>,
+    /// Its tags, and whether pushing one releases.
+    pub tagging: gxm_core::tag::Tagging,
 }
 
 pub enum Row {
@@ -196,6 +200,8 @@ impl App {
             sheet: Sheet::Closed,
             fields: Fields::default(),
             sheet_jobs: SheetJobs::default(),
+            tag_fields: crate::tag::TagFields::default(),
+            tag_jobs: crate::tag::TagJobs::default(),
             account: None,
             account_jobs: AccountJobs::new(env_token),
             update: Update::Idle,

@@ -262,12 +262,14 @@ impl App {
     }
 }
 
-/// The repository's summary and its newest commits laid out as a graph, read side by side.
+/// The repository's summary, its tags and its newest commits laid out as a graph, read side by
+/// side.
 fn read_history(env: &Env, path: PathBuf) -> Read {
-    let (summary, log) = std::thread::scope(|scope| {
+    let (summary, tagging, log) = std::thread::scope(|scope| {
         let summary = scope.spawn(|| RepoSummary::read(env, &path).ok());
+        let tagging = scope.spawn(|| gxm_core::tag::survey(env, &path));
         let log = history::log(env, &path, HISTORY_LIMIT);
-        (summary.join().ok().flatten(), log)
+        (summary.join().ok().flatten(), tagging.join().unwrap_or_default(), log)
     });
     let status = summary.as_ref().map(|s| &s.status);
     let (changed, head) = status.map_or((0, None), |s| (s.changed, s.head.clone()));
@@ -288,7 +290,8 @@ fn read_history(env: &Env, path: PathBuf) -> Read {
         Row::Commit(c) => (c.id.as_str(), c.parents.iter().map(String::as_str).collect()),
     }));
     let cols = graph.iter().map(|g| g.width).max().unwrap_or(1);
-    let history = History { path: path.clone(), rows, graph, cols, total: None, details: None, error, lit: None };
+    let history =
+        History { path: path.clone(), rows, graph, cols, total: None, details: None, error, lit: None, tagging };
     Read { path, summary, history }
 }
 

@@ -51,6 +51,11 @@ fn merge_pull_request() {
 }
 
 #[test]
+fn tag_a_release() {
+    journey("tag_a_release");
+}
+
+#[test]
 fn repository_settings() {
     journey("repository_settings");
 }
