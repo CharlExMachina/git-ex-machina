@@ -68,6 +68,24 @@ icon!(
 );
 icon!(CHEVRON, "gxm-chevron", r#"<path d="M4.5 6.5 8 10l3.5-3.5"/>"#);
 icon!(CHEVRON_RIGHT, "gxm-chevron-right", r#"<path d="M6.5 4.5 10 8l-3.5 3.5"/>"#);
+icon!(
+    SETTINGS,
+    "gxm-settings",
+    r#"<path d="M2.5 4h6.5M12.5 4h1M2.5 8h2M7.5 8h6M2.5 12h8M13.5 12h0"/><circle cx="10.75" cy="4" r="1.75"/><circle cx="5.75" cy="8" r="1.75"/><circle cx="12" cy="12" r="1.5"/>"#
+);
+icon!(
+    CLOUD,
+    "gxm-cloud",
+    r#"<path d="M11.5 12.5H5a3.5 3.5 0 1 1 .6-6.95A4 4 0 0 1 13.4 7a2.75 2.75 0 0 1-1.9 5.5z"/>"#
+);
+icon!(LAPTOP, "gxm-laptop", r#"<rect x="3" y="3.5" width="10" height="7" rx="1"/><path d="M1.5 13h13"/>"#);
+icon!(
+    LOCK,
+    "gxm-lock",
+    r#"<rect x="3.5" y="7" width="9" height="6.5" rx="1.25"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>"#
+);
+icon!(TRASH, "gxm-trash", r#"<path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.75 9h6.5l.75-9"/>"#);
+icon!(KEY, "gxm-key", r#"<circle cx="5" cy="10.5" r="2.5"/><path d="M6.75 8.75 13 2.5M11 4.5l1.5 1.5M9.5 6l1 1"/>"#);
 // An arrow down into a tray: take an update.
 icon!(
     DOWNLOAD,

@@ -51,6 +51,16 @@ fn merge_pull_request() {
 }
 
 #[test]
+fn repository_settings() {
+    journey("repository_settings");
+}
+
+#[test]
+fn settings_without_admin() {
+    journey("settings_without_admin");
+}
+
+#[test]
 fn update_app() {
     journey("update_app");
 }

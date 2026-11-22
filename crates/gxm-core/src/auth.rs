@@ -22,6 +22,9 @@ pub const CLIENT_ID: &str = "Ov23liYCFf3FCirGMPGF";
 /// What the token may do: repositories (code, pull requests, reviews, checks; private ones too)
 /// and reading which organisations the person is in.
 pub const SCOPES: &str = "repo read:org";
+/// [`SCOPES`] and deleting repositories, which GitHub keeps apart: asked for only when the
+/// person deletes one.
+pub const DELETE_SCOPES: &str = "repo read:org delete_repo";
 /// The host the token is for, as the Keychain and `accounts.json` file it.
 pub const HOST: &str = "github.com";
 
@@ -70,9 +73,14 @@ impl std::error::Error for AuthError {}
 
 /// Asks GitHub for a one-time code to sign in with.
 pub fn start(env: &Env) -> Result<DeviceCode, AuthError> {
+    start_with(env, SCOPES)
+}
+
+/// Asks GitHub for a one-time code for a token that may do what `scopes` grant.
+pub fn start_with(env: &Env, scopes: &str) -> Result<DeviceCode, AuthError> {
     env.off_ui_thread(&"asking GitHub for a sign-in code");
     let url = format!("{}/login/device/code", env.forge.github_web);
-    let answer = http::post_form(&url, &[("client_id", CLIENT_ID), ("scope", SCOPES)]).map_err(AuthError::GitHub)?;
+    let answer = http::post_form(&url, &[("client_id", CLIENT_ID), ("scope", scopes)]).map_err(AuthError::GitHub)?;
     serde_json::from_value(answer.clone()).map_err(|_| refusal(&answer))
 }
 

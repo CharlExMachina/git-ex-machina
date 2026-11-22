@@ -12,6 +12,8 @@ pub enum Variant {
     Secondary,
     Primary,
     Ghost,
+    /// A raised control whose words warn: it deletes, publishes or gives away.
+    Danger,
 }
 
 /// `Button` at `size="sm"`: 24 tall, 8 a side, radius 6, 12px medium, icon 14, gap 6.
@@ -57,13 +59,16 @@ fn build(
         Variant::Primary => t.on_accent,
         Variant::Secondary => t.ink,
         Variant::Ghost => t.ink_muted,
+        Variant::Danger => t.removed,
     };
     let only_icon = label.is_empty();
     let mut b = row().h(24.0).gap(6.0).center_y().radius(size::RADIUS_SM);
     b = if only_icon { b.w(24.0).center() } else { b.px(8.0) };
     b = match variant {
         Variant::Primary => b.fill(t.accent).gradient(t.accent_top, t.accent).hover(t.accent_top),
-        Variant::Secondary => b.fill(t.control).gradient(t.control, t.control_bottom).hover(t.control_hover),
+        Variant::Secondary | Variant::Danger => {
+            b.fill(t.control).gradient(t.control, t.control_bottom).hover(t.control_hover)
+        }
         Variant::Ghost => b.hover(t.control_hover),
     };
     if pressed {
@@ -75,7 +80,7 @@ fn build(
         for s in t.shadow_primary() {
             b = b.box_shadow(s);
         }
-    } else if variant == Variant::Secondary {
+    } else if matches!(variant, Variant::Secondary | Variant::Danger) {
         for s in t.shadow_raised() {
             b = b.box_shadow(s);
         }
@@ -168,6 +173,17 @@ pub fn field<S: 'static>(
 /// `Checkbox`: a 16-point box, radius 4, raised when off and accent with a check when on, 8
 /// before its label.
 pub fn check(t: &Theme, on: bool, label: &str) -> El {
+    row()
+        .gap(8.0)
+        .center_y()
+        .role("checkbox")
+        .label(label.to_owned())
+        .child(check_box(t, on))
+        .child(text(label.to_owned()).font(ty::BODY).color(t.ink))
+}
+
+/// [`check`]'s box alone, for a row that lays out its own words.
+pub fn check_box(t: &Theme, on: bool) -> El {
     let mut b = row().size(16.0, 16.0).radius(size::RADIUS_XS).center();
     if on {
         b = b.fill(t.accent).gradient(t.accent_top, t.accent).child(icon(&icons::CHECK, 12.0).color(t.on_accent));
@@ -180,13 +196,7 @@ pub fn check(t: &Theme, on: bool, label: &str) -> El {
             b = b.box_shadow(s);
         }
     }
-    row()
-        .gap(8.0)
-        .center_y()
-        .role("checkbox")
-        .label(label.to_owned())
-        .child(b)
-        .child(text(label.to_owned()).font(ty::BODY).color(t.ink))
+    b
 }
 
 /// `SegmentedControl`: a well with 2 of padding and gap, radius 8; options 24 tall, 12 a side,

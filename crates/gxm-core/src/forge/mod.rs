@@ -8,6 +8,7 @@
 //! Every call blocks on the network, so the app makes them off the UI thread. Answers are
 //! cached on disk ([`cache`]), so a pull request opens at once and refreshes behind the scenes.
 
+pub mod admin;
 pub mod cache;
 pub mod drafts;
 pub(crate) mod github;

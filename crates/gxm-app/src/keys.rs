@@ -184,3 +184,40 @@ pub fn pull_commit(short: &str) -> String {
 
 /// Back to every commit's changes in the cockpit.
 pub const PULL_COMMITS_ALL: &str = "pull-commits-all";
+
+// Repository settings.
+/// The history header's button that opens them.
+pub const SETTINGS: &str = "settings";
+pub const SETTINGS_DIALOG: &str = "settings-dialog";
+pub const SETTINGS_CLOSE: &str = "settings-close";
+/// The header's word on the last change: `Saved on GitHub`, `Saving…`, or what went wrong.
+pub const SETTINGS_STATUS: &str = "settings-status";
+/// Why some settings can't be changed here (no admin rights, no provider).
+pub const SETTINGS_NOTICE: &str = "settings-notice";
+/// The section's content.
+pub const SETTINGS_PAGE: &str = "settings-page";
+
+/// A section in the dialog's sidebar: `settings-section-pull-requests`.
+pub fn settings_section(title: &str) -> String {
+    format!("settings-section-{}", slug(title))
+}
+
+/// A setting's control (a checkbox, a choice, a button), by its id: `setting-wiki`.
+pub fn setting(id: &str) -> String {
+    format!("setting-{}", slug(id))
+}
+
+/// A setting's text field: `setting-field-description`.
+pub fn setting_field(id: &str) -> String {
+    format!("setting-field-{}", slug(id))
+}
+
+/// A row in one of the dialog's lists: `setting-item-person-kenji-mori`.
+pub fn setting_item(kind: &str, id: &str) -> String {
+    format!("setting-item-{kind}-{}", slug(id))
+}
+
+/// `Pull requests` → `pull-requests`, `fix/avatar-cache` → `fix:avatar-cache`.
+fn slug(s: &str) -> String {
+    sanitize(&s.to_lowercase().replace(' ', "-"))
+}

@@ -56,6 +56,9 @@ pub struct App {
     /// A newer release, from offered to restarted into.
     pub update: Update,
     pub update_jobs: UpdateJobs,
+    /// The repository settings dialog, and its work off the UI thread.
+    pub settings: crate::settings::Model,
+    pub settings_jobs: crate::settings::Jobs,
 }
 
 /// Loading is an explicit machine: nothing is read before the first frame is up, and the
@@ -196,12 +199,18 @@ impl App {
             update: Update::Idle,
             add_menu: false,
             update_jobs: UpdateJobs::default(),
+            settings: crate::settings::Model::default(),
+            settings_jobs: crate::settings::Jobs::default(),
         }
     }
 
     /// A read, a write or a provider call is in flight: what's on screen may be about to change.
     pub fn busy(&self) -> bool {
-        self.loads.busy() || self.pulls.busy() || self.account_jobs.reading() || self.update_jobs.checking()
+        self.loads.busy()
+            || self.pulls.busy()
+            || self.account_jobs.reading()
+            || self.update_jobs.checking()
+            || self.settings_jobs.busy()
     }
 
     /// Lights the open pull request's commits in the graph, or clears the light.

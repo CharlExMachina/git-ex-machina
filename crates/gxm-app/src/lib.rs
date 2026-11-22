@@ -12,6 +12,7 @@ pub mod ops;
 pub mod pull_disk;
 pub mod pulls;
 pub mod review;
+pub mod settings;
 pub mod sheet;
 pub mod state;
 pub mod theme;
@@ -57,12 +58,14 @@ fn poll(s: &mut App, _t: f64, tx: &mut Tx) -> bool {
     let sheet = s.land_sheet(tx);
     let account = s.land_account(tx);
     let update = s.land_update(tx);
-    s.land() | landed | pulled | sheet | account | update
+    let settings = s.land_settings();
+    s.land() | landed | pulled | sheet | account | update | settings
 }
 
 fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
-    // A sheet or a menu has the keyboard: Escape dismisses it.
-    if !matches!(s.sheet, sheet::Sheet::Closed) || s.add_menu {
+    // A sheet, a menu or the settings have the keyboard: their fields take the keys, Escape
+    // dismisses.
+    if !matches!(s.sheet, sheet::Sheet::Closed) || s.add_menu || s.settings.open {
         return false;
     }
     if shell::is_sidebar_toggle(ev) {
@@ -121,6 +124,7 @@ pub fn app() -> rune::App<App> {
             s.sheet_jobs.set_waker(waker.clone());
             s.account_jobs.set_waker(waker.clone());
             s.update_jobs.set_waker(waker.clone());
+            s.settings_jobs.set_waker(&waker);
             s.loads.set_waker(waker);
         }),
         on_key: Some(on_key),

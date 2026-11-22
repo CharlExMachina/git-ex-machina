@@ -307,6 +307,10 @@ pub mod size {
     pub const PILL: f32 = 999.0;
     pub const SIDEBAR: f32 = 248.0;
     pub const SHEET: f32 = 460.0;
+    /// The repository settings dialog, and its sidebar of sections.
+    pub const SETTINGS_W: f32 = 960.0;
+    pub const SETTINGS_H: f32 = 720.0;
+    pub const SETTINGS_NAV: f32 = 224.0;
     pub const INSPECTOR: f32 = 360.0;
     pub const TOOLBAR: f32 = 48.0;
     pub const ROW_REPO: f32 = 36.0;

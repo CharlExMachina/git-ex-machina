@@ -15,6 +15,8 @@ pub fn all() -> Vec<Journey> {
         shape_history(),
         crate::review::review_pull_request(),
         crate::merge::merge_pull_request(),
+        crate::settings::repository_settings(),
+        crate::settings::settings_without_admin(),
         crate::update::update_app(),
     ]
 }

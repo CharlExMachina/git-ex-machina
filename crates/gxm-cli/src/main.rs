@@ -3,6 +3,7 @@
 //! The CLI and the app share `gxm-core`, so anything the app shows can be checked here as text.
 
 mod prs;
+mod settings;
 
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -22,6 +23,8 @@ Usage:
   gxm repos [--json]              The workspace's repositories and their state
   gxm log [PATH] [-n N] [--json]  History with its graph (PATH defaults to .)
   gxm prs [PATH]                  Pull requests on the repository's provider (gxm auth login, or GH_TOKEN)
+  gxm settings [PATH]             The repository's settings, on its provider and on this computer
+  gxm tidy [PATH] [--delete]      Its merged branches, here and on origin; --delete deletes them
   gxm add PATH                    Add a repository on disk to the workspace
   gxm clone URL [INTO]            Clone over SSH into INTO (default ~/code) and add it
   gxm auth login                  Sign in to GitHub with a one-time code
@@ -39,6 +42,8 @@ fn main() -> ExitCode {
         Some("repos") => repos(&env, &args[1..], &mut out),
         Some("log") => log(&env, &args[1..], &mut out),
         Some("prs") => prs::prs(&env, &args[1..], &mut out),
+        Some("settings") => settings::settings(&env, &args[1..], &mut out),
+        Some("tidy") => settings::tidy(&env, &args[1..], &mut out),
         Some("add") => add(&env, &args[1..], &mut out),
         Some("clone") => clone(&env, &args[1..], &mut out),
         Some("auth") => auth(&env, &args[1..], &mut out),

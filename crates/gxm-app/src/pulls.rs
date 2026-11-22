@@ -421,7 +421,14 @@ impl Pulls {
                 let job = move |()| {
                     let result = match (pull, payload) {
                         (Some(pull), Some(Payload::Headline(h))) => {
-                            forge.squash_merge(&pull, &h).map_err(|e| e.to_string())
+                            let merged = forge.squash_merge(&pull, &h).map_err(|e| e.to_string());
+                            // Set to delete merged branches here too: the local copy goes when it
+                            // holds nothing the merge didn't take. Best effort: the merge stands.
+                            let s = &pull.summary;
+                            if merged.is_ok() && gxm_core::local::read(&env, &repo).is_ok_and(|l| l.delete_merged) {
+                                gxm_core::tidy::after_merge(&env, &repo, &s.head_ref, &s.head_sha).ok();
+                            }
+                            merged
                         }
                         _ => Err("the pull request isn't loaded yet".to_owned()),
                     };

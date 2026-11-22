@@ -122,3 +122,44 @@ fn someone_signs_in_to_github_from_the_terminal() {
     assert!(!status.status.success());
     assert_eq!(String::from_utf8_lossy(&status.stderr), "gxm: not signed in to github.com: gxm auth login\n");
 }
+
+#[test]
+fn someone_reads_the_settings_of_a_repository_and_tidies_its_merged_branches_from_the_terminal() {
+    let w = World::new();
+    let m = gxm_world::fixtures::mockup(&w);
+    gxm_world::fixtures::atlas_settings(&w);
+    gxm_world::fixtures::atlas_branches(&w, &m.atlas_web);
+    let atlas = m.atlas_web.display().to_string();
+
+    let settings = gxm(&w, &["settings", &atlas]);
+    assert!(settings.contains("studio/atlas-web  (private, main; you: Admin)"), "{settings}");
+    assert!(settings.contains("merges by merge, squash · auto-merge on · delete branches on merge off"), "{settings}");
+    assert!(settings.contains("commits as Ana Ruiz <ana@example.com>"), "{settings}");
+    assert!(settings.contains("origin git@github.com:studio/atlas-web.git"), "{settings}");
+
+    // Done branches first, each with why; the rest with why they stay.
+    let tidy = gxm(&w, &["tidy", &atlas]);
+    let lines: Vec<String> = tidy.lines().map(|l| l.split_whitespace().collect::<Vec<_>>().join(" ")).collect();
+    assert_eq!(
+        lines,
+        [
+            "✓ feature/graph-virtualization local and origin #128 merged",
+            "✓ sidebar-spring local same changes, rebased",
+            "✓ tune/brass-light origin in the default branch",
+            "· fix/avatar-cache local and origin #131 is still open",
+            "· spike/canvas-text origin 1 commit not in the default branch",
+            "· wip/lane-colors local 2 commits only on this computer",
+        ],
+        "{tidy}"
+    );
+
+    // Deleting takes the done ones, wherever they are, and nothing else.
+    let deleted = gxm(&w, &["tidy", &atlas, "--delete"]);
+    assert!(deleted.ends_with("Deleted 3 branches\n"), "{deleted}");
+    let remote = w.git(&w.remote("github.com", "studio", "atlas-web"), &["branch", "--format=%(refname:short)"]);
+    assert_eq!(remote.lines().collect::<Vec<_>>(), ["fix/avatar-cache", "main", "spike/canvas-text"]);
+    let local = w.git(&m.atlas_web, &["branch", "--format=%(refname:short)"]);
+    assert_eq!(local.lines().collect::<Vec<_>>(), ["fix/avatar-cache", "main", "wip/lane-colors"]);
+    let again = gxm(&w, &["tidy", &atlas]);
+    assert!(!again.contains('✓'), "nothing left to tidy:\n{again}");
+}

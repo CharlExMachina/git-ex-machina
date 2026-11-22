@@ -115,7 +115,14 @@ fn summary(s: &App, h: &History, t: &Theme) -> El {
                 .gap(12.0)
                 .center_y()
                 .child(text("⌘-click or ⇧-click to select several").font(ty::HINT).color(t.ink_faint))
-                .child(search),
+                .child(search)
+                .child(
+                    ui::button_in(t, ui::Variant::Secondary, Some(&icons::SETTINGS), "", None, s.settings.open)
+                        .key(keys::SETTINGS)
+                        .label("Repository settings".to_owned())
+                        .help("Repository settings")
+                        .on_press(|s: &mut App| s.open_settings()),
+                ),
         )
 }
 
