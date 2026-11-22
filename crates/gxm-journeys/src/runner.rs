@@ -225,6 +225,11 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                     return Err(fail(format!("the app asked to open {asked:?}"), &d));
                 }
             }
+            Step::Quits => {
+                if d.rt.shell_request != Some(rune::Shell::Quit) {
+                    return Err(fail(format!("the app asked the window for {:?}", d.rt.shell_request), &d));
+                }
+            }
             Step::World { check, .. } => check(world).map_err(|why| fail(why, &d))?,
         }
     }
@@ -330,7 +335,7 @@ impl Driver {
             .map(|e| (e.visible[0] + e.visible[2] / 2.0, e.visible[1] + e.visible[3] / 2.0))
     }
 
-    /// Every visible text inside the element keyed `key`, joined by spaces.
+    /// The element keyed `key`'s label, then every visible text inside it, joined by spaces.
     fn text_in(&self, key: &str) -> Option<String> {
         let all = self.rt.elements();
         let root = all.iter().position(|e| e.key.as_deref() == Some(key) && !e.exiting)?;
@@ -343,9 +348,15 @@ impl Driver {
                 None => return false,
             }
         };
-        let texts: Vec<&str> = (0..all.len())
-            .filter(|&i| inside(i) && all[i].opacity > 0.01 && all[i].visible[2] > 0.5)
-            .filter_map(|i| all[i].text.as_deref())
+        // An icon button's label is what it says (its tooltip, and what a screen reader reads).
+        let label = all[root].label.as_deref().filter(|l| !l.is_empty());
+        let texts: Vec<&str> = label
+            .into_iter()
+            .chain(
+                (0..all.len())
+                    .filter(|&i| inside(i) && all[i].opacity > 0.01 && all[i].visible[2] > 0.5)
+                    .filter_map(|i| all[i].text.as_deref()),
+            )
             .collect();
         Some(texts.join(" "))
     }

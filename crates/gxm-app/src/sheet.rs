@@ -1,5 +1,6 @@
 //! The sheets over the window: Add (a repository already on disk), Init (a folder Add found
-//! without git, made a repository where it is) and Clone (one from a remote, over SSH). Each is
+//! without git, made a repository where it is) and Clone (one from a remote, over SSH). (The
+//! account's and the update's sheets have machines of their own: `account`, `update`.) Each is
 //! a small machine: editing, then working off the UI thread, then closed with the repository
 //! open in the window, or back to editing with what went wrong. A clone can be cancelled while
 //! it runs.
@@ -30,12 +31,16 @@ pub enum Sheet {
         phase: Phase,
     },
     Clone(Phase),
+    /// An update is in place: restart into it, with its notes, and why a restart failed.
+    Update {
+        error: Option<String>,
+    },
 }
 
 impl Sheet {
     fn phase(&self) -> Option<&Phase> {
         match self {
-            Sheet::Closed | Sheet::Account(_) => None,
+            Sheet::Closed | Sheet::Account(_) | Sheet::Update { .. } => None,
             Sheet::Add(phase) | Sheet::Clone(phase) | Sheet::Init { phase, .. } => Some(phase),
         }
     }

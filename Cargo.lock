@@ -1254,6 +1254,7 @@ dependencies = [
  "keyring",
  "serde",
  "serde_json",
+ "sha2",
  "ureq",
 ]
 
@@ -1275,6 +1276,7 @@ dependencies = [
  "gxm-core",
  "jiff",
  "serde_json",
+ "sha2",
  "tempfile",
 ]
 

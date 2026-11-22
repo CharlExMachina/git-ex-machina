@@ -17,4 +17,5 @@ pub mod remote;
 pub mod repo;
 pub mod secrets;
 pub mod time;
+pub mod update;
 pub mod workspace;

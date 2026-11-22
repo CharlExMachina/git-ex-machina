@@ -1,4 +1,4 @@
-//! A sheet over the window (Add, Init, Clone, Account): a 460-wide panel raised over a dimmed window, with a
+//! A sheet over the window (Add, Init, Clone, Account, Update): a 460-wide panel raised over a dimmed window, with a
 //! title, what it's for, its fields, what went wrong, and Cancel beside the primary button.
 
 use rune::{El, col, el, row, text};
@@ -16,6 +16,10 @@ pub fn layer(s: &App, t: &Theme) -> Vec<El> {
         Sheet::Closed => return Vec::new(),
         Sheet::Account(state) => {
             let (title, about, body, footer) = super::account::sheet(t, state);
+            return panel(t, title, about, body, footer);
+        }
+        Sheet::Update { error } => {
+            let (title, about, body, footer) = super::update::sheet(s, t, error.as_deref());
             return panel(t, title, about, body, footer);
         }
         Sheet::Add(phase) => (

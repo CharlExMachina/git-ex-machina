@@ -28,6 +28,31 @@ pub fn button_in(
     badge: Option<String>,
     pressed: bool,
 ) -> El {
+    build(t, variant, glyph, label, badge, pressed, None)
+}
+
+/// An icon-only [`button`] named `label` (its tooltip and what a screen reader says), its glyph
+/// in `ink` when given instead of its variant's: an update waiting is accent, a failure removed.
+pub fn icon_button(
+    t: &Theme,
+    variant: Variant,
+    glyph: &'static Icon,
+    ink: Option<Color>,
+    label: &str,
+    pressed: bool,
+) -> El {
+    build(t, variant, Some(glyph), "", None, pressed, ink).label(label.to_owned()).help(label.to_owned())
+}
+
+fn build(
+    t: &Theme,
+    variant: Variant,
+    glyph: Option<&'static Icon>,
+    label: &str,
+    badge: Option<String>,
+    pressed: bool,
+    glyph_ink: Option<Color>,
+) -> El {
     let ink = match variant {
         Variant::Primary => t.on_accent,
         Variant::Secondary => t.ink,
@@ -56,7 +81,7 @@ pub fn button_in(
         }
     }
     if let Some(g) = glyph {
-        b = b.child(icon(g, 14.0).color(ink));
+        b = b.child(icon(g, 14.0).color(glyph_ink.unwrap_or(ink)));
     }
     if !only_icon {
         b = b.child(text(label.to_owned()).font(ty::CONTROL).color(ink));

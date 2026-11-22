@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=git-ex-machina
+GenericName=Git client
+Comment=A native git client for GitHub, GitLab and Bitbucket
+Exec=git-ex-machina %U
+Icon=git-ex-machina
+Terminal=false
+Categories=Development;RevisionControl;
+Keywords=git;github;gitlab;bitbucket;pull request;
+StartupWMClass=git-ex-machina

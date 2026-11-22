@@ -16,6 +16,7 @@ use crate::ops::Ops;
 use crate::pulls::Pulls;
 use crate::review::Mode;
 use crate::sheet::{Fields, Sheet, SheetJobs};
+use crate::update::{Update, UpdateJobs};
 
 pub struct App {
     pub env: Env,
@@ -50,6 +51,11 @@ pub struct App {
     /// Who's signed in to GitHub; None when no one is.
     pub account: Option<gxm_core::forge::model::User>,
     pub account_jobs: AccountJobs,
+    /// The sidebar's + menu (Add, Clone) is open.
+    pub add_menu: bool,
+    /// A newer release, from offered to restarted into.
+    pub update: Update,
+    pub update_jobs: UpdateJobs,
 }
 
 /// Loading is an explicit machine: nothing is read before the first frame is up, and the
@@ -187,12 +193,15 @@ impl App {
             sheet_jobs: SheetJobs::default(),
             account: None,
             account_jobs: AccountJobs::new(env_token),
+            update: Update::Idle,
+            add_menu: false,
+            update_jobs: UpdateJobs::default(),
         }
     }
 
     /// A read, a write or a provider call is in flight: what's on screen may be about to change.
     pub fn busy(&self) -> bool {
-        self.loads.busy() || self.pulls.busy() || self.account_jobs.reading()
+        self.loads.busy() || self.pulls.busy() || self.account_jobs.reading() || self.update_jobs.checking()
     }
 
     /// Lights the open pull request's commits in the graph, or clears the light.
