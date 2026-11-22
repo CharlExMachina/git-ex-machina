@@ -1,6 +1,6 @@
 //! Notes out as GitHub-flavoured markdown: what the tag carries, and what GitHub shows.
 
-use super::{Line, Mark, Notes, Part, Rich, Span};
+use super::{Chip, Line, Mark, Notes, Part, Rich, Span};
 
 /// One markdown block, and whether it's a list item (list items sit on consecutive lines; every
 /// other block has a blank line before it).
@@ -17,15 +17,22 @@ impl Block {
     }
 }
 
-/// `notes` as markdown, ending in a newline (empty notes are empty).
+/// `notes` as markdown, ending in a newline (empty notes are empty). Attached files link to
+/// their names; see [`markdown_with`].
 pub fn markdown(notes: &Notes) -> String {
+    markdown_with(notes, None)
+}
+
+/// [`markdown`], with attached files linked where the release will keep them: `assets` is the
+/// release's download URL (`https://github.com/owner/name/releases/download/v1.0.0`).
+pub fn markdown_with(notes: &Notes, assets: Option<&str>) -> String {
     let mut blocks: Vec<Block> = Vec::new();
     let mut in_fold = false;
     for part in &notes.parts {
         match part {
             Part::Heading(level, title) => {
                 let hashes = "#".repeat(usize::from((*level).clamp(1, 3)));
-                let title = inline(title.text.lines().next().unwrap_or_default(), &title.marks);
+                let title = inline(title.text.lines().next().unwrap_or_default(), &title.marks, assets);
                 if !title.trim().is_empty() {
                     blocks.push(Block::new(format!("{hashes} {title}")));
                 }
@@ -38,7 +45,7 @@ pub fn markdown(notes: &Notes) -> String {
                 blocks.push(Block::new(format!("<details>\n<summary>{summary}</summary>")));
                 in_fold = true;
             }
-            Part::Body(body) => body_blocks(body, &mut blocks),
+            Part::Body(body) => body_blocks(body, assets, &mut blocks),
         }
     }
     if in_fold {
@@ -62,7 +69,7 @@ pub fn markdown(notes: &Notes) -> String {
 
 /// A body's lines as blocks: paragraphs, list items (indented under their parents, numbered per
 /// level), quotes and fenced code, each run of quote or code lines one block.
-fn body_blocks(body: &Rich, blocks: &mut Vec<Block>) {
+fn body_blocks(body: &Rich, assets: Option<&str>, blocks: &mut Vec<Block>) {
     let mut widths: Vec<usize> = Vec::new();
     let mut counts: Vec<u32> = Vec::new();
     let mut run: Option<(Line, Vec<String>)> = None;
@@ -80,6 +87,9 @@ fn body_blocks(body: &Rich, blocks: &mut Vec<Block>) {
     };
     for (start, line, kind) in body.each_line() {
         let end = start + line.len();
+        // A paragraph led by a task's checkbox is a task list's item.
+        let tasked = body.marks.iter().any(|m| m.start == start && matches!(m.mark, Mark::Chip(Chip::Task(_))));
+        let kind = if tasked && kind == Line::Paragraph { Line::Bullet(0) } else { kind };
         let marks: Vec<Span> = body
             .marks
             .iter()
@@ -99,7 +109,7 @@ fn body_blocks(body: &Rich, blocks: &mut Vec<Block>) {
                     last.ends_list = true;
                 }
             }
-            Line::Quote => run.get_or_insert_with(|| (Line::Quote, Vec::new())).1.push(inline(line, &marks)),
+            Line::Quote => run.get_or_insert_with(|| (Line::Quote, Vec::new())).1.push(inline(line, &marks, assets)),
             Line::Bullet(level) | Line::Numbered(level) => {
                 let level = usize::from(level).min(widths.len());
                 widths.truncate(level);
@@ -112,13 +122,30 @@ fn body_blocks(body: &Rich, blocks: &mut Vec<Block>) {
                 };
                 let indent = " ".repeat(widths.iter().sum());
                 widths.push(marker.len() + 1);
-                let text = format!("{indent}{marker} {}", inline(line, &marks));
+                // A task's checkbox leads its item: `- [x] Done`.
+                let task = marks.iter().find_map(|m| match &m.mark {
+                    Mark::Chip(Chip::Task(done)) if m.start == 0 => Some((*done, m.end)),
+                    _ => None,
+                });
+                let item = match task {
+                    Some((done, end)) => {
+                        let skip = end + line[end..].len() - line[end..].trim_start().len();
+                        let rest: Vec<Span> = marks
+                            .iter()
+                            .filter(|m| m.end > skip)
+                            .map(|m| Span { start: m.start.max(skip) - skip, end: m.end - skip, mark: m.mark.clone() })
+                            .collect();
+                        format!("[{}] {}", if done { "x" } else { " " }, inline(&line[skip..], &rest, assets))
+                    }
+                    None => inline(line, &marks, assets),
+                };
+                let text = format!("{indent}{marker} {}", item.trim_end());
                 blocks.push(Block { text, item: true, ends_list: false });
             }
             Line::Paragraph => {
                 widths.clear();
                 counts.clear();
-                blocks.push(Block::new(inline(line, &marks)));
+                blocks.push(Block::new(inline(line, &marks, assets).trim_end().to_owned()));
             }
         }
     }
@@ -128,12 +155,12 @@ fn body_blocks(body: &Rich, blocks: &mut Vec<Block>) {
 /// One line's text with its marks as markdown delimiters, outermost mark first. A mark's edges
 /// skip the spaces it covers (`**word **` isn't bold in markdown), and characters markdown
 /// would read as formatting are escaped, except inside code and URLs.
-fn inline(text: &str, marks: &[Span]) -> String {
+fn inline(text: &str, marks: &[Span], assets: Option<&str>) -> String {
     let marks: Vec<Span> = marks
         .iter()
         .filter_map(|m| {
             let s = &text[m.start..m.end];
-            let (start, end) = if m.mark == Mark::Code {
+            let (start, end) = if matches!(m.mark, Mark::Code | Mark::Chip(_)) {
                 (m.start, m.end)
             } else {
                 (m.start + (s.len() - s.trim_start().len()), m.end - (s.len() - s.trim_end().len()))
@@ -171,7 +198,16 @@ fn inline(text: &str, marks: &[Span]) -> String {
             open.push(m.clone());
         }
         let piece = &text[a..b];
-        if open.contains(&Mark::Code) {
+        let chip = marks.iter().find_map(|m| match &m.mark {
+            Mark::Chip(c) if m.start <= a && m.end >= b => Some((m.start, c)),
+            _ => None,
+        });
+        if let Some((start, chip)) = chip {
+            // A chip writes itself once, whatever its label says.
+            if start == a {
+                out.push_str(&chip_markdown(chip, assets));
+            }
+        } else if open.contains(&Mark::Code) {
             out.push_str(piece);
         } else {
             out.push_str(&escape(piece, a == 0));
@@ -181,6 +217,19 @@ fn inline(text: &str, marks: &[Span]) -> String {
         out.push_str(&if m == Mark::Code { close_code(tick) } else { close(&m) });
     }
     out
+}
+
+/// What a chip writes: `@login`, `#12`, an image or a link to an attached file.
+fn chip_markdown(chip: &Chip, assets: Option<&str>) -> String {
+    match chip {
+        Chip::Mention(login) => format!("@{login}"),
+        Chip::Pull(n) => format!("#{n}"),
+        Chip::Task(done) => format!("[{}]", if *done { "x" } else { " " }),
+        Chip::File(name) => {
+            let url = assets.map_or_else(|| name.clone(), |base| format!("{}/{name}", base.trim_end_matches('/')));
+            if Chip::is_image(name) { format!("![{name}]({url})") } else { format!("[{name}]({url})") }
+        }
+    }
 }
 
 fn open_code(tick: &str) -> String {
@@ -198,6 +247,7 @@ fn opener(m: &Mark) -> &'static str {
         Mark::Strike => "~~",
         Mark::Code => "`",
         Mark::Link(_) => "[",
+        Mark::Chip(_) => "",
     }
 }
 

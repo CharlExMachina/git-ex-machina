@@ -38,6 +38,8 @@ pub fn journey(args: &[String]) -> Result<(), String> {
         let replay = build_world_in(name, &crate::target().join("worlds").join(format!("{name}-video")))?;
         let mp4 = dir.join(format!("{name}.mp4"));
         let mut c = Command::new(&bin);
+        // Files the journey drops are named from the world's `~/code`.
+        c.current_dir(replay.code());
         c.envs(replay.env().child_vars()).arg("--script").arg(dir.join("script.json"));
         c.args(["--theme", theme, "--realtime"]).stdout(std::process::Stdio::null());
         run(c.arg("--video").arg(&mp4).args(["--keys", "--pointer", "--scale", "1", "--fps", "30"]))?;

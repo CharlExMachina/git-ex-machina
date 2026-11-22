@@ -10,7 +10,7 @@ mod write;
 mod tests;
 
 pub use read::parse;
-pub use write::markdown;
+pub use write::{markdown, markdown_with};
 
 /// A whole set of notes, top to bottom.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -52,6 +52,69 @@ pub enum Mark {
     Strike,
     Code,
     Link(String),
+    /// Something that stands whole in the text, its label the text it covers.
+    Chip(Chip),
+}
+
+/// What a chip stands for, and what it writes.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Chip {
+    /// `@login`: someone on GitHub, who GitHub notifies.
+    Mention(String),
+    /// `#123`: a pull request (or issue), which GitHub links.
+    Pull(u64),
+    /// A task list item's checkbox, done or not: `- [x]`. It starts its line.
+    Task(bool),
+    /// A file attached to the release (an image shows in the notes), by its asset name.
+    File(String),
+}
+
+impl Chip {
+    /// The text a chip covers: what it reads as in the editor.
+    pub fn label(&self) -> String {
+        match self {
+            Chip::Mention(login) => format!("@{login}"),
+            Chip::Pull(n) => format!("#{n}"),
+            // The editor draws a task's checkbox as an icon: its label only holds the place.
+            Chip::Task(_) => "\u{a0}".to_owned(),
+            Chip::File(name) => name.clone(),
+        }
+    }
+
+    /// The editor's id for it: `user:ana-ruiz`, `pull:12`, `task:done`, `file:shot.png`.
+    pub fn id(&self) -> String {
+        match self {
+            Chip::Mention(login) => format!("user:{login}"),
+            Chip::Pull(n) => format!("pull:{n}"),
+            Chip::Task(done) => format!("task:{}", if *done { "done" } else { "open" }),
+            Chip::File(name) => format!("file:{name}"),
+        }
+    }
+
+    pub fn of_id(id: &str) -> Option<Chip> {
+        let (kind, value) = id.split_once(':')?;
+        Some(match kind {
+            "user" => Chip::Mention(value.to_owned()),
+            "pull" => Chip::Pull(value.parse().ok()?),
+            "task" => Chip::Task(value == "done"),
+            "file" => Chip::File(value.to_owned()),
+            _ => return None,
+        })
+    }
+
+    /// Whether a file of this name shows as an image.
+    pub fn is_image(name: &str) -> bool {
+        let ext = name.rsplit('.').next().unwrap_or_default().to_ascii_lowercase();
+        matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg")
+    }
+}
+
+/// A file's name as GitHub keeps it as a release asset: letters, digits, `.`, `-` and `_`.
+pub fn asset_name(name: &str) -> String {
+    let clean: String =
+        name.chars().map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '-' }).collect();
+    let clean = clean.trim_matches('-').to_owned();
+    if clean.is_empty() { "file".to_owned() } else { clean }
 }
 
 impl Mark {
@@ -63,6 +126,7 @@ impl Mark {
             Mark::Italic => 2,
             Mark::Strike => 3,
             Mark::Code => 4,
+            Mark::Chip(_) => 5,
         }
     }
 }

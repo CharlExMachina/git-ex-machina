@@ -9,6 +9,7 @@ mod history;
 mod inspector;
 mod notes;
 mod on_graph;
+mod picker;
 mod pull;
 mod pull_parts;
 mod settings;
@@ -32,8 +33,11 @@ const INSPECTOR_W: f32 = size::INSPECTOR + 1.0;
 
 pub fn view(s: &App, cx: &mut Cx<App>) -> El {
     let t = Theme::new(cx.system_dark());
+    // The release notes' caret, for their popup and their rows; read only while they're open, as
+    // reading it runs the view again whenever the caret moves.
+    let caret = matches!(s.sheet, crate::sheet::Sheet::Tag(_)).then(|| cx.caret(crate::keys::NOTES)).flatten();
     if s.load == Load::Loaded && s.repos.is_empty() {
-        return welcome::screen(s, &t).children(sheet::layer(s, &t)).child(toast::layer(s, &t));
+        return welcome::screen(s, &t).children(sheet::layer(s, &t, caret)).child(toast::layer(s, &t));
     }
     let cockpit = s.cockpit().is_some();
     let main = match &s.load {
@@ -58,7 +62,7 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
     if s.add_menu && s.sidebar_open && !cockpit {
         shell = shell.children(sidebar::add_menu(&t));
     }
-    shell.children(settings::layer(s, &t)).children(sheet::layer(s, &t)).child(toast::layer(s, &t))
+    shell.children(settings::layer(s, &t)).children(sheet::layer(s, &t, caret)).child(toast::layer(s, &t))
 }
 
 fn message(t: &Theme, e: &str) -> El {

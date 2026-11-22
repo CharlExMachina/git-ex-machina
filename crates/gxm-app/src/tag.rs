@@ -20,6 +20,8 @@ pub struct TagSheet {
     pub short: String,
     pub subject: String,
     pub tagging: Tagging,
+    /// Where the repository lives on its provider: attached files go up to its release.
+    pub origin: Option<Remote>,
     pub phase: Phase,
 }
 
@@ -42,6 +44,11 @@ impl TagSheet {
     /// Whether the release takes its notes from the tag, so the sheet writes them.
     pub fn writes_notes(&self) -> bool {
         self.tagging.trigger.as_ref().is_some_and(|t| t.notes == NotesFrom::Tag)
+    }
+
+    /// Where `tag`'s release will keep its files, when the repository is on GitHub.
+    pub fn assets(&self, tag: &str) -> Option<String> {
+        self.origin.as_ref().and_then(|o| gxm_core::forge::assets::download_base(o, tag))
     }
 }
 
@@ -72,6 +79,12 @@ pub enum TagEffect {
     Create(NewTag),
     /// The tag is made: read the history again and say so.
     Done(String),
+    /// The tag is pushed: these files (asset name, where it is) go up to its release once the
+    /// workflow publishes it.
+    Attach {
+        tag: String,
+        files: Vec<(String, std::path::PathBuf)>,
+    },
 }
 
 /// One transition. `tagging` and `commit` are the selected repository's and commit's, for Open.
@@ -79,18 +92,18 @@ pub fn step(
     sheet: &mut Sheet,
     fields: &mut TagFields,
     event: TagEvent,
-    found: Option<(Tagging, String, String)>,
+    found: Option<(Tagging, String, String, Option<Remote>)>,
 ) -> Vec<TagEffect> {
     match (sheet, event) {
         (sheet @ Sheet::Closed, TagEvent::Open(commit)) => {
-            let Some((tagging, short, subject)) = found else { return vec![] };
+            let Some((tagging, short, subject, origin)) = found else { return vec![] };
             fields.name = TextEdit::new(tagging.suggest().unwrap_or_default());
             fields.message = TextEdit::new("");
             fields.notes = NotesEditor::default();
             // Where pushing a tag releases, the push is the point; elsewhere a tag starts local.
             fields.push = tagging.trigger.is_some() && tagging.remote.is_some();
             let phase = Phase::Editing { error: None };
-            *sheet = Sheet::Tag(Box::new(TagSheet { commit, short, subject, tagging, phase }));
+            *sheet = Sheet::Tag(Box::new(TagSheet { commit, short, subject, tagging, origin, phase }));
             vec![TagEffect::Focus(keys::TAG_NAME)]
         }
         (Sheet::Tag(t), TagEvent::TogglePush) if t.phase.editing() && t.tagging.remote.is_some() => {
@@ -127,9 +140,16 @@ pub fn step(
         (Sheet::Tag(t), TagEvent::Submit) if t.phase.editing() => {
             let name = fields.name.text.trim().to_owned();
             let taken = t.tagging.existing(&name).filter(|on| *on != t.commit);
+            let files = t.writes_notes() && !fields.notes.files.is_empty();
             let refuse = match taken {
                 _ if name.is_empty() => Some("Name the tag".to_owned()),
                 Some(on) => Some(format!("{name} already exists, on {}", on.get(..7).unwrap_or(on))),
+                None if files && t.assets(&name).is_none() => {
+                    Some("Files attach to the release on GitHub, and this repository isn't on GitHub".to_owned())
+                }
+                None if files && !fields.push => {
+                    Some("Files attach to the release, so the tag has to be pushed".to_owned())
+                }
                 None => None,
             };
             if let Some(why) = refuse {
@@ -137,18 +157,33 @@ pub fn step(
                 return vec![];
             }
             t.phase = Phase::Working;
-            let message =
-                if t.writes_notes() { fields.notes.markdown() } else { fields.message.text.trim().to_owned() };
+            let message = if t.writes_notes() {
+                fields.notes.markdown(t.assets(&name).as_deref())
+            } else {
+                fields.message.text.trim().to_owned()
+            };
             vec![TagEffect::Create(NewTag { name, commit: t.commit.clone(), message, push: fields.push })]
         }
         (sheet @ Sheet::Tag(_), TagEvent::Landed(Ok(remote))) => {
-            let name = fields.name.text.trim();
+            let name = fields.name.text.trim().to_owned();
+            let writes_notes = matches!(sheet, Sheet::Tag(t) if t.writes_notes());
+            let files =
+                if writes_notes && remote.is_some() { std::mem::take(&mut fields.notes.files) } else { Vec::new() };
+            let waiting = match files.as_slice() {
+                [] => String::new(),
+                [(one, _)] => format!(" · {one} attaches when the release is published"),
+                many => format!(" · {} files attach when the release is published", many.len()),
+            };
             let said = match remote {
-                Some(remote) => format!("Pushed {name} to {remote}"),
+                Some(remote) => format!("Pushed {name} to {remote}{waiting}"),
                 None => format!("Tagged {name}"),
             };
             *sheet = Sheet::Closed;
-            vec![TagEffect::Done(said)]
+            let mut effects = vec![TagEffect::Done(said)];
+            if !files.is_empty() {
+                effects.push(TagEffect::Attach { tag: name, files });
+            }
+            effects
         }
         (Sheet::Tag(t), TagEvent::Landed(Err(message))) => {
             t.phase = Phase::Editing { error: Some(Ops::reason(&message).to_owned()) };
@@ -158,17 +193,20 @@ pub fn step(
     }
 }
 
-/// The tag being made, and GitHub's draft of its notes, off the UI thread.
+/// The tag being made, GitHub's draft of its notes, and the files waiting for their releases,
+/// off the UI thread.
 #[derive(Default)]
 pub struct TagJobs {
     job: Latest<Result<Option<String>, String>>,
     draft: Latest<Result<String, String>>,
+    attach: Latest<Result<String, String>>,
 }
 
 impl TagJobs {
     pub fn set_waker(&self, waker: Waker) {
         self.job.set_waker(waker.clone());
-        self.draft.set_waker(waker);
+        self.draft.set_waker(waker.clone());
+        self.attach.set_waker(waker);
     }
 }
 
@@ -178,7 +216,8 @@ impl App {
         let found = match &event {
             TagEvent::Open(id) => self.commit(id).and_then(|c| {
                 let tagging = self.history.as_ref()?.tagging.clone();
-                Some((tagging, c.short_id().to_owned(), c.subject.clone()))
+                let origin = self.repo().and_then(|r| r.summary.origin.clone());
+                Some((tagging, c.short_id().to_owned(), c.subject.clone(), origin))
             }),
             _ => None,
         };
@@ -213,6 +252,16 @@ impl App {
                         tag::create(&env, &path, &new).map_err(Ops::said)
                     });
                 }
+                TagEffect::Attach { tag, files } => {
+                    let Some(origin) = self.repo().and_then(|r| r.summary.origin.clone()) else { continue };
+                    self.tag_jobs.attach.request(
+                        (self.env.clone(), origin, tag, files),
+                        |(env, origin, tag, files)| {
+                            gxm_core::forge::assets::queue(&env, &origin, &tag, &files)?;
+                            gxm_core::forge::assets::attach_all(&env)
+                        },
+                    );
+                }
                 TagEffect::Done(said) => {
                     self.reload_repo();
                     if let Some(tx) = tx.as_deref_mut() {
@@ -223,9 +272,23 @@ impl App {
         }
     }
 
-    /// Takes the finished tag, or GitHub's draft. True when the state changed.
+    /// Uploads what an earlier run left waiting for its release.
+    pub fn resume_attachments(&mut self) {
+        self.tag_jobs.attach.request(self.env.clone(), |env| gxm_core::forge::assets::attach_all(&env));
+    }
+
+    /// Takes the finished tag, GitHub's draft, or files attached. True when the state changed.
     pub fn land_tag(&mut self, tx: &mut Tx) -> bool {
-        let drafted = self.tag_jobs.draft.take().map(|d| self.tag_event(TagEvent::Drafted(d), Some(tx))).is_some();
+        let attached = match self.tag_jobs.attach.take() {
+            Some(Ok(said)) if said.is_empty() => false,
+            Some(Ok(said) | Err(said)) => {
+                self.toasts.show(&said, tx);
+                true
+            }
+            None => false,
+        };
+        let drafted =
+            attached | self.tag_jobs.draft.take().map(|d| self.tag_event(TagEvent::Drafted(d), Some(tx))).is_some();
         let Some(result) = self.tag_jobs.job.take() else { return drafted };
         self.tag_event(TagEvent::Landed(result), Some(tx));
         true

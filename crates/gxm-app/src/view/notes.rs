@@ -1,19 +1,21 @@
 //! The release notes editor in the tag sheet: a formatting bar like GitHub's, then the notes as
-//! they'll read (headings, collapsed sections, rich text), or the markdown they'll be sent as.
-//! GitHub's draft starts them.
+//! they'll read (headings, collapsed sections, rich text with mentions, references, tasks and
+//! attached files), or the markdown they'll be sent as. GitHub's draft starts them.
 
-use rune::{Block, El, Icon, Mark, ScrollSpec, Tx, col, el, row, text, text_input};
+use gxm_core::notes::Chip;
+use rune::{Block, El, Icon, Mark, PillStyle, ScrollSpec, Tx, col, el, row, text, text_input};
 
 use crate::icons;
 use crate::keys;
 use crate::notes::{Draft, Kind, NotesEditor};
 use crate::state::App;
-use crate::tag::TagEvent;
+use crate::tag::{TagEvent, TagSheet};
 use crate::theme::{Theme, size, ty};
 use crate::ui::{self, Variant};
 
 /// The notes, under their heading: Write or Markdown, GitHub's draft, the bar and the parts.
-pub fn editor(s: &App, t: &Theme) -> El {
+/// `caret` is the notes' caret as last drawn, in window points.
+pub fn editor(s: &App, t: &Theme, tag: &TagSheet, caret: Option<[f32; 4]>) -> El {
     let n = &s.tag_fields.notes;
     let asking = n.draft == Draft::Asking;
     let draft = ui::button_in(
@@ -47,23 +49,31 @@ pub fn editor(s: &App, t: &Theme) -> El {
         .child(draft)
         .child(ui::segmented(t, vec![(write, !shown), (source, shown)]));
     let inside = if shown {
-        col().w_full().padding(12.0).child(
-            text(n.markdown()).key(keys::NOTES_MARKDOWN).font(ty::MONO).color(t.ink_muted).wrap().selectable(true),
-        )
+        let markdown = n.markdown(tag.assets(s.tag_fields.name.text.trim()).as_deref());
+        col()
+            .w_full()
+            .padding(12.0)
+            .child(text(markdown).key(keys::NOTES_MARKDOWN).font(ty::MONO).color(t.ink_muted).wrap().selectable(true))
     } else {
-        parts(t, n)
+        parts(t, n, caret)
     };
     let mut well = col().w_full().radius(size::RADIUS_SM).fill(t.well).clip_rounded(size::RADIUS_SM);
     for sh in t.shadow_well() {
         well = well.box_shadow(sh);
     }
     if !shown {
-        well = well.child(bar(t, n)).child(el().w_full().h(1.0).fill(t.line));
+        well = well.child(bar(t, n, tag.assets("").is_some())).child(el().w_full().h(1.0).fill(t.line));
     }
     well = well.child(
         col().w_full().max_h(size::NOTES_MAX_H).min_h(0.0).scroll(ScrollSpec { stick_bottom: false }).child(inside),
     );
-    let mut box_ = col().key(keys::NOTES).w_full().gap(6.0).child(header).child(well);
+    let mut box_ =
+        col().key(keys::NOTES).w_full().gap(6.0).child(header).child(well).on_drop_files(|s: &mut App, files, tx| {
+            for f in files {
+                s.tag_fields.notes.add_file(f.clone());
+            }
+            refocus(s, tx);
+        });
     if let Some(url) = &n.link {
         box_ = box_.child(link_row(t, url));
     }
@@ -73,11 +83,12 @@ pub fn editor(s: &App, t: &Theme) -> El {
     box_
 }
 
-/// The formatting bar: heading, bold, italic, strikethrough, code, link; bullets, numbers, quote,
-/// code block; a collapsed section. Each lights while the caret is in what it makes, and none
-/// takes focus from the notes.
-fn bar(t: &Theme, n: &NotesEditor) -> El {
+/// The formatting bar: heading, bold, italic, strikethrough, code, link; bullets, numbers,
+/// tasks, quote, code block; a collapsed section; and attaching a file (on GitHub, `attaches`).
+/// Each lights while the caret is in what it makes, and none takes focus from the notes.
+fn bar(t: &Theme, n: &NotesEditor, attaches: bool) -> El {
     let (kind, block) = n.current_kind();
+    let task = n.on_task();
     let tool = |glyph: &'static Icon, label: &str, key: &str, on: bool, act: fn(&mut NotesEditor)| {
         ui::icon_button(t, Variant::Ghost, glyph, Some(if on { t.accent } else { t.ink_muted }), label, on)
             .key(key)
@@ -105,6 +116,31 @@ fn bar(t: &Theme, n: &NotesEditor) -> El {
         notes.link = Some(rune::TextEdit::new(url.unwrap_or_default()));
         tx.focus(keys::NOTES_LINK_URL, true);
     });
+    let attach = ui::icon_button(
+        t,
+        Variant::Ghost,
+        &icons::ATTACH,
+        Some(t.ink_muted),
+        "Attach files (or drop them here)",
+        false,
+    )
+    .key(keys::NOTES_ATTACH)
+    .focusable(false);
+    let attach = if attaches {
+        attach.on_press_tx(|s: &mut App, tx| {
+            s.tag_fields.notes.at = s.tag_fields.notes.current();
+            let options =
+                rune::FileDialogOptions { title: "Attach a file to the release".to_owned(), ..Default::default() };
+            tx.open_file(options, |s: &mut App, picked, tx| {
+                if let Ok(Some(path)) = picked {
+                    s.tag_fields.notes.add_file(path);
+                }
+                refocus(s, tx);
+            });
+        })
+    } else {
+        attach.disabled(true).opacity(0.5).help("Files attach to the release on GitHub")
+    };
     row()
         .w_full()
         .center_y()
@@ -126,12 +162,19 @@ fn bar(t: &Theme, n: &NotesEditor) -> El {
         .child(tool(&icons::CODE, "Code", keys::NOTES_CODE, n.has_mark(&Mark::Code), |n| n.toggle_mark(Mark::Code)))
         .child(link)
         .child(gap())
-        .child(tool(&icons::BULLETS, "Bulleted list", keys::NOTES_BULLETS, matches!(block, Block::Bullet(_)), |n| {
-            n.toggle_block(Block::Bullet(0));
-        }))
+        .child(tool(
+            &icons::BULLETS,
+            "Bulleted list",
+            keys::NOTES_BULLETS,
+            !task && matches!(block, Block::Bullet(_)),
+            |n| {
+                n.toggle_block(Block::Bullet(0));
+            },
+        ))
         .child(tool(&icons::NUMBERS, "Numbered list", keys::NOTES_NUMBERS, matches!(block, Block::Numbered(_)), |n| {
             n.toggle_block(Block::Numbered(0));
         }))
+        .child(tool(&icons::TASKS, "Task list (again checks it off)", keys::NOTES_TASKS, task, |n| n.toggle_task()))
         .child(tool(&icons::QUOTE, "Quote", keys::NOTES_QUOTE, block == Block::Quote, |n| n.toggle_block(Block::Quote)))
         .child(tool(&icons::CODE_BLOCK, "Code block", keys::NOTES_CODE_BLOCK, block == Block::Code, |n| {
             n.toggle_block(Block::Code);
@@ -142,20 +185,40 @@ fn bar(t: &Theme, n: &NotesEditor) -> El {
             "Collapsed section: what follows folds under this line",
             keys::NOTES_FOLD,
             kind == Kind::Fold,
-            |n| {
-                n.toggle_fold();
-            },
+            |n| n.toggle_fold(),
         ))
+        .child(gap())
+        .child(attach)
 }
 
 /// The caret back in the notes, in the part it was in.
-fn refocus(s: &mut App, tx: &mut Tx) {
+pub(super) fn refocus(s: &mut App, tx: &mut Tx) {
     tx.focus(keys::notes_part(s.tag_fields.notes.at), true);
+}
+
+/// How a chip looks: a mention or reference on the accent's tint, a task's checkbox as a box
+/// (accent once checked), an attached file with its kind's icon.
+fn chip_style(t: Theme) -> impl Fn(&str) -> PillStyle + 'static {
+    move |id| match Chip::of_id(id) {
+        Some(Chip::Mention(_)) => PillStyle::new().bg(t.accent_soft).fg(t.accent).icon(&icons::PERSON),
+        Some(Chip::Pull(_)) => PillStyle::new().bg(t.accent_soft).fg(t.accent).icon(&icons::PULL_REQUEST),
+        Some(Chip::Task(true)) => PillStyle::new().bg(rune::Color::TRANSPARENT).fg(t.accent).icon(&icons::BOX_CHECKED),
+        Some(Chip::Task(false)) => PillStyle::new().bg(rune::Color::TRANSPARENT).fg(t.ink_faint).icon(&icons::BOX),
+        Some(Chip::File(name)) if Chip::is_image(&name) => PillStyle::new().bg(t.control).fg(t.ink).icon(&icons::IMAGE),
+        Some(Chip::File(_)) => PillStyle::new().bg(t.control).fg(t.ink).icon(&icons::FILE),
+        None => PillStyle::new(),
+    }
+}
+
+/// Whether the caret is on the first and last rows `rect` (a field, as drawn) holds.
+fn rows(caret: [f32; 4], rect: [f32; 4]) -> (bool, bool) {
+    let half = caret[3] * 0.5;
+    (caret[1] < rect[1] + half, caret[1] + caret[3] > rect[1] + rect[3] - half)
 }
 
 /// Every part, as it will read: headings in their size, a section's summary behind its
 /// chevron with what folds under it indented, text in the body's.
-fn parts(t: &Theme, n: &NotesEditor) -> El {
+fn parts(t: &Theme, n: &NotesEditor, caret: Option<[f32; 4]>) -> El {
     let mut list = col().w_full().gap(4.0).padding(12.0);
     // The parts under the open collapsed section, drawn together on one rule.
     let mut folded: Option<Vec<El>> = None;
@@ -169,6 +232,7 @@ fn parts(t: &Theme, n: &NotesEditor) -> El {
             Kind::Fold => ty::BODY_STRONG,
             Kind::Body => ty::BODY,
         };
+        let edges = caret.filter(|_| p.edit.focused).zip(n.rects.get(&id)).map(|(c, r)| rows(c, *r));
         let mut field = text_input(&p.edit, font)
             .key(keys::notes_part(id))
             .label(match p.kind {
@@ -181,14 +245,26 @@ fn parts(t: &Theme, n: &NotesEditor) -> El {
                 // The part went (joined to another) while an edit was on its way.
                 None => &mut s.scratch,
             })
+            .on_input_change(move |s: &mut App, _| {
+                let notes = &mut s.tag_fields.notes;
+                notes.repad();
+                notes.sense_pick(id);
+            })
             .on_input_key(move |s: &mut App, ev, tx| {
-                let taken = s.tag_fields.notes.key(id, ev);
+                if super::picker::key(s, id, ev, tx) {
+                    return true;
+                }
+                let taken = s.tag_fields.notes.key(id, ev, edges);
                 if taken {
                     refocus(s, tx);
                 }
                 taken
             })
+            .on_drawn_layout(move |s: &mut App, rect| {
+                s.tag_fields.notes.rects.insert(id, rect);
+            })
             .rich_style(t.rich())
+            .pill_style(chip_style(*t))
             .color(t.ink)
             .w_full()
             .min_w(0.0);
@@ -238,30 +314,22 @@ fn fold_body(t: &Theme, inside: Vec<El>) -> El {
 
 /// The link's address, under the bar: Return applies it, an empty one takes the link away.
 fn link_row(t: &Theme, url: &rune::TextEdit) -> El {
-    let field = ui::field(
-        t,
-        url,
-        "Link",
-        "https://…",
-        keys::NOTES_LINK_URL,
-        |s: &mut App| link_edit(s),
-        |e| {
-            e.on_submit(|s: &mut App, tx| {
-                if let Some(url) = s.tag_fields.notes.link.take() {
-                    s.tag_fields.notes.apply_link(&url.text);
-                }
-                refocus(s, tx);
-            })
-            .on_input_key(|s: &mut App, ev, tx| {
-                if ev.key != rune::Key::Escape {
-                    return false;
-                }
-                s.tag_fields.notes.link = None;
-                refocus(s, tx);
-                true
-            })
-        },
-    );
+    let field = ui::field(t, url, "Link", "https://…", keys::NOTES_LINK_URL, link_edit, |e| {
+        e.on_submit(|s: &mut App, tx| {
+            if let Some(url) = s.tag_fields.notes.link.take() {
+                s.tag_fields.notes.apply_link(&url.text);
+            }
+            refocus(s, tx);
+        })
+        .on_input_key(|s: &mut App, ev, tx| {
+            if ev.key != rune::Key::Escape {
+                return false;
+            }
+            s.tag_fields.notes.link = None;
+            refocus(s, tx);
+            true
+        })
+    });
     row().w_full().child(field)
 }
 

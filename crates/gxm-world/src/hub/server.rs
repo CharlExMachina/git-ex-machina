@@ -14,6 +14,8 @@ pub struct Request {
     pub path: String,
     pub authorization: Option<String>,
     pub body: String,
+    /// The body as sent, for an upload that isn't text.
+    pub bytes: Vec<u8>,
 }
 
 /// An answer: its status and body, and whether to send the body slowly, as a download over a
@@ -99,7 +101,8 @@ fn serve(stream: TcpStream, handle: &impl Fn(Request) -> Reply) -> std::io::Resu
     }
     let mut body = vec![0; length];
     reader.read_exact(&mut body)?;
-    let request = Request { method, path, authorization, body: String::from_utf8_lossy(&body).into_owned() };
+    let request =
+        Request { method, path, authorization, body: String::from_utf8_lossy(&body).into_owned(), bytes: body };
     let Reply { status, body, paced } = handle(request);
     let reason = match status {
         200 => "OK",

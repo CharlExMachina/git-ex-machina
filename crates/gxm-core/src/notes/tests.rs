@@ -201,3 +201,53 @@ fn rich_text_splits_and_joins_by_line_keeping_marks() {
     first.extend_line(&middle);
     assert_eq!((first.text.as_str(), first.marks[0].start), ("onetwo **x**", 3));
 }
+
+#[test]
+fn mentions_references_tasks_and_files_are_chips_that_write_themselves() {
+    let md = "Thanks to @kenji-mori for #5.\n\n- [x] Linux AppImage\n- [ ] macOS disk image\n\n![shot.png](https://github.com/studio/beacon/releases/download/v0.1.2/shot.png)\n";
+    let notes = parse(md);
+    let Part::Body(body) = &notes.parts[0] else { panic!("{:#?}", notes.parts) };
+    let chips: Vec<(&str, &Chip)> = body
+        .marks
+        .iter()
+        .filter_map(|m| match &m.mark {
+            Mark::Chip(c) => Some((&body.text[m.start..m.end], c)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        chips,
+        [
+            ("@kenji-mori", &Chip::Mention("kenji-mori".to_owned())),
+            ("#5", &Chip::Pull(5)),
+            ("\u{a0}", &Chip::Task(true)),
+            ("\u{a0}", &Chip::Task(false)),
+            ("shot.png", &Chip::File("shot.png".to_owned())),
+        ]
+    );
+    assert_eq!(body.lines, [Line::Paragraph; 4], "a task is its checkbox and words, no bullet");
+    assert_eq!(markdown_with(&notes, Some("https://github.com/studio/beacon/releases/download/v0.1.2")), md);
+    // Not chips: an email, a URL's fragment, `#` and `@` with nothing after them.
+    let (text, marks) = read::inline("ana@example.com x.dev/#5 # and @ alone");
+    assert!(marks.is_empty(), "{marks:?}");
+    assert_eq!(text, "ana@example.com x.dev/#5 # and @ alone");
+}
+
+#[test]
+fn a_file_s_name_is_what_github_keeps_and_links_where_the_release_keeps_it() {
+    assert_eq!(asset_name("My shot (2).png"), "My-shot--2-.png");
+    assert_eq!(asset_name("über.txt"), "ber.txt");
+    let file = |name: &str| Notes {
+        parts: vec![Part::Body(Rich {
+            text: name.to_owned(),
+            marks: vec![Span { start: 0, end: name.len(), mark: Mark::Chip(Chip::File(name.to_owned())) }],
+            lines: vec![Line::Paragraph],
+        })],
+    };
+    let base = Some("https://github.com/o/r/releases/download/v1");
+    assert_eq!(markdown_with(&file("a.png"), base), "![a.png](https://github.com/o/r/releases/download/v1/a.png)\n");
+    assert_eq!(
+        markdown_with(&file("log.txt"), base),
+        "[log.txt](https://github.com/o/r/releases/download/v1/log.txt)\n"
+    );
+}

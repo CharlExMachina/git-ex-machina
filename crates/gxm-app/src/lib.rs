@@ -51,6 +51,7 @@ fn init() -> App {
 fn poll(s: &mut App, t: f64, tx: &mut Tx) -> bool {
     if s.load == Load::NotStarted {
         s.load_workspace();
+        s.resume_attachments();
         s.update_event(update::UpdateEvent::Boot, Some(tx));
         return true;
     }
