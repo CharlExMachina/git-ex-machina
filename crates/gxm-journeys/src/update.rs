@@ -43,8 +43,10 @@ pub fn update_app() -> Journey {
         "Someone starts git-ex-machina and sees a newer version at the sidebar's foot; they download it (a damaged first download is refused, and the retry lands), read what's new, put the restart off, then restart into it.",
         update_world,
     )
-    // On a fresh start the app asked GitHub, and offers the newer release in the corner.
+    // On a fresh start the app asked GitHub, and offers the newer release in the corner, as an
+    // icon that says what it does.
     .see_in(keys::UPDATE, "Update to 0.2.0")
+    .not_see("Update to 0.2.0")
     .see_in(keys::HISTORY, "3 files changed")
     .mark("available")
     // The download shows its progress as it arrives.
@@ -84,7 +86,7 @@ pub fn update_app() -> Journey {
     // Later keeps working on the old version, with the restart a click away in the corner.
     .tap(keys::UPDATE_LATER)
     .gone(keys::SHEET)
-    .see_in(keys::UPDATE, "Restart to update")
+    .see_in(keys::UPDATE, "Restart to update to 0.2.0")
     .mark("later")
     .tap(keys::UPDATE)
     .see_in(keys::SHEET, "git-ex-machina 0.2.0 is ready")

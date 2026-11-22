@@ -11,7 +11,7 @@ use crate::state::App;
 use crate::theme::{Theme, size, ty};
 use crate::ui::{self, Variant};
 
-/// Wide enough for "Downloading 0.20.0… 100%".
+/// Wide enough for why a download failed, under the update's button.
 const CORNER: f32 = 220.0;
 
 pub fn screen(s: &App, t: &Theme) -> El {
@@ -49,11 +49,12 @@ pub fn screen(s: &App, t: &Theme) -> El {
         )
 }
 
-/// One of the foot's corners, the same width either side so the account stays centred.
-fn corner(content: Option<El>) -> El {
-    let c = col().w(CORNER).justify_center();
+/// One of the foot's corners, the same width either side so the account stays centred: the
+/// update's button, and what goes under it.
+fn corner(content: Option<(El, Option<El>)>) -> El {
+    let c = col().w(CORNER).gap(4.0).justify_center();
     match content {
-        Some(content) => c.child(content),
+        Some((button, under)) => c.child(row().child(button)).children(under),
         None => c,
     }
 }

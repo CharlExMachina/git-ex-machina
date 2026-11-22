@@ -1,5 +1,5 @@
-//! Updates on screen: the button at the sidebar's foot (Update to …, the download's progress,
-//! Restart to update), and the sheet that offers the restart, with the release's notes.
+//! Updates on screen: the icon button at the sidebar's foot (check for one, download it, its
+//! progress, restart into it), and the sheet that offers the restart, with the release's notes.
 
 use rune::{El, ScrollSpec, col, el, row, text};
 
@@ -11,15 +11,39 @@ use crate::theme::{Theme, size, ty};
 use crate::ui::{self, Variant};
 use crate::update::{Note, Update, UpdateEvent, notes};
 
-/// The update button, and under it the download's progress or why it failed; nothing while
-/// there's no update.
-pub fn control(s: &App, t: &Theme) -> Option<El> {
+/// The update's icon button, and what goes under its row: the download's progress, or why the
+/// download failed. Nothing when the app can't update itself (it isn't an AppImage).
+pub fn control(s: &App, t: &Theme) -> Option<(El, Option<El>)> {
+    s.env.install.appimage.as_ref()?;
+    let version = &s.env.install.version;
+    let check = |b: El| b.on_press_tx(|s: &mut App, tx| s.update_event(UpdateEvent::Check, Some(tx)));
     let take = |b: El| b.on_press_tx(|s: &mut App, tx| s.update_event(UpdateEvent::Take, Some(tx)));
+    let icon = |variant, glyph, ink, label: &str| ui::icon_button(t, variant, glyph, ink, label, false);
     let (button, under) = match &s.update {
-        Update::Quiet => return None,
+        Update::Idle => (check(icon(Variant::Ghost, &icons::REFRESH, None, "Check for updates")), None),
+        Update::Checking { .. } => {
+            (icon(Variant::Ghost, &icons::REFRESH, Some(t.ink_faint), "Checking for updates…").disabled(true), None)
+        }
+        Update::UpToDate => (
+            check(icon(
+                Variant::Ghost,
+                &icons::CHECK,
+                Some(t.added),
+                &format!("Up to date: git-ex-machina {version} is the latest. Check again"),
+            )),
+            None,
+        ),
+        Update::CheckFailed(why) => (
+            check(icon(
+                Variant::Ghost,
+                &icons::REFRESH,
+                Some(t.removed),
+                &format!("Couldn't check for updates: {why}"),
+            )),
+            None,
+        ),
         Update::Available(r) => (
-            take(ui::button(t, Variant::Secondary, Some(&icons::DOWNLOAD), &format!("Update to {}", r.version), None))
-                .help(format!("Download git-ex-machina {}; it takes over from the next start", r.version)),
+            take(icon(Variant::Secondary, &icons::DOWNLOAD, Some(t.accent), &format!("Update to {}", r.version))),
             None,
         ),
         Update::Downloading { release, done, total } => {
@@ -27,31 +51,25 @@ pub fn control(s: &App, t: &Theme) -> Option<El> {
             let label = format!("Downloading {}… {}%", release.version, (frac * 100.0).floor());
             let bar = row()
                 .w_full()
-                .h(3.0)
+                .h(2.0)
                 .radius(size::PILL)
                 .fill(t.line)
                 .child(el().w_frac(frac).h_full().radius(size::PILL).fill(t.accent));
-            (ui::button_in(t, Variant::Secondary, Some(&icons::DOWNLOAD), &label, None, true).disabled(true), Some(bar))
+            let button = ui::icon_button(t, Variant::Secondary, &icons::DOWNLOAD, Some(t.accent), &label, true);
+            (button.disabled(true), Some(bar))
         }
         Update::Failed { why, .. } => (
-            take(ui::button(t, Variant::Secondary, Some(&icons::RESTART), "Retry update", None))
-                .help("Download the update again"),
+            take(icon(Variant::Ghost, &icons::DOWNLOAD, Some(t.removed), "Retry update")),
             Some(text(why.clone()).key(keys::UPDATE_ERROR).font(ty::CAPTION).color(t.removed).wrap()),
         ),
-        Update::Ready(r) => (
-            take(ui::button(t, Variant::Primary, Some(&icons::RESTART), "Restart to update", None))
-                .help(format!("git-ex-machina {} is installed; restart to use it", r.version)),
-            None,
-        ),
+        Update::Ready(r) => {
+            (take(icon(Variant::Primary, &icons::RESTART, None, &format!("Restart to update to {}", r.version))), None)
+        }
         Update::Restarting(_) => {
-            (ui::button_in(t, Variant::Primary, Some(&icons::RESTART), "Restarting…", None, true).disabled(true), None)
+            (ui::icon_button(t, Variant::Primary, &icons::RESTART, None, "Restarting…", true).disabled(true), None)
         }
     };
-    let mut c = col().w_full().gap(6.0).child(row().child(button.key(keys::UPDATE)));
-    if let Some(under) = under {
-        c = c.child(under);
-    }
-    Some(c)
+    Some((button.key(keys::UPDATE), under))
 }
 
 /// The restart sheet's title, what it's for, body and buttons: the release's notes, and Later

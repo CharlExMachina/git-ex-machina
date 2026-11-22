@@ -51,6 +51,8 @@ pub struct App {
     /// Who's signed in to GitHub; None when no one is.
     pub account: Option<gxm_core::forge::model::User>,
     pub account_jobs: AccountJobs,
+    /// The sidebar's + menu (Add, Clone) is open.
+    pub add_menu: bool,
     /// A newer release, from offered to restarted into.
     pub update: Update,
     pub update_jobs: UpdateJobs,
@@ -191,7 +193,8 @@ impl App {
             sheet_jobs: SheetJobs::default(),
             account: None,
             account_jobs: AccountJobs::new(env_token),
-            update: Update::Quiet,
+            update: Update::Idle,
+            add_menu: false,
             update_jobs: UpdateJobs::default(),
         }
     }

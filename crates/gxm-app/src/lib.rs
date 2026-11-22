@@ -61,8 +61,8 @@ fn poll(s: &mut App, _t: f64, tx: &mut Tx) -> bool {
 }
 
 fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
-    // A sheet has the keyboard: its fields take the keys, Escape dismisses it.
-    if !matches!(s.sheet, sheet::Sheet::Closed) {
+    // A sheet or a menu has the keyboard: Escape dismisses it.
+    if !matches!(s.sheet, sheet::Sheet::Closed) || s.add_menu {
         return false;
     }
     if shell::is_sidebar_toggle(ev) {

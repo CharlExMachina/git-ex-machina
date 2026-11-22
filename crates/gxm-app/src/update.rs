@@ -1,6 +1,7 @@
-//! Updating the app, as a machine: asked once at startup whether there's a newer release, which
-//! the sidebar's foot then offers; downloaded and put in place off the UI thread when the person
-//! takes it; then a sheet offering to restart into it, with the release's notes. The network,
+//! Updating the app, as a machine: asked once at startup whether there's a newer release (and
+//! again whenever the person asks), which the sidebar's foot then offers; downloaded and put in
+//! place off the UI thread when the person takes it; then a sheet offering to restart into it,
+//! with the release's notes. The network,
 //! the file swap and starting the new version all run off the UI thread.
 //!
 //! Only an AppImage updates itself (see `gxm_core::update`); anywhere else the check finds
@@ -17,8 +18,17 @@ use crate::state::App;
 /// Where an update is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Update {
-    /// Nothing to offer: not asked yet, asking, up to date, or the app can't update itself.
-    Quiet,
+    /// Nothing found yet: not asked, or the start's check found nothing or couldn't ask. The
+    /// corner offers to check.
+    Idle,
+    /// Asking GitHub. `manual` when the person asked, so the answer is said whatever it is.
+    Checking {
+        manual: bool,
+    },
+    /// The person's check found nothing newer.
+    UpToDate,
+    /// The person's check couldn't ask GitHub.
+    CheckFailed(String),
     Available(Release),
     Downloading {
         release: Release,
@@ -40,7 +50,7 @@ impl Update {
     /// The release the update is about, once there is one.
     pub fn release(&self) -> Option<&Release> {
         match self {
-            Update::Quiet => None,
+            Update::Idle | Update::Checking { .. } | Update::UpToDate | Update::CheckFailed(_) => None,
             Update::Available(r)
             | Update::Downloading { release: r, .. }
             | Update::Failed { release: r, .. }
@@ -53,6 +63,8 @@ impl Update {
 pub enum UpdateEvent {
     /// The window is up: ask whether there's a newer release.
     Boot,
+    /// The person asks whether there's a newer release.
+    Check,
     Checked(Result<Option<Release>, String>),
     /// The sidebar's update button: download, try again, or offer the restart again.
     Take,
@@ -76,13 +88,31 @@ enum Effect {
 
 fn step(update: &mut Update, event: UpdateEvent) -> Vec<Effect> {
     match (&*update, event) {
-        (Update::Quiet, UpdateEvent::Boot) => vec![Effect::Check],
-        (Update::Quiet, UpdateEvent::Checked(Ok(Some(release)))) => {
+        (Update::Idle, UpdateEvent::Boot) => {
+            *update = Update::Checking { manual: false };
+            vec![Effect::Check]
+        }
+        (Update::Idle | Update::UpToDate | Update::CheckFailed(_), UpdateEvent::Check) => {
+            *update = Update::Checking { manual: true };
+            vec![Effect::Check]
+        }
+        (Update::Checking { .. }, UpdateEvent::Checked(Ok(Some(release)))) => {
             *update = Update::Available(release);
             vec![]
         }
-        // A check that fails says nothing: the next start asks again.
-        (Update::Quiet, UpdateEvent::Checked(_)) => vec![],
+        // The start's own check says nothing when it finds nothing, or can't ask.
+        (Update::Checking { manual: false }, UpdateEvent::Checked(_)) => {
+            *update = Update::Idle;
+            vec![]
+        }
+        (Update::Checking { manual: true }, UpdateEvent::Checked(Ok(None))) => {
+            *update = Update::UpToDate;
+            vec![]
+        }
+        (Update::Checking { manual: true }, UpdateEvent::Checked(Err(why))) => {
+            *update = Update::CheckFailed(why);
+            vec![]
+        }
         (Update::Available(r) | Update::Failed { release: r, .. }, UpdateEvent::Take) => {
             let release = r.clone();
             *update = Update::Downloading { total: release.asset.size, release: release.clone(), done: 0 };
@@ -147,7 +177,7 @@ impl App {
                 Effect::Check => {
                     self.update_jobs
                         .check
-                        .request(self.env.clone(), |env| update::check(&env).map_err(|e| e.to_string()));
+                        .request(self.env.clone(), |env| update::check(&env).map_err(|e| sentence(&e.to_string())));
                 }
                 Effect::Install(release) => self.install_update(release),
                 Effect::OfferRestart => {
@@ -291,10 +321,17 @@ mod tests {
 
     #[test]
     fn an_update_is_offered_downloaded_then_restarted_into() {
-        let mut u = Update::Quiet;
+        let mut u = Update::Idle;
         assert_eq!(step(&mut u, UpdateEvent::Boot), vec![Effect::Check]);
         assert!(step(&mut u, UpdateEvent::Checked(Err("offline".into()))).is_empty());
-        assert_eq!(u, Update::Quiet, "a failed check says nothing");
+        assert_eq!(u, Update::Idle, "the start's failed check says nothing");
+        assert_eq!(step(&mut u, UpdateEvent::Check), vec![Effect::Check]);
+        step(&mut u, UpdateEvent::Checked(Err("Offline".into())));
+        assert_eq!(u, Update::CheckFailed("Offline".into()), "a check the person asked for says why it failed");
+        step(&mut u, UpdateEvent::Check);
+        step(&mut u, UpdateEvent::Checked(Ok(None)));
+        assert_eq!(u, Update::UpToDate);
+        assert_eq!(step(&mut u, UpdateEvent::Check), vec![Effect::Check], "and can ask again");
         step(&mut u, UpdateEvent::Checked(Ok(Some(release("0.2.0")))));
         assert_eq!(u, Update::Available(release("0.2.0")));
         assert_eq!(step(&mut u, UpdateEvent::Take), vec![Effect::Install(release("0.2.0"))]);

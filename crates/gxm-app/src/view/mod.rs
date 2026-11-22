@@ -51,6 +51,9 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
         };
         shell = shell.child(right.w(INSPECTOR_W).h_full());
     }
+    if s.add_menu && s.sidebar_open && !cockpit {
+        shell = shell.children(sidebar::add_menu(&t));
+    }
     shell.children(sheet::layer(s, &t))
 }
 

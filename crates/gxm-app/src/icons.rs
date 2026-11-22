@@ -76,3 +76,9 @@ icon!(
 );
 // A circling arrow: restart into an update.
 icon!(RESTART, "gxm-restart", r#"<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.5 1.5v3h-3"/>"#);
+// Two arrows chasing each other round: check for an update.
+icon!(
+    REFRESH,
+    "gxm-refresh",
+    r#"<path d="M13 6.5A5 5 0 0 0 3.6 5"/><path d="M3.5 2.5V5H6"/><path d="M3 9.5a5 5 0 0 0 9.4 1.5"/><path d="M12.5 13.5V11H10"/>"#
+);
