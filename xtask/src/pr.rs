@@ -8,7 +8,7 @@ use std::process::Command;
 
 use gxm_journeys::catalog;
 
-use crate::{root, run};
+use crate::{flag, root, run};
 
 /// The crates whose changes a person sees: a PR touching one needs proof.
 const USER_FACING: &[&str] = &["crates/gxm-app/", "crates/gxm-journeys/", "crates/gxm-core/", "crates/gxm-cli/"];
@@ -243,10 +243,6 @@ fn positional(args: &[String]) -> Option<&str> {
         }
     }
     None
-}
-
-fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).map(String::as_str)
 }
 
 #[cfg(test)]
