@@ -67,6 +67,9 @@ pub(super) fn answer(s: &mut State, method: &str, path: &str, body: &str, can_de
                 _ => not_found(),
             }
         }
+        ["repos", owner, name, "releases", "generate-notes"] if method == "POST" => {
+            super::notes::generate(s, owner, name, &body)
+        }
         ["repos", owner, name, rest @ ..] => {
             // A renamed repository answers to its old name too, by its new one.
             let name = s.current_name(owner, name);

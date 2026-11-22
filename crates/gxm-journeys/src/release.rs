@@ -1,5 +1,6 @@
 //! Tagging a release: beacon releases whatever version tag is pushed (its `release.yml` runs on
-//! `v*` tags), so a commit on main is tagged as the next version and pushed, which is the
+//! `v*` tags, and takes the release's notes from the tag), so a commit on main is tagged as the
+//! next version, with notes drafted by GitHub and written as rich text, and pushed, which is the
 //! release. A commit off main, and not on origin yet, says what tagging it would mean. field-notes
 //! doesn't release from tags, so there it's a plain tag that stays on this computer.
 
@@ -8,7 +9,8 @@ use gxm_world::World;
 
 use crate::{Journey, Press};
 
-/// beacon's release workflow, as GitHub reads it: a push of a `v*` tag runs it.
+/// beacon's release workflow, as GitHub reads it: a push of a `v*` tag runs it, and the
+/// release's notes are the tag's message.
 const RELEASE_YML: &str = "\
 name: release
 
@@ -22,6 +24,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: gh release create \"$GITHUB_REF_NAME\" --notes-from-tag --verify-tag
+";
+
+/// What v0.1.2's tag says, as GitHub will show it: the summary and highlight written in the
+/// sheet, then GitHub's draft folded away.
+const NOTES: &str = "\
+**v0.1.2** · 2 changes from 2 contributors
+
+- **Fix the --json flag.** It prints JSON again.
+
+### Plus a steadier progress bar
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+
+- Print progress while uploading by @kenji-mori in https://github.com/studio/beacon/pull/5
+- Fix the --json flag by @lea-brandt in https://github.com/studio/beacon/pull/6
+
+## New Contributors
+
+- @lea-brandt made their first contribution in https://github.com/studio/beacon/pull/6
+
+**Full Changelog**: https://github.com/studio/beacon/compare/v0.1.1...v0.1.2
+
+</details>
 ";
 
 /// beacon's checks, which run on branches, not tags: it mustn't be taken for the release.
@@ -36,8 +65,8 @@ jobs:
     runs-on: ubuntu-latest
 ";
 
-/// beacon, released twice (v0.1.0 and v0.1.1, both on origin), two commits on main since, and
-/// a `feature/watch-mode` commit that was never pushed. field-notes has neither tags nor a
+/// beacon, released twice (v0.1.0 and v0.1.1, both on origin), two pull requests merged into main
+/// since (Lea's first), and a `feature/watch-mode` commit that was never pushed. field-notes has neither tags nor a
 /// release workflow.
 fn release_world(w: &World) {
     use gxm_world::fixtures::{ANA, KENJI, LEA};
@@ -49,10 +78,10 @@ fn release_world(w: &World) {
     beacon.write(".github/workflows/ci.yml", CI_YML);
     beacon.write(".github/workflows/release.yml", RELEASE_YML);
     beacon.commit(ANA, w.ago(days(20)), "Release from version tags", &[]);
-    beacon.commit(LEA, w.ago(days(14)), "Retry failed uploads", &["src/upload.rs"]);
+    beacon.commit(KENJI, w.ago(days(14)), "Retry failed uploads (#3)", &["src/upload.rs"]);
     beacon.tag("v0.1.1");
-    beacon.commit(KENJI, w.ago(days(6)), "Print progress while uploading", &["src/upload.rs"]);
-    beacon.commit(ANA, w.ago(days(2)), "Fix the --json flag", &["src/cli.rs"]);
+    beacon.commit(KENJI, w.ago(days(6)), "Print progress while uploading (#5)", &["src/upload.rs"]);
+    beacon.commit(LEA, w.ago(days(2)), "Fix the --json flag (#6)", &["src/cli.rs"]);
     beacon.push("main");
     beacon.git(&["push", "--quiet", "origin", "--tags"]);
     beacon.branch("feature/watch-mode");
@@ -71,28 +100,31 @@ fn release_world(w: &World) {
 pub fn tag_a_release() -> Journey {
     Journey::new(
         "tag_a_release",
-        "Someone releases the next version of beacon by tagging a commit on main and pushing the tag, sees what tagging a commit off main would mean, and tags a commit in a repository that doesn't release from tags.",
+        "Someone releases the next version of beacon by tagging a commit on main, writing its notes from GitHub's draft without markdown, and pushing the tag, sees what tagging a commit off main would mean, and tags a commit in a repository that doesn't release from tags.",
         release_world,
     )
     // beacon releases from version tags, so a commit selected offers to tag a release.
-    .tap_text("Fix the --json flag")
+    .tap_text("Fix the --json flag (#6)")
     .see_in(keys::CREATE_TAG, "Tag a release")
     .mark("release-ready")
     // The sheet suggests the version after the newest one, and says what pushing it starts.
     .tap(keys::CREATE_TAG)
     .see_in(keys::SHEET, "Tag a release")
-    .see_in(keys::TAG_COMMIT, "Fix the --json flag")
+    .see_in(keys::TAG_COMMIT, "Fix the --json flag (#6)")
     .see_in(keys::TAG_NAME, "v0.1.2")
     .see_in(keys::TAG_PUSH, "Push to origin")
-    .see_in(keys::TAG_RELEASE, "Pushing v0.1.2 to origin starts the release workflow (release.yml)")
+    .see_in(keys::TAG_RELEASE, "Pushing v0.1.2 to origin starts the release workflow (release.yml), with these notes.")
     .gone(keys::TAG_WARNING)
+    // The workflow takes the release's notes from the tag, so the sheet writes them.
+    .see_in(keys::NOTES, "Release notes")
+    .gone(keys::TAG_MESSAGE)
     .mark("tag-sheet")
     // A version that's already out is refused before anything happens.
     .tap(keys::TAG_NAME)
     .press(Press::cmd("a"))
     .type_text("v0.1.1")
     .tap(keys::TAG_CONFIRM)
-    .see_in(keys::SHEET_ERROR, "v0.1.1 already exists, on bef591e")
+    .see_in(keys::SHEET_ERROR, "v0.1.1 already exists, on 450f3e1")
     .mark("taken")
     // A name the workflow doesn't watch for says it won't release anything.
     .tap(keys::TAG_NAME)
@@ -105,22 +137,46 @@ pub fn tag_a_release() -> Journey {
     .press(Press::cmd("a"))
     .type_text("v0.1.2")
     .not_see("already exists")
-    .tap(keys::TAG_MESSAGE)
-    .type_text("Beacon 0.1.2: the --json flag works again")
-    .mark("named")
+    // GitHub drafts what changed since v0.1.1, folded away under a summary still to write.
+    .tap(keys::NOTES_GENERATE)
+    .wait_for(keys::NOTES, "What's Changed")
+    .see_in(keys::NOTES, "v0.1.2 · 2 changes from 2 contributors")
+    .see_in(keys::NOTES, "Full changelog")
+    .see_in(keys::NOTES, "Fix the --json flag by @lea-brandt in https://github.com/studio/beacon/pull/6")
+    .see_in(keys::NOTES, "New Contributors")
+    .mark("draft")
+    // The highlight, written without markdown: ⌘B for its bold lead-in.
+    .press(Press::cmd("b"))
+    .type_text("Fix the --json flag.")
+    .press(Press::cmd("b"))
+    .type_text(" It prints JSON again.")
+    // Return twice ends the list; the heading button makes the line a heading.
+    .press(Press::ENTER)
+    .press(Press::ENTER)
+    .type_text("Plus a steadier progress bar")
+    .tap(keys::NOTES_HEADING)
+    .mark("notes")
+    // Markdown shows what the tag will carry: what GitHub will show.
+    .tap(keys::NOTES_SOURCE)
+    .see_in(keys::NOTES_MARKDOWN, "- **Fix the --json flag.** It prints JSON again.")
+    .see_in(keys::NOTES_MARKDOWN, "### Plus a steadier progress bar")
+    .see_in(keys::NOTES_MARKDOWN, "<summary>Full changelog</summary>")
+    .mark("markdown")
+    .tap(keys::NOTES_WRITE)
+    .see_in(keys::NOTES, "Plus a steadier progress bar")
     // Tag a release tags the commit and pushes the tag: that push is the release.
     .tap(keys::TAG_CONFIRM)
     .wait_for(keys::TOASTS, "Pushed v0.1.2 to origin")
     .gone(keys::SHEET)
     .see_in(keys::HISTORY, "v0.1.2")
-    .world_check("origin has v0.1.2, annotated with its message, on Fix the --json flag", |w| {
+    .world_check("origin has v0.1.2 on Fix the --json flag, its message the notes as markdown", |w| {
         let remote = w.remote("github.com", "studio", "beacon");
         let kind = w.git(&remote, &["cat-file", "-t", "v0.1.2"]);
-        let message = w.git(&remote, &["tag", "-l", "--format=%(contents:subject)", "v0.1.2"]);
         let subject = w.git(&remote, &["log", "-1", "--format=%s", "v0.1.2^{commit}"]);
-        match (kind.trim(), message.trim(), subject.trim()) {
-            ("tag", "Beacon 0.1.2: the --json flag works again", "Fix the --json flag") => Ok(()),
-            other => Err(format!("origin's v0.1.2 (kind, message, commit): {other:?}")),
+        let message = w.git(&remote, &["tag", "-l", "--format=%(contents)", "v0.1.2"]);
+        match (kind.trim(), subject.trim()) {
+            ("tag", "Fix the --json flag (#6)") if message == NOTES => Ok(()),
+            other => Err(format!("origin's v0.1.2 (kind, commit) {other:?}, message:\n{message}")),
         }
     })
     .mark("released")

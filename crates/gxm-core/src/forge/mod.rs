@@ -15,6 +15,7 @@ pub(crate) mod github;
 pub(crate) mod http;
 pub mod local;
 pub mod model;
+pub mod notes;
 
 use std::sync::Arc;
 

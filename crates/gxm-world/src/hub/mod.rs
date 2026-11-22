@@ -8,6 +8,7 @@
 
 pub mod admin;
 mod graphql;
+mod notes;
 mod releases;
 mod rest;
 mod rest_more;
