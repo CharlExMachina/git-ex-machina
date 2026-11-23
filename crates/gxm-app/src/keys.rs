@@ -101,9 +101,13 @@ pub const SHEET: &str = "sheet";
 pub const SHEET_ERROR: &str = "sheet-error";
 pub const SHEET_CANCEL: &str = "sheet-cancel";
 pub const ADD_PATH: &str = "add-path";
+/// Add's Choose…: the folder, picked in the system's folder chooser.
+pub const ADD_CHOOSE: &str = "add-choose";
 pub const ADD_CONFIRM: &str = "add-confirm";
 pub const CLONE_URL: &str = "clone-url";
 pub const CLONE_INTO: &str = "clone-into";
+/// Clone's Choose…: where it clones into, picked in the system's folder chooser.
+pub const CLONE_CHOOSE: &str = "clone-choose";
 /// What Clone will do: the URL it clones over SSH, and the folder it clones into.
 pub const CLONE_PLAN: &str = "clone-plan";
 pub const CLONE_CONFIRM: &str = "clone-confirm";

@@ -15,7 +15,7 @@ use gxm_core::git::GitError;
 use gxm_core::init::{self, Plan};
 use gxm_core::repo::RepoSummary;
 use gxm_core::workspace::{self, AddError};
-use rune::{Latest, TextEdit, Tx, Waker};
+use rune::{FileDialogOptions, Latest, TextEdit, Tx, Waker};
 
 use crate::keys;
 use crate::ops::Ops;
@@ -126,14 +126,30 @@ pub enum Event {
     ToggleReadme,
     ToggleIgnore,
     ToggleLfs,
+    /// Choose… beside a folder's field: Add's folder, or where Clone clones into.
+    Choose,
+    /// What the folder chooser answered: the folder picked, `None` when cancelled, or why it
+    /// couldn't show.
+    Chosen(Result<Option<PathBuf>, String>),
     Landed(Result<Box<RepoEntry>, Refusal>),
 }
 
 pub enum Effect {
     Focus(&'static str),
+    /// Show the system's folder chooser, titled `title`, starting in `start`.
+    ChooseFolder {
+        title: &'static str,
+        start: PathBuf,
+    },
     Add(PathBuf),
-    Init { folder: PathBuf, plan: Plan },
-    Clone { url: String, dest: PathBuf },
+    Init {
+        folder: PathBuf,
+        plan: Plan,
+    },
+    Clone {
+        url: String,
+        dest: PathBuf,
+    },
     StopClone,
     StopSignIn,
     Open(Box<RepoEntry>),
@@ -164,6 +180,33 @@ pub fn step(sheet: &mut Sheet, fields: &mut Fields, event: Event, env: &Env, int
             }
             *phase = Phase::Working;
             vec![Effect::Add(env.expand(&fields.path.text))]
+        }
+        (Sheet::Add(phase), Event::Choose) if phase.editing() => {
+            let start = chooser_start(env, &fields.path.text, false);
+            vec![Effect::ChooseFolder { title: "Choose the repository's folder", start }]
+        }
+        (Sheet::Clone(phase), Event::Choose) if phase.editing() => {
+            let start = chooser_start(env, &fields.into.text, true);
+            vec![Effect::ChooseFolder { title: "Choose where to clone it", start }]
+        }
+        // Picking the folder is choosing it: it's added straight away. A real chooser answers a
+        // full path, which `join` keeps; a replay's script names one from the home folder.
+        (Sheet::Add(phase), Event::Chosen(Ok(Some(folder)))) if phase.editing() => {
+            let folder = env.home.join(folder);
+            fields.path = TextEdit::new(env.tilde(&folder));
+            *phase = Phase::Working;
+            vec![Effect::Add(folder)]
+        }
+        // Where it clones into is one part of a clone: the URL may still be to come.
+        (Sheet::Clone(phase), Event::Chosen(Ok(Some(folder)))) if phase.editing() => {
+            fields.into = TextEdit::new(env.tilde(&env.home.join(folder)));
+            vec![Effect::Focus(keys::CLONE_URL)]
+        }
+        (Sheet::Add(phase), Event::Chosen(Ok(None))) if phase.editing() => vec![Effect::Focus(keys::ADD_PATH)],
+        (Sheet::Clone(phase), Event::Chosen(Ok(None))) if phase.editing() => vec![Effect::Focus(keys::CLONE_URL)],
+        (Sheet::Add(phase) | Sheet::Clone(phase), Event::Chosen(Err(why))) if phase.editing() => {
+            *phase = fail(&format!("The folder chooser couldn't open ({why}). Type the folder's path instead."));
+            vec![]
         }
         (Sheet::Init { offer, phase }, Event::Submit) if phase.editing() => {
             *phase = Phase::Working;
@@ -249,6 +292,18 @@ pub fn step(sheet: &mut Sheet, fields: &mut Fields, event: Event, env: &Env, int
     }
 }
 
+/// Where the folder chooser starts for a typed path: the folder it names when `names_folder`,
+/// it ends in `/` or it is the home folder; else the folder it's in, so `~/code/lantern` starts beside
+/// lantern.
+fn chooser_start(env: &Env, typed: &str, names_folder: bool) -> PathBuf {
+    let typed = typed.trim();
+    let path = env.expand(typed);
+    let named = names_folder || typed.is_empty() || typed == "~" || typed.ends_with('/');
+    let folder = if named { path } else { path.parent().map_or(path.clone(), Path::to_path_buf) };
+    // Without the trailing separator a typed folder keeps.
+    folder.components().collect()
+}
+
 /// What the Clone sheet would do: the source and the folder it lands in.
 pub fn plan(env: &Env, fields: &Fields) -> Option<(clone::Source, PathBuf)> {
     let source = clone::source(&fields.url.text)?;
@@ -285,6 +340,15 @@ impl App {
                 Effect::Focus(key) => {
                     if let Some(tx) = tx.as_deref_mut() {
                         tx.focus(key, true);
+                    }
+                }
+                Effect::ChooseFolder { title, start } => {
+                    if let Some(tx) = tx.as_deref_mut() {
+                        let options =
+                            FileDialogOptions { title: title.to_owned(), directory: Some(start), ..Default::default() };
+                        tx.open_folder(options, |s: &mut App, picked, tx| {
+                            s.sheet_event(Event::Chosen(picked.map_err(|e| e.to_string())), Some(tx));
+                        });
                     }
                 }
                 Effect::Add(path) => self.sheet_jobs.job.request((self.env.clone(), path), |(env, path)| {

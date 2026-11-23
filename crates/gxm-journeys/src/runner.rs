@@ -6,6 +6,8 @@ use gxm_app::state::App;
 use gxm_app::tag_window::{self, TagLink, TagWindow};
 use gxm_world::World;
 use rune::{ElementInfo, Key, KeyEvent, Mods, PhysicalInput, Runtime};
+
+use crate::window::Window;
 use serde_json::{Value, json};
 
 use crate::{Journey, Press, Step};
@@ -177,6 +179,27 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                 d.win_mut().drop_files(vec![world.code().join(path)], Some((x, y)));
                 // A replay runs in its own world's `~/code`, where the same file is.
                 d.events.push(json!({ "t": t, "drop_files": { "paths": [path], "key": key } }));
+                d.advance_to(t + AFTER_TAP);
+            }
+            Step::Chooser { title, starts_in } => {
+                let (shown, start) = d.win().folder_chooser().map_err(|why| fail(why, &d))?;
+                let home = &world.env().home;
+                let start = start.map(|dir| world.env().tilde(&dir));
+                let want = world.env().tilde(&home.join(starts_in));
+                if shown != *title || start.as_deref() != Some(want.as_str()) {
+                    return Err(fail(format!("the chooser is titled {shown:?}, starting in {start:?}"), &d));
+                }
+            }
+            Step::Choose(folder) => {
+                d.win().folder_chooser().map_err(|why| fail(why, &d))?;
+                // The app gets the full path, as a real chooser gives it; the replay's script names
+                // it from the home folder, which the app reads in its own world's home.
+                let picked = folder.map(|f| world.env().home.join(f));
+                d.win_mut().answer_dialog(picked).map_err(|why| fail(why, &d))?;
+                d.events.push(match folder {
+                    Some(f) => json!({ "t": t, "type": "file-dialog", "path": f }),
+                    None => json!({ "t": t, "type": "file-dialog-cancel" }),
+                });
                 d.advance_to(t + AFTER_TAP);
             }
             Step::Press(p) => {
@@ -554,47 +577,4 @@ fn key_of(p: &Press) -> Option<Key> {
         name if name.chars().count() == 1 => Key::Text(name.to_owned()),
         _ => return None,
     })
-}
-
-/// What the runner does with a window, whichever window it is.
-trait Window {
-    fn elements(&self) -> Vec<ElementInfo>;
-    fn find(&self, key: &str) -> Option<(f32, f32)>;
-    fn pointer_move(&mut self, x: f32, y: f32);
-    fn pointer_down(&mut self, x: f32, y: f32);
-    fn pointer_up(&mut self, x: f32, y: f32);
-    fn wheel(&mut self, x: f32, y: f32, dy: f32);
-    fn key(&mut self, ev: KeyEvent);
-    fn physical_input(&mut self, input: PhysicalInput);
-    fn drop_files(&mut self, files: Vec<std::path::PathBuf>, at: Option<(f32, f32)>);
-}
-
-impl<S: 'static> Window for Runtime<S> {
-    fn elements(&self) -> Vec<ElementInfo> {
-        Runtime::elements(self)
-    }
-    fn find(&self, key: &str) -> Option<(f32, f32)> {
-        Runtime::find(self, key)
-    }
-    fn pointer_move(&mut self, x: f32, y: f32) {
-        Runtime::pointer_move(self, x, y);
-    }
-    fn pointer_down(&mut self, x: f32, y: f32) {
-        Runtime::pointer_down(self, x, y);
-    }
-    fn pointer_up(&mut self, x: f32, y: f32) {
-        Runtime::pointer_up(self, x, y);
-    }
-    fn wheel(&mut self, x: f32, y: f32, dy: f32) {
-        Runtime::wheel(self, x, y, dy);
-    }
-    fn key(&mut self, ev: KeyEvent) {
-        Runtime::key(self, ev);
-    }
-    fn physical_input(&mut self, input: PhysicalInput) {
-        Runtime::physical_input(self, input);
-    }
-    fn drop_files(&mut self, files: Vec<std::path::PathBuf>, at: Option<(f32, f32)>) {
-        Runtime::drop_files(self, files, at);
-    }
 }

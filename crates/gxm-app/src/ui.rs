@@ -157,6 +157,21 @@ pub fn field<S: 'static>(
     access: impl for<'a> Fn(&'a mut S) -> &'a mut TextEdit + 'static,
     handlers: impl FnOnce(El) -> El,
 ) -> El {
+    field_beside(t, edit, label, placeholder, key, access, handlers, None)
+}
+
+/// [`field`] with a control after the well, 8 to its right, as a path's Choose… button.
+#[expect(clippy::too_many_arguments, reason = "field's arguments, and what goes beside it")]
+pub fn field_beside<S: 'static>(
+    t: &Theme,
+    edit: &TextEdit,
+    label: &str,
+    placeholder: &str,
+    key: &str,
+    access: impl for<'a> Fn(&'a mut S) -> &'a mut TextEdit + 'static,
+    handlers: impl FnOnce(El) -> El,
+    beside: Option<El>,
+) -> El {
     let input = handlers(text_input(edit, ty::BODY))
         .key(key)
         .label(label.to_owned())
@@ -170,11 +185,12 @@ pub fn field<S: 'static>(
     for s in t.shadow_well() {
         w = w.box_shadow(s);
     }
-    rune::col()
-        .w_full()
-        .gap(6.0)
-        .child(text(label.to_owned()).font(ty::CAPTION_STRONG).color(t.ink_muted))
-        .child(w.role("textbox").child(input))
+    let well = w.role("textbox").child(input);
+    let well = match beside {
+        Some(beside) => row().w_full().gap(8.0).center_y().child(well.grow(1.0).min_w(0.0)).child(beside),
+        None => well,
+    };
+    rune::col().w_full().gap(6.0).child(text(label.to_owned()).font(ty::CAPTION_STRONG).color(t.ink_muted)).child(well)
 }
 
 /// `Checkbox`: a 16-point box, radius 4, raised when off and accent with a check when on, 8

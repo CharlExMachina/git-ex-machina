@@ -75,6 +75,11 @@ icon!(
     "gxm-image",
     r#"<rect x="2" y="3" width="12" height="10" rx="2"/><circle cx="6" cy="6.5" r="1"/><path d="M14 11 10.5 7.5 4 13"/>"#
 );
+icon!(
+    FOLDER,
+    "gxm-folder",
+    r#"<path d="M2 4.5a1 1 0 0 1 1-1h3.25l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/>"#
+);
 icon!(FILE, "gxm-file", r#"<path d="M4 2.5h5L12 5.5v8H4z"/><path d="M9 2.5v3h3"/>"#);
 icon!(SPARKLE, "gxm-sparkle", r#"<path d="M8 2.5 9.2 6.8 13.5 8 9.2 9.2 8 13.5 6.8 9.2 2.5 8 6.8 6.8z"/>"#);
 icon!(PERSON, "gxm-person", r#"<circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c0-2.6 2.2-4 5-4s5 1.4 5 4"/>"#);

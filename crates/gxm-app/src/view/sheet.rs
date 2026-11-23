@@ -3,11 +3,11 @@
 
 use rune::{El, col, el, row, text};
 
-use crate::keys;
 use crate::sheet::{self, Event, Phase, Sheet};
 use crate::state::App;
 use crate::theme::{Theme, size, ty};
 use crate::ui::{self, Variant};
+use crate::{icons, keys};
 
 /// The scrim and the panel, laid over the window; nothing while no sheet is open.
 pub fn layer(s: &App, t: &Theme) -> Vec<El> {
@@ -25,7 +25,7 @@ pub fn layer(s: &App, t: &Theme) -> Vec<El> {
         Sheet::Add(phase) => (
             "Add a repository".to_owned(),
             "A repository already on this computer: its folder, or any folder inside it.".to_owned(),
-            vec![ui::field(
+            vec![ui::field_beside(
                 t,
                 &f.path,
                 "Folder",
@@ -33,6 +33,7 @@ pub fn layer(s: &App, t: &Theme) -> Vec<El> {
                 keys::ADD_PATH,
                 |s: &mut App| &mut s.fields.path,
                 submit,
+                Some(choose(t, keys::ADD_CHOOSE, phase)),
             )],
             phase,
             ("Add", keys::ADD_CONFIRM),
@@ -64,7 +65,16 @@ pub fn layer(s: &App, t: &Theme) -> Vec<El> {
                     |s: &mut App| &mut s.fields.url,
                     submit,
                 ),
-                ui::field(t, &f.into, "Into", "~/code", keys::CLONE_INTO, |s: &mut App| &mut s.fields.into, submit),
+                ui::field_beside(
+                    t,
+                    &f.into,
+                    "Into",
+                    "~/code",
+                    keys::CLONE_INTO,
+                    |s: &mut App| &mut s.fields.into,
+                    submit,
+                    Some(choose(t, keys::CLONE_CHOOSE, phase)),
+                ),
                 plan(s, t, phase),
             ],
             phase,
@@ -116,6 +126,19 @@ fn panel(t: &Theme, title: String, about: String, body: Vec<El>, footer: El) -> 
 /// Return in a field does what the primary button does.
 fn submit(field: El) -> El {
     field.on_submit(|s: &mut App, tx| s.sheet_event(Event::Submit, Some(tx)))
+}
+
+/// Choose…, beside a folder's field: picks the folder in the system's chooser. Held while the
+/// sheet works.
+fn choose(t: &Theme, key: &str, phase: &Phase) -> El {
+    let button = ui::button(t, Variant::Secondary, Some(&icons::FOLDER), "Choose…", None).key(key);
+    if phase.editing() {
+        button
+            .help("Pick the folder instead of typing it")
+            .on_press_tx(|s: &mut App, tx| s.sheet_event(Event::Choose, Some(tx)))
+    } else {
+        button.disabled(true).opacity(0.6)
+    }
 }
 
 /// Cancel (it stops a clone that's running), then the primary button, held down while it works.
