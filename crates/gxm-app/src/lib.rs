@@ -17,6 +17,7 @@ pub mod settings;
 pub mod sheet;
 pub mod state;
 pub mod tag;
+pub mod tag_window;
 pub mod theme;
 pub mod toast;
 pub mod ui;
@@ -60,7 +61,7 @@ fn poll(s: &mut App, t: f64, tx: &mut Tx) -> bool {
         // A pull request's index can arrive after its commit was selected: read it now.
         s.prefetch_pull();
     }
-    let sheet = s.land_sheet(tx) | s.land_tag(tx);
+    let sheet = s.land_sheet(tx) | s.land_tagged(tx);
     let account = s.land_account(tx);
     let update = s.land_update(tx);
     let settings = s.land_settings();
@@ -120,15 +121,27 @@ fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
     true
 }
 
-/// The app as both the window and headless runs build it.
+/// The app as both the window and headless runs build it: the main window, and the tag window
+/// beside it, hidden until a commit is tagged.
 pub fn app() -> rune::App<App> {
+    let mut app = main_app();
+    let link = tag_window::add_to(&mut app);
+    app.init(move || {
+        let mut s = init();
+        s.tag_link = link;
+        s
+    })
+}
+
+/// The main window alone, as journeys drive it (beside a tag window of their own).
+pub fn main_app() -> rune::App<App> {
     rune::App::new(AppSpec {
         poll: Some(poll),
         setup: Some(|s: &mut App, waker| {
             s.ops.set_waker(waker.clone());
             s.pulls.set_waker(&waker);
             s.sheet_jobs.set_waker(waker.clone());
-            s.tag_jobs.set_waker(waker.clone());
+            s.tag_link.done.set_waker(waker.clone());
             s.account_jobs.set_waker(waker.clone());
             s.update_jobs.set_waker(waker.clone());
             s.settings_jobs.set_waker(&waker);

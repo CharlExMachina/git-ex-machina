@@ -29,8 +29,12 @@ pub const BISECT: &str = "bisect";
 pub const SQUASH: &str = "squash";
 /// Create tag on the selected commit: "Tag a release" where pushing a tag releases.
 pub const CREATE_TAG: &str = "create-tag";
-/// The tag sheet: the commit it tags, the name and message, Push to origin, what pushing starts,
-/// and why the commit may not be the one to tag.
+/// The tag window, its title: the commit it tags, the name and message, Push to origin, what
+/// pushing starts, why the commit may not be the one to tag, and what went wrong.
+pub const TAG_WINDOW: &str = "tag-window";
+pub const TAG_TITLE: &str = "tag-title";
+pub const TAG_ERROR: &str = "tag-error";
+pub const TAG_CANCEL: &str = "tag-cancel";
 pub const TAG_COMMIT: &str = "tag-commit";
 pub const TAG_NAME: &str = "tag-name";
 pub const TAG_MESSAGE: &str = "tag-message";

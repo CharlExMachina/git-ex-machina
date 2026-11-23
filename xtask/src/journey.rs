@@ -42,6 +42,17 @@ pub fn journey(args: &[String]) -> Result<(), String> {
         c.current_dir(replay.code());
         c.envs(replay.env().child_vars()).arg("--script").arg(dir.join("script.json"));
         c.args(["--theme", theme, "--realtime"]).stdout(std::process::Stdio::null());
+        if recording.windows {
+            // Another window showed: record the desktop, every window as it stood, the main
+            // window filling the frame and the others over it, as a screen recording shows them.
+            let backdrop = crate::target().join("desktop-backdrop.png");
+            let (w, h) = (gxm_app::SIZE.0 as u32, gxm_app::SIZE.1 as u32);
+            run(Command::new("ffmpeg")
+                .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i", &format!("color=c=0x101114:s={w}x{h}")])
+                .args(["-frames:v", "1"])
+                .arg(&backdrop))?;
+            c.arg("--desktop").arg(&backdrop).args(["--size", &format!("{w}x{h}")]);
+        }
         run(c.arg("--video").arg(&mp4).args(["--keys", "--pointer", "--scale", "1", "--fps", "30"]))?;
         drop(replay);
         let gif = dir.join(format!("{name}.gif"));

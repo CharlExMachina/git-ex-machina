@@ -1,4 +1,4 @@
-//! The release notes editor in the tag sheet: a formatting bar like GitHub's, then the notes as
+//! The release notes editor in the tag window: a formatting bar like GitHub's, then the notes as
 //! they'll read (headings, collapsed sections, rich text with mentions, references, tasks and
 //! attached files), or the markdown they'll be sent as. GitHub's draft starts them.
 
@@ -8,14 +8,15 @@ use rune::{Block, El, Icon, Mark, PillStyle, ScrollSpec, Tx, col, el, row, text,
 use crate::icons;
 use crate::keys;
 use crate::notes::{Draft, Kind, NotesEditor};
-use crate::state::App;
 use crate::tag::{TagEvent, TagSheet};
+use crate::tag_window::TagWindow;
 use crate::theme::{Theme, size, ty};
 use crate::ui::{self, Variant};
 
 /// The notes, under their heading: Write or Markdown, GitHub's draft, the bar and the parts.
-/// `caret` is the notes' caret as last drawn, in window points.
-pub fn editor(s: &App, t: &Theme, tag: &TagSheet, caret: Option<[f32; 4]>) -> El {
+/// They take the height the window has left, and scroll inside it. `caret` is the notes' caret
+/// as last drawn, in window points.
+pub fn editor(s: &TagWindow, t: &Theme, tag: &TagSheet, caret: Option<[f32; 4]>) -> El {
     let n = &s.tag_fields.notes;
     let asking = n.draft == Draft::Asking;
     let draft = ui::button_in(
@@ -31,15 +32,15 @@ pub fn editor(s: &App, t: &Theme, tag: &TagSheet, caret: Option<[f32; 4]>) -> El
     let draft = if asking {
         draft.disabled(true)
     } else {
-        draft.on_press_tx(|s: &mut App, tx| s.tag_event(TagEvent::Draft, Some(tx)))
+        draft.on_press_tx(|s: &mut TagWindow, tx| s.tag_event(TagEvent::Draft, Some(tx)))
     };
     let shown = n.markdown_shown;
     let write = ui::segment_label(t, "Write", !shown)
         .key(keys::NOTES_WRITE)
-        .on_press(|s: &mut App| s.tag_fields.notes.markdown_shown = false);
+        .on_press(|s: &mut TagWindow| s.tag_fields.notes.markdown_shown = false);
     let source = ui::segment_label(t, "Markdown", shown)
         .key(keys::NOTES_SOURCE)
-        .on_press(|s: &mut App| s.tag_fields.notes.markdown_shown = true);
+        .on_press(|s: &mut TagWindow| s.tag_fields.notes.markdown_shown = true);
     let header = row()
         .w_full()
         .center_y()
@@ -64,24 +65,25 @@ pub fn editor(s: &App, t: &Theme, tag: &TagSheet, caret: Option<[f32; 4]>) -> El
     } else {
         parts(t, n, caret)
     };
-    let mut well = col().w_full().radius(size::RADIUS_SM).fill(t.well).clip_rounded(size::RADIUS_SM);
+    let mut well =
+        col().w_full().grow(1.0).min_h(0.0).radius(size::RADIUS_SM).fill(t.well).clip_rounded(size::RADIUS_SM);
     for sh in t.shadow_well() {
         well = well.box_shadow(sh);
     }
     if !shown {
         well = well.child(bar(t, n, tag.files_base("").is_some())).child(el().w_full().h(1.0).fill(t.line));
     }
-    well = well.child(
-        col().w_full().max_h(size::NOTES_MAX_H).min_h(0.0).scroll(ScrollSpec { stick_bottom: false }).child(inside),
-    );
+    well = well.child(col().w_full().grow(1.0).min_h(0.0).scroll(ScrollSpec { stick_bottom: false }).child(inside));
     let mut box_ =
-        col().key(keys::NOTES).w_full().gap(6.0).child(header).child(well).on_drop_files(|s: &mut App, files, tx| {
-            for f in files {
-                s.tag_fields.notes.add_file(f.clone());
-            }
-            s.tag_event(TagEvent::FilesChanged, None);
-            refocus(s, tx);
-        });
+        col().key(keys::NOTES).w_full().grow(1.0).min_h(0.0).gap(6.0).child(header).child(well).on_drop_files(
+            |s: &mut TagWindow, files, tx| {
+                for f in files {
+                    s.tag_fields.notes.add_file(f.clone());
+                }
+                s.tag_event(TagEvent::FilesChanged, None);
+                refocus(s, tx);
+            },
+        );
     if let Some(url) = &n.link {
         box_ = box_.child(link_row(t, url));
     }
@@ -101,7 +103,7 @@ fn bar(t: &Theme, n: &NotesEditor, attaches: bool) -> El {
         ui::icon_button(t, Variant::Ghost, glyph, Some(if on { t.accent } else { t.ink_muted }), label, on)
             .key(key)
             .focusable(false)
-            .on_press_tx(move |s: &mut App, tx| {
+            .on_press_tx(move |s: &mut TagWindow, tx| {
                 act(&mut s.tag_fields.notes);
                 refocus(s, tx);
             })
@@ -117,7 +119,7 @@ fn bar(t: &Theme, n: &NotesEditor, attaches: bool) -> El {
     )
     .key(keys::NOTES_LINK)
     .focusable(false)
-    .on_press_tx(|s: &mut App, tx| {
+    .on_press_tx(|s: &mut TagWindow, tx| {
         let notes = &mut s.tag_fields.notes;
         notes.at = notes.current();
         let url = notes.parts.iter().find(|p| p.id == notes.at).and_then(|p| p.edit.active_link().map(str::to_owned));
@@ -135,11 +137,11 @@ fn bar(t: &Theme, n: &NotesEditor, attaches: bool) -> El {
     .key(keys::NOTES_ATTACH)
     .focusable(false);
     let attach = if attaches {
-        attach.on_press_tx(|s: &mut App, tx| {
+        attach.on_press_tx(|s: &mut TagWindow, tx| {
             s.tag_fields.notes.at = s.tag_fields.notes.current();
             let options =
                 rune::FileDialogOptions { title: "Attach a file to the release".to_owned(), ..Default::default() };
-            tx.open_file(options, |s: &mut App, picked, tx| {
+            tx.open_file(options, |s: &mut TagWindow, picked, tx| {
                 if let Ok(Some(path)) = picked {
                     s.tag_fields.notes.add_file(path);
                     s.tag_event(TagEvent::FilesChanged, None);
@@ -201,7 +203,7 @@ fn bar(t: &Theme, n: &NotesEditor, attaches: bool) -> El {
 }
 
 /// The caret back in the notes, in the part it was in.
-pub(super) fn refocus(s: &mut App, tx: &mut Tx) {
+pub(super) fn refocus(s: &mut TagWindow, tx: &mut Tx) {
     tx.focus(keys::notes_part(s.tag_fields.notes.at), true);
 }
 
@@ -249,17 +251,17 @@ fn parts(t: &Theme, n: &NotesEditor, caret: Option<[f32; 4]>) -> El {
                 Kind::Task(_) => "Task".to_owned(),
                 Kind::Body => "Release notes".to_owned(),
             })
-            .on_edit(move |s: &mut App| match s.tag_fields.notes.parts.iter().position(|p| p.id == id) {
+            .on_edit(move |s: &mut TagWindow| match s.tag_fields.notes.parts.iter().position(|p| p.id == id) {
                 Some(i) => &mut s.tag_fields.notes.parts[i].edit,
                 // The part went (joined to another) while an edit was on its way.
                 None => &mut s.scratch,
             })
-            .on_input_change(move |s: &mut App, _| {
+            .on_input_change(move |s: &mut TagWindow, _| {
                 let notes = &mut s.tag_fields.notes;
                 notes.repad();
                 notes.sense_pick(id);
             })
-            .on_input_key(move |s: &mut App, ev, tx| {
+            .on_input_key(move |s: &mut TagWindow, ev, tx| {
                 if super::picker::key(s, id, ev, tx) {
                     return true;
                 }
@@ -269,7 +271,7 @@ fn parts(t: &Theme, n: &NotesEditor, caret: Option<[f32; 4]>) -> El {
                 }
                 taken
             })
-            .on_drawn_layout(move |s: &mut App, rect| {
+            .on_drawn_layout(move |s: &mut TagWindow, rect| {
                 s.tag_fields.notes.rects.insert(id, rect);
             })
             .rich_style(t.rich())
@@ -306,7 +308,7 @@ fn parts(t: &Theme, n: &NotesEditor, caret: Option<[f32; 4]>) -> El {
                     .role("checkbox")
                     .label(if done { "Done" } else { "Not done" })
                     .focusable(false)
-                    .on_press_tx(move |s: &mut App, tx| {
+                    .on_press_tx(move |s: &mut TagWindow, tx| {
                         s.tag_fields.notes.check(id);
                         refocus(s, tx);
                     });
@@ -338,13 +340,13 @@ fn fold_body(t: &Theme, inside: Vec<El>) -> El {
 /// The link's address, under the bar: Return applies it, an empty one takes the link away.
 fn link_row(t: &Theme, url: &rune::TextEdit) -> El {
     let field = ui::field(t, url, "Link", "https://…", keys::NOTES_LINK_URL, link_edit, |e| {
-        e.on_submit(|s: &mut App, tx| {
+        e.on_submit(|s: &mut TagWindow, tx| {
             if let Some(url) = s.tag_fields.notes.link.take() {
                 s.tag_fields.notes.apply_link(&url.text);
             }
             refocus(s, tx);
         })
-        .on_input_key(|s: &mut App, ev, tx| {
+        .on_input_key(|s: &mut TagWindow, ev, tx| {
             if ev.key != rune::Key::Escape {
                 return false;
             }
@@ -356,7 +358,7 @@ fn link_row(t: &Theme, url: &rune::TextEdit) -> El {
     row().w_full().child(field)
 }
 
-fn link_edit(s: &mut App) -> &mut rune::TextEdit {
+fn link_edit(s: &mut TagWindow) -> &mut rune::TextEdit {
     if s.tag_fields.notes.link.is_none() {
         return &mut s.scratch;
     }

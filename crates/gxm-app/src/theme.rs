@@ -329,10 +329,6 @@ pub mod size {
     pub const PILL: f32 = 999.0;
     pub const SIDEBAR: f32 = 248.0;
     pub const SHEET: f32 = 460.0;
-    /// A sheet with a document to write in it (the tag sheet's release notes).
-    pub const SHEET_WIDE: f32 = 640.0;
-    /// How tall release notes grow before they scroll.
-    pub const NOTES_MAX_H: f32 = 280.0;
     /// The repository settings dialog, and its sidebar of sections.
     pub const SETTINGS_W: f32 = 960.0;
     pub const SETTINGS_H: f32 = 720.0;
