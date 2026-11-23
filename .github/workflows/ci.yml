@@ -14,9 +14,34 @@ env:
   CI: "true"
 
 jobs:
+  changes:
+    # Which checks this PR needs (.github/changes.sh): a job it doesn't need is skipped, which
+    # main's required checks count as passed. The jobs run unless told they aren't needed, so if
+    # this job fails they all run. A push to main runs everything.
+    runs-on: ubuntu-24.04
+    outputs:
+      checks: ${{ steps.changes.outputs.checks }}
+      macos: ${{ steps.changes.outputs.macos }}
+      proof: ${{ steps.changes.outputs.proof }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A PR is checked out as its merge into main, whose first parent is main.
+          fetch-depth: 2
+      - name: What changed
+        id: changes
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            git diff --name-only HEAD^1 HEAD | bash .github/changes.sh | tee -a "$GITHUB_OUTPUT"
+          else
+            printf 'checks=true\nmacos=true\nproof=true\n' | tee -a "$GITHUB_OUTPUT"
+          fi
+
   verify:
     # Linux with Mesa's software Vulkan (lavapipe): the journeys draw every mark's screenshot
     # without a GPU, the same pixels on every run.
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.checks != 'false' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +78,8 @@ jobs:
     # macOS, the other platform the app ships for: everything `verify` checks, with the journeys'
     # screenshots drawn by Metal and macOS text. GitHub-hosted, so no machine of ours runs a
     # stranger's PR; free for a public repository.
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.macos != 'false' }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
