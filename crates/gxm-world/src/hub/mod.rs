@@ -233,17 +233,18 @@ impl Hub {
         self.lock().sign_ins.extend(answers);
     }
 
-    /// Publishes git-ex-machina `version` with these notes, carrying `appimage` as this
-    /// machine's AppImage.
-    pub fn publish(&self, version: &str, notes: &str, appimage: &str) {
+    /// Publishes git-ex-machina `version` with these notes, carrying `bytes` as this machine's
+    /// build, named `asset` (see `gxm_core::update::asset_name`).
+    pub fn publish(&self, version: &str, notes: &str, asset: &str, bytes: Vec<u8>) {
         self.lock().releases.push(releases::ReleaseData {
             version: version.to_owned(),
             notes: notes.to_owned(),
-            appimage: appimage.to_owned(),
+            asset: asset.to_owned(),
+            bytes,
         });
     }
 
-    /// The next `n` downloads of an AppImage arrive damaged: their bytes don't match the digest.
+    /// The next `n` downloads of a build arrive damaged: their bytes don't match the digest.
     pub fn damage_downloads(&self, n: u32) {
         self.lock().damaged = n;
     }

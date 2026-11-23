@@ -4,8 +4,8 @@
 //! with the release's notes. The network,
 //! the file swap and starting the new version all run off the UI thread.
 //!
-//! Only an AppImage updates itself (see `gxm_core::update`); anywhere else the check finds
-//! nothing, and nothing is shown.
+//! Only an AppImage or the Mac app updates itself (see `gxm_core::update`); anywhere else the
+//! check finds nothing, and nothing is shown.
 
 use std::sync::{Arc, Mutex};
 

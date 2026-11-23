@@ -38,22 +38,53 @@ pub struct Env {
     pub install: Install,
 }
 
-/// The running app as an installation: its version, and the AppImage it was started from. Only
-/// an AppImage updates itself (see `update`); anything else, a `cargo run` or a package a
-/// package manager owns, leaves updating to whoever installed it.
+/// The running app as an installation: its version, and the bundle it was started from. Only an
+/// AppImage or a Mac app updates itself (see `update`); anything else, a `cargo run` or a package
+/// a package manager owns, leaves updating to whoever installed it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Install {
     /// `0.1.0`.
     pub version: String,
-    /// The AppImage file the app runs from (the AppImage runtime's `APPIMAGE`), which an update
-    /// replaces.
-    pub appimage: Option<PathBuf>,
+    /// What the app runs from, which an update replaces.
+    pub bundle: Option<Bundle>,
 }
 
 impl Install {
     /// This build's version, run from nothing it could replace.
     pub fn this_build() -> Install {
-        Install { version: env!("CARGO_PKG_VERSION").to_owned(), appimage: None }
+        Install { version: env!("CARGO_PKG_VERSION").to_owned(), bundle: None }
+    }
+}
+
+/// What the app runs from, when an update can replace it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Bundle {
+    /// The AppImage file (the AppImage runtime's `APPIMAGE`).
+    AppImage(PathBuf),
+    /// The Mac app, `git-ex-machina.app`, wherever the person put it.
+    MacApp(PathBuf),
+}
+
+impl Bundle {
+    /// A path ending in `.app` is a Mac app; anything else is an AppImage.
+    pub fn at(path: PathBuf) -> Bundle {
+        if path.extension().is_some_and(|e| e == "app") { Bundle::MacApp(path) } else { Bundle::AppImage(path) }
+    }
+
+    pub fn path(&self) -> &Path {
+        match self {
+            Bundle::AppImage(p) | Bundle::MacApp(p) => p,
+        }
+    }
+
+    /// The Mac app `exe` runs inside (`…/git-ex-machina.app/Contents/MacOS/git-ex-machina`), when
+    /// an update could replace it. Not one opened from its disk image, nor one macOS moved aside
+    /// to open it (App Translocation): both are read-only, and the person copies the app to
+    /// Applications to keep it.
+    pub fn mac_app_of(exe: &Path) -> Option<Bundle> {
+        let app = exe.parent().filter(|d| d.ends_with("Contents/MacOS"))?.parent()?.parent()?;
+        let read_only = app.starts_with("/Volumes") || app.components().any(|c| c.as_os_str() == "AppTranslocation");
+        (app.extension().is_some_and(|e| e == "app") && !read_only).then(|| Bundle::MacApp(app.to_path_buf()))
     }
 }
 
@@ -121,7 +152,8 @@ pub const GITHUB_API_VAR: &str = "GXM_GITHUB_API";
 pub const GITHUB_TOKEN_VAR: &str = "GXM_GITHUB_TOKEN";
 pub const GITHUB_WEB_VAR: &str = "GXM_GITHUB_WEB";
 pub const VERSION_VAR: &str = "GXM_VERSION";
-pub const APPIMAGE_VAR: &str = "GXM_APPIMAGE";
+/// What a sandboxed run plays it runs from: an AppImage, or a Mac app (`….app`).
+pub const BUNDLE_VAR: &str = "GXM_BUNDLE";
 
 impl Env {
     /// The real environment, with the `GXM_*` overrides a sandboxed run sets.
@@ -142,15 +174,20 @@ impl Env {
         let github_web = var(GITHUB_WEB_VAR).unwrap_or_else(|| ForgeAccess::GITHUB_WEB.to_owned());
         let forge = ForgeAccess { github_api, github_web, github_token };
         let secrets = if isolated { Secrets::File(config_dir.join("secrets.json")) } else { Secrets::Keychain };
-        // A sandboxed run says which version it plays and which file it would replace; a real one
-        // is this build, from the AppImage the AppImage runtime names.
+        // A sandboxed run says which version it plays and what it would replace; a real one is
+        // this build, from the AppImage the AppImage runtime names, or from the Mac app it's in.
         let install = if isolated {
             Install {
                 version: var(VERSION_VAR).unwrap_or_else(|| Install::this_build().version),
-                appimage: var(APPIMAGE_VAR).map(PathBuf::from),
+                bundle: var(BUNDLE_VAR).map(|p| Bundle::at(PathBuf::from(p))),
             }
         } else {
-            Install { appimage: var("APPIMAGE").map(PathBuf::from), ..Install::this_build() }
+            let appimage = var("APPIMAGE").map(|p| Bundle::AppImage(PathBuf::from(p)));
+            let mac_app = || {
+                let exe = std::env::current_exe().ok().filter(|_| cfg!(target_os = "macos"))?;
+                Bundle::mac_app_of(&exe)
+            };
+            Install { bundle: appimage.or_else(mac_app), ..Install::this_build() }
         };
         Env { home, config_dir, clock, tz, isolated, git_vars, forge, secrets, install, ui_thread: None }
     }
@@ -234,8 +271,8 @@ impl Env {
             vars.push((GITHUB_TOKEN_VAR.into(), token.clone().into()));
         }
         vars.push((VERSION_VAR.into(), self.install.version.clone().into()));
-        if let Some(appimage) = &self.install.appimage {
-            vars.push((APPIMAGE_VAR.into(), appimage.clone().into()));
+        if let Some(bundle) = &self.install.bundle {
+            vars.push((BUNDLE_VAR.into(), bundle.path().into()));
         }
         vars
     }
@@ -282,5 +319,23 @@ mod tests {
         assert_eq!(env.tilde(Path::new("/home/ana")), "~");
         assert_eq!(env.tilde(Path::new("/home/anabel")), "/home/anabel");
         assert_eq!(env.tilde(Path::new("/srv/git")), "/srv/git");
+    }
+
+    #[test]
+    fn a_mac_app_updates_itself_only_where_the_person_put_it() {
+        let app = |exe: &str| Bundle::mac_app_of(Path::new(exe)).map(|b| b.path().to_path_buf());
+        let exe = "/Applications/git-ex-machina.app/Contents/MacOS/git-ex-machina";
+        assert_eq!(app(exe), Some(PathBuf::from("/Applications/git-ex-machina.app")));
+        let renamed = "/Users/ana/Applications/gxm.app/Contents/MacOS/git-ex-machina";
+        assert_eq!(app(renamed), Some(PathBuf::from("/Users/ana/Applications/gxm.app")), "renamed, in ~/Applications");
+        let mounted = "/Volumes/git-ex-machina/git-ex-machina.app/Contents/MacOS/git-ex-machina";
+        assert_eq!(app(mounted), None, "on its disk image");
+        let moved = "/private/var/folders/x/T/AppTranslocation/0A1B/d/git-ex-machina.app/Contents/MacOS/git-ex-machina";
+        assert_eq!(app(moved), None, "moved aside by Gatekeeper");
+        assert_eq!(app("/Users/ana/code/gxm/target/debug/gxm-app"), None, "a cargo build");
+        let mac = PathBuf::from("/a/git-ex-machina.app");
+        assert_eq!(Bundle::at(mac.clone()), Bundle::MacApp(mac));
+        let appimage = PathBuf::from("/a/git-ex-machina.AppImage");
+        assert_eq!(Bundle::at(appimage.clone()), Bundle::AppImage(appimage));
     }
 }
