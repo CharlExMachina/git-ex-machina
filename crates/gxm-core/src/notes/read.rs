@@ -2,7 +2,7 @@
 //! items (nested by indentation), quotes, fenced code and paragraphs, with bold, italic,
 //! strikethrough, code and links inside them. What it doesn't know stays as text.
 
-use super::{Line, Mark, Notes, Part, Rich, Span};
+use super::{Chip, Line, Mark, Notes, Part, Rich, Span};
 
 /// The body being read, line by line.
 #[derive(Default)]
@@ -23,6 +23,19 @@ impl Body {
         self.rich.marks.extend(marks.into_iter().map(|m| Span { start: m.start + at, end: m.end + at, mark: m.mark }));
         self.rich.lines.push(kind);
         self.open_paragraph = kind == Line::Paragraph;
+    }
+
+    /// `chip` before the text of the line just pushed.
+    fn lead_with(&mut self, chip: Chip) {
+        let label = chip.label();
+        let at = self.rich.text.rfind('\n').map_or(0, |n| n + 1);
+        let shift = label.len();
+        self.rich.text.insert_str(at, &label);
+        for m in self.rich.marks.iter_mut().filter(|m| m.start >= at) {
+            m.start += shift;
+            m.end += shift;
+        }
+        self.rich.marks.push(Span { start: at, end: at + label.len(), mark: Mark::Chip(chip) });
     }
 
     /// A line of fenced code, taken as written: no marks.
@@ -100,7 +113,20 @@ pub fn parse(markdown: &str) -> Notes {
                 indents.push(indent);
             }
             let level = u8::try_from(indents.len().saturating_sub(1)).unwrap_or(3).min(3);
-            body.push(if numbered { Line::Numbered(level) } else { Line::Bullet(level) }, item);
+            let kind = if numbered { Line::Numbered(level) } else { Line::Bullet(level) };
+            // `- [ ] item`: a task, its checkbox a chip at the start of the line.
+            let task = item
+                .strip_prefix("[ ] ")
+                .map(|r| (false, r))
+                .or_else(|| item.strip_prefix("[x] ").or_else(|| item.strip_prefix("[X] ")).map(|r| (true, r)));
+            match task {
+                // A task's line is its checkbox and its words, as GitHub draws it: no bullet.
+                Some((done, rest)) => {
+                    body.push(Line::Paragraph, rest);
+                    body.lead_with(Chip::Task(done));
+                }
+                None => body.push(kind, item),
+            }
             continue;
         }
         indents.clear();
@@ -174,6 +200,17 @@ fn read_inline(md: &str, text: &mut String, marks: &mut Vec<Span>) {
                 continue;
             }
         }
+        // An image the release keeps (`![shot.png](…/releases/download/v1/shot.png)`) is a file
+        // attached to it.
+        if c == '!'
+            && let Some((_, url, used)) = link(&rest[1..])
+            && url.contains("/releases/download/")
+        {
+            let chip = Chip::File(url.rsplit('/').next().unwrap_or_default().to_owned());
+            push_chip(text, marks, chip);
+            i += 1 + used;
+            continue;
+        }
         if c == '['
             && let Some((label, url, used)) = link(rest)
         {
@@ -204,9 +241,30 @@ fn read_inline(md: &str, text: &mut String, marks: &mut Vec<Span>) {
                 continue;
             }
         }
+        // `@login` and `#123` after a space (or at the start): a mention and a reference.
+        let after_space = md[..i].chars().next_back().is_none_or(|b| !b.is_alphanumeric() && b != '/' && b != '&');
+        if after_space && (c == '@' || c == '#') {
+            let word: String = rest[1..].chars().take_while(|w| w.is_ascii_alphanumeric() || *w == '-').collect();
+            let chip = match c {
+                '@' if !word.is_empty() && !word.starts_with('-') => Some(Chip::Mention(word.clone())),
+                '#' => word.parse().ok().filter(|_| word.chars().all(|d| d.is_ascii_digit())).map(Chip::Pull),
+                _ => None,
+            };
+            if let Some(chip) = chip {
+                push_chip(text, marks, chip);
+                i += 1 + word.len();
+                continue;
+            }
+        }
         text.push(c);
         i += c.len_utf8();
     }
+}
+
+fn push_chip(text: &mut String, marks: &mut Vec<Span>, chip: Chip) {
+    let start = text.len();
+    text.push_str(&chip.label());
+    marks.push(Span { start, end: text.len(), mark: Mark::Chip(chip) });
 }
 
 /// Where `delim` closes in `s`: not after a space, and for `_` not inside a word.

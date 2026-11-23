@@ -157,6 +157,13 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                 }
                 d.advance_to(t + PER_CHAR * text.chars().count() as f64 + AFTER_TYPE);
             }
+            Step::Drop { key, path } => {
+                let (x, y) = d.rt.find(key).ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
+                d.rt.drop_files(vec![world.code().join(path)], Some((x, y)));
+                // A replay runs in its own world's `~/code`, where the same file is.
+                d.events.push(json!({ "t": t, "drop_files": { "paths": [path], "key": key } }));
+                d.advance_to(t + AFTER_TAP);
+            }
             Step::Press(p) => {
                 let key = key_of(p).ok_or_else(|| fail(format!("journeys can't press {:?} yet", p.name), &d))?;
                 d.rt.key(KeyEvent { key, mods: Mods { cmd: p.cmd, shift: p.shift, alt: p.alt, ..Mods::default() } });

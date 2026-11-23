@@ -10,7 +10,8 @@ use crate::theme::{Theme, size, ty};
 use crate::ui::{self, Variant};
 
 /// The scrim and the panel, laid over the window; nothing while no sheet is open.
-pub fn layer(s: &App, t: &Theme) -> Vec<El> {
+/// `caret` is the release notes' caret, in window points, while the tag sheet has them.
+pub fn layer(s: &App, t: &Theme, caret: Option<[f32; 4]>) -> Vec<El> {
     let f = &s.fields;
     let (title, about, fields, phase, confirm) = match &s.sheet {
         Sheet::Closed => return Vec::new(),
@@ -19,8 +20,10 @@ pub fn layer(s: &App, t: &Theme) -> Vec<El> {
             return panel(t, title, about, body, footer);
         }
         Sheet::Tag(tag) => {
-            let (title, about, body, footer, width) = super::tag::sheet(s, t, tag);
-            return panel_of(t, width, title, about, body, footer);
+            let (title, about, body, footer, width) = super::tag::sheet(s, t, tag, caret);
+            let mut layer = panel_of(t, width, title, about, body, footer);
+            layer.extend(super::picker::layer(s, t, caret));
+            return layer;
         }
         Sheet::Update { error } => {
             let (title, about, body, footer) = super::update::sheet(s, t, error.as_deref());

@@ -2,6 +2,10 @@
 //! pushing) off the UI thread, then closed with the history read again and a toast saying what
 //! happened, or back to editing with git's reason.
 
+use std::path::PathBuf;
+
+use gxm_core::attach;
+use gxm_core::notes::Notes;
 use gxm_core::release::NotesFrom;
 use gxm_core::remote::Remote;
 use gxm_core::tag::{self, NewTag, Tagging};
@@ -20,6 +24,8 @@ pub struct TagSheet {
     pub short: String,
     pub subject: String,
     pub tagging: Tagging,
+    /// Where the repository lives on its provider: where its notes link attached files.
+    pub origin: Option<Remote>,
     pub phase: Phase,
 }
 
@@ -43,6 +49,12 @@ impl TagSheet {
     pub fn writes_notes(&self) -> bool {
         self.tagging.trigger.as_ref().is_some_and(|t| t.notes == NotesFrom::Tag)
     }
+
+    /// Where the notes link the files of `commit` (`gxm_core::attach`), when the repository is
+    /// on GitHub.
+    pub fn files_base(&self, commit: &str) -> Option<String> {
+        self.origin.as_ref().and_then(|o| attach::files_base(o, commit))
+    }
 }
 
 pub enum TagEvent {
@@ -55,6 +67,10 @@ pub enum TagEvent {
     Draft,
     /// GitHub's notes (markdown), or why they didn't come.
     Drafted(Result<String, String>),
+    /// A file was attached to the notes: their files' commit, and so their links, change.
+    FilesChanged,
+    /// The commit holding the notes' files, or why it couldn't be made.
+    FilesCommitted(Result<String, String>),
     Submit,
     /// The tag was made, and pushed to this remote when it says one; or git's reason it wasn't.
     Landed(Result<Option<String>, String>),
@@ -69,7 +85,17 @@ pub enum TagEffect {
         name: String,
         commit: String,
     },
+    /// The commit holding these files (each one's name in the notes, and where it is).
+    CommitFiles(Vec<(String, PathBuf)>),
     Create(NewTag),
+    /// Commit `files`, link them from `notes` by that commit, and make (and push) the tag with
+    /// them: the files go up with the tag.
+    CreateWithFiles {
+        new: NewTag,
+        notes: Notes,
+        files: Vec<(String, PathBuf)>,
+        origin: Remote,
+    },
     /// The tag is made: read the history again and say so.
     Done(String),
 }
@@ -79,18 +105,18 @@ pub fn step(
     sheet: &mut Sheet,
     fields: &mut TagFields,
     event: TagEvent,
-    found: Option<(Tagging, String, String)>,
+    found: Option<(Tagging, String, String, Option<Remote>)>,
 ) -> Vec<TagEffect> {
     match (sheet, event) {
         (sheet @ Sheet::Closed, TagEvent::Open(commit)) => {
-            let Some((tagging, short, subject)) = found else { return vec![] };
+            let Some((tagging, short, subject, origin)) = found else { return vec![] };
             fields.name = TextEdit::new(tagging.suggest().unwrap_or_default());
             fields.message = TextEdit::new("");
             fields.notes = NotesEditor::default();
             // Where pushing a tag releases, the push is the point; elsewhere a tag starts local.
             fields.push = tagging.trigger.is_some() && tagging.remote.is_some();
             let phase = Phase::Editing { error: None };
-            *sheet = Sheet::Tag(Box::new(TagSheet { commit, short, subject, tagging, phase }));
+            *sheet = Sheet::Tag(Box::new(TagSheet { commit, short, subject, tagging, origin, phase }));
             vec![TagEffect::Focus(keys::TAG_NAME)]
         }
         (Sheet::Tag(t), TagEvent::TogglePush) if t.phase.editing() && t.tagging.remote.is_some() => {
@@ -124,12 +150,27 @@ pub fn step(
                 vec![]
             }
         },
+        (Sheet::Tag(_), TagEvent::FilesChanged) => {
+            fields.notes.files_commit = None;
+            vec![TagEffect::CommitFiles(fields.notes.files.clone())]
+        }
+        (Sheet::Tag(_), TagEvent::FilesCommitted(made)) => {
+            fields.notes.files_commit = made.ok();
+            vec![]
+        }
         (Sheet::Tag(t), TagEvent::Submit) if t.phase.editing() => {
             let name = fields.name.text.trim().to_owned();
             let taken = t.tagging.existing(&name).filter(|on| *on != t.commit);
+            let files = t.writes_notes() && !fields.notes.files.is_empty();
             let refuse = match taken {
                 _ if name.is_empty() => Some("Name the tag".to_owned()),
                 Some(on) => Some(format!("{name} already exists, on {}", on.get(..7).unwrap_or(on))),
+                None if files && t.files_base("").is_none() => {
+                    Some("Attached files go up to GitHub, and this repository isn't on GitHub".to_owned())
+                }
+                None if files && !fields.push => {
+                    Some("Attached files go up with the tag, so it has to be pushed".to_owned())
+                }
                 None => None,
             };
             if let Some(why) = refuse {
@@ -137,14 +178,29 @@ pub fn step(
                 return vec![];
             }
             t.phase = Phase::Working;
-            let message =
-                if t.writes_notes() { fields.notes.markdown() } else { fields.message.text.trim().to_owned() };
-            vec![TagEffect::Create(NewTag { name, commit: t.commit.clone(), message, push: fields.push })]
+            let new = |message| NewTag { name, commit: t.commit.clone(), message, push: fields.push, files: None };
+            match (files, t.origin.clone()) {
+                (true, Some(origin)) => vec![TagEffect::CreateWithFiles {
+                    new: new(String::new()),
+                    notes: fields.notes.notes(),
+                    files: fields.notes.files.clone(),
+                    origin,
+                }],
+                _ if t.writes_notes() => vec![TagEffect::Create(new(fields.notes.markdown(None)))],
+                _ => vec![TagEffect::Create(new(fields.message.text.trim().to_owned()))],
+            }
         }
         (sheet @ Sheet::Tag(_), TagEvent::Landed(Ok(remote))) => {
-            let name = fields.name.text.trim();
+            let name = fields.name.text.trim().to_owned();
+            let writes_notes = matches!(sheet, Sheet::Tag(t) if t.writes_notes());
+            let with = match fields.notes.files.as_slice() {
+                _ if !writes_notes => String::new(),
+                [] => String::new(),
+                [(one, _)] => format!(" and {one}"),
+                many => format!(" and {} files", many.len()),
+            };
             let said = match remote {
-                Some(remote) => format!("Pushed {name} to {remote}"),
+                Some(remote) => format!("Pushed {name}{with} to {remote}"),
                 None => format!("Tagged {name}"),
             };
             *sheet = Sheet::Closed;
@@ -158,17 +214,20 @@ pub fn step(
     }
 }
 
-/// The tag being made, and GitHub's draft of its notes, off the UI thread.
+/// The tag being made, GitHub's draft of its notes, and the commit of their files, off the UI
+/// thread.
 #[derive(Default)]
 pub struct TagJobs {
     job: Latest<Result<Option<String>, String>>,
     draft: Latest<Result<String, String>>,
+    files: Latest<Result<String, String>>,
 }
 
 impl TagJobs {
     pub fn set_waker(&self, waker: Waker) {
         self.job.set_waker(waker.clone());
-        self.draft.set_waker(waker);
+        self.draft.set_waker(waker.clone());
+        self.files.set_waker(waker);
     }
 }
 
@@ -178,7 +237,8 @@ impl App {
         let found = match &event {
             TagEvent::Open(id) => self.commit(id).and_then(|c| {
                 let tagging = self.history.as_ref()?.tagging.clone();
-                Some((tagging, c.short_id().to_owned(), c.subject.clone()))
+                let origin = self.repo().and_then(|r| r.summary.origin.clone());
+                Some((tagging, c.short_id().to_owned(), c.subject.clone(), origin))
             }),
             _ => None,
         };
@@ -207,9 +267,26 @@ impl App {
                         gxm_core::forge::notes::generate(&env, &origin, &name, &commit, previous.as_deref())
                     });
                 }
+                TagEffect::CommitFiles(files) => {
+                    let Some(path) = self.repo().map(|r| r.summary.path.clone()) else { continue };
+                    self.tag_jobs.files.request((self.env.clone(), path, files), |(env, path, files)| {
+                        attach::files_commit(&env, &path, &files).map_err(Ops::said)
+                    });
+                }
                 TagEffect::Create(new) => {
                     let Some(path) = self.repo().map(|r| r.summary.path.clone()) else { continue };
                     self.tag_jobs.job.request((self.env.clone(), path, new), |(env, path, new)| {
+                        tag::create(&env, &path, &new).map_err(Ops::said)
+                    });
+                }
+                TagEffect::CreateWithFiles { new, notes, files, origin } => {
+                    let Some(path) = self.repo().map(|r| r.summary.path.clone()) else { continue };
+                    let input = (self.env.clone(), path, new, notes, files, origin);
+                    self.tag_jobs.job.request(input, |(env, path, mut new, notes, files, origin)| {
+                        let commit = attach::files_commit(&env, &path, &files).map_err(Ops::said)?;
+                        let base = attach::files_base(&origin, &commit);
+                        new.message = gxm_core::notes::markdown_with(&notes, base.as_deref());
+                        new.files = Some(commit);
                         tag::create(&env, &path, &new).map_err(Ops::said)
                     });
                 }
@@ -223,9 +300,11 @@ impl App {
         }
     }
 
-    /// Takes the finished tag, or GitHub's draft. True when the state changed.
+    /// Takes the finished tag, GitHub's draft, or the files' commit. True when the state changed.
     pub fn land_tag(&mut self, tx: &mut Tx) -> bool {
-        let drafted = self.tag_jobs.draft.take().map(|d| self.tag_event(TagEvent::Drafted(d), Some(tx))).is_some();
+        let committed = self.tag_jobs.files.take().map(|c| self.tag_event(TagEvent::FilesCommitted(c), None)).is_some();
+        let drafted =
+            committed | self.tag_jobs.draft.take().map(|d| self.tag_event(TagEvent::Drafted(d), Some(tx))).is_some();
         let Some(result) = self.tag_jobs.job.take() else { return drafted };
         self.tag_event(TagEvent::Landed(result), Some(tx));
         true

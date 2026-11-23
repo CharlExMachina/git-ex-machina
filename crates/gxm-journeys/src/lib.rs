@@ -57,6 +57,9 @@ pub enum Step {
     Up,
     /// Type into whatever has focus.
     Type(String),
+    /// Drop a file from another app (Finder, a file manager) on the element with this key: the
+    /// file at `path`, from the world's `~/code`.
+    Drop { key: String, path: &'static str },
     /// Press a key.
     Press(Press),
     /// Hold modifiers (`"cmd"`, `"shift"`, `"cmd+shift"`) until the next hold; `""` lets go.
@@ -151,6 +154,11 @@ impl Journey {
         self.step(Step::Type(text.into()))
     }
 
+    /// Drops the file at `path` (from the world's `~/code`) on the element keyed `key`.
+    pub fn drop_file(self, key: impl Into<String>, path: &'static str) -> Journey {
+        self.step(Step::Drop { key: key.into(), path })
+    }
+
     pub fn press(self, p: Press) -> Journey {
         self.step(Step::Press(p))
     }
@@ -221,6 +229,7 @@ impl std::fmt::Display for Step {
             Step::Down(k) => write!(f, "press the mouse down on [{k}]"),
             Step::Up => write!(f, "let go of the mouse"),
             Step::Type(t) => write!(f, "type {t:?}"),
+            Step::Drop { key, path } => write!(f, "drop ~/code/{path} on [{key}]"),
             Step::Press(p) => {
                 write!(f, "press {}{}{}", if p.cmd { "⌘" } else { "" }, if p.shift { "⇧" } else { "" }, p.name)
             }

@@ -26,7 +26,7 @@ pub fn button(s: &App, t: &Theme, commit: &str) -> El {
 
 /// The sheet's title, what it's for, its body, its buttons and its width: wide when it holds
 /// release notes to write.
-pub fn sheet(s: &App, t: &Theme, tag: &TagSheet) -> (String, String, Vec<El>, El, f32) {
+pub fn sheet(s: &App, t: &Theme, tag: &TagSheet, caret: Option<[f32; 4]>) -> (String, String, Vec<El>, El, f32) {
     let f = &s.tag_fields;
     let trigger = tag.tagging.trigger.as_ref();
     let remote = tag.tagging.remote.as_deref();
@@ -70,7 +70,7 @@ pub fn sheet(s: &App, t: &Theme, tag: &TagSheet) -> (String, String, Vec<El>, El
         }
     };
     let writes_notes = tag.writes_notes();
-    let words = if writes_notes { super::notes::editor(s, t) } else { message };
+    let words = if writes_notes { super::notes::editor(s, t, tag, caret) } else { message };
     let mut body = vec![commit, name, words, push.key(keys::TAG_PUSH)];
     if let Some(trigger) = trigger {
         let name = f.name.text.trim();

@@ -3,6 +3,7 @@
 //! No UI lives here. The app (`gxm-app`) and the CLI (`gxm-cli`) are thin layers over it, so
 //! everything here can be verified from either.
 
+pub mod attach;
 pub mod auth;
 pub mod clone;
 pub mod diff;

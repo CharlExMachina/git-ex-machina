@@ -56,8 +56,22 @@ pub const NOTES_NUMBERS: &str = "notes-numbers";
 pub const NOTES_QUOTE: &str = "notes-quote";
 pub const NOTES_CODE_BLOCK: &str = "notes-code-block";
 pub const NOTES_FOLD: &str = "notes-fold";
+pub const NOTES_TASKS: &str = "notes-tasks";
+pub const NOTES_ATTACH: &str = "notes-attach";
+/// The popup `@` and `#` open: people to mention, pull requests to refer to.
+pub const NOTES_PICKER: &str = "notes-picker";
 /// The link's address, under the formatting bar while a link is being made.
 pub const NOTES_LINK_URL: &str = "notes-link-url";
+
+/// A task's checkbox, by its place among the tasks.
+pub fn notes_task(i: usize) -> String {
+    format!("notes-task-{i}")
+}
+
+/// A row of the `@` or `#` popup, by its place.
+pub fn notes_pick(i: usize) -> String {
+    format!("notes-pick-{i}")
+}
 
 /// One part of the release notes (a heading, a collapsed section's summary, or the text
 /// between them), by its id.
