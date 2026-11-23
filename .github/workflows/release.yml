@@ -144,9 +144,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The notes are the tag's message, so the tag comes as it was pushed (see `notes`).
+          # gh reads them from this checkout's tag, and refuses `--notes-from-tag` with `--repo`:
+          # the checkout's origin names the repository instead.
           git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
           gh release create "$GITHUB_REF_NAME" dist/*.AppImage dist/*.dmg \
-            --repo "$GITHUB_REPOSITORY" \
             --title "git-ex-machina ${GITHUB_REF_NAME#v}" \
             --notes-from-tag \
             --verify-tag
