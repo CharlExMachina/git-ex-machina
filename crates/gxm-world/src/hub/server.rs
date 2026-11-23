@@ -20,13 +20,13 @@ pub struct Request {
 /// real connection arrives, so its progress shows.
 pub struct Reply {
     pub status: u16,
-    pub body: String,
+    pub body: Vec<u8>,
     pub paced: bool,
 }
 
 impl From<(u16, String)> for Reply {
     fn from((status, body): (u16, String)) -> Reply {
-        Reply { status, body, paced: false }
+        Reply { status, body: body.into_bytes(), paced: false }
     }
 }
 
@@ -120,7 +120,7 @@ fn serve(stream: TcpStream, handle: &impl Fn(Request) -> Reply) -> std::io::Resu
         body.len()
     )?;
     let piece = if paced { body.len().div_ceil(PIECES).max(1) } else { body.len().max(1) };
-    for (i, chunk) in body.as_bytes().chunks(piece).enumerate() {
+    for (i, chunk) in body.chunks(piece).enumerate() {
         if i > 0 {
             std::thread::sleep(PACE);
         }

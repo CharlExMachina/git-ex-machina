@@ -12,9 +12,10 @@ use crate::ui::{self, Variant};
 use crate::update::{Note, Update, UpdateEvent, notes};
 
 /// The update's icon button, and what goes under its row: the download's progress, or why the
-/// download failed. Nothing when the app can't update itself (it isn't an AppImage).
+/// download failed. Nothing when the app can't update itself (it isn't an AppImage or the Mac
+/// app).
 pub fn control(s: &App, t: &Theme) -> Option<(El, Option<El>)> {
-    s.env.install.appimage.as_ref()?;
+    s.env.install.bundle.as_ref()?;
     let version = &s.env.install.version;
     let check = |b: El| b.on_press_tx(|s: &mut App, tx| s.update_event(UpdateEvent::Check, Some(tx)));
     let take = |b: El| b.on_press_tx(|s: &mut App, tx| s.update_event(UpdateEvent::Take, Some(tx)));
@@ -48,7 +49,13 @@ pub fn control(s: &App, t: &Theme) -> Option<(El, Option<El>)> {
         ),
         Update::Downloading { release, done, total } => {
             let frac = if *total == 0 { 0.0 } else { (*done as f32 / *total as f32).clamp(0.0, 1.0) };
-            let label = format!("Downloading {}… {}%", release.version, (frac * 100.0).floor());
+            // Once it's all here it's put in place, which for the Mac app (opening its disk
+            // image, copying the app out, checking its signature) takes a few seconds.
+            let label = if *total > 0 && done >= total {
+                format!("Installing {}…", release.version)
+            } else {
+                format!("Downloading {}… {}%", release.version, (frac * 100.0).floor())
+            };
             let bar = row()
                 .w_full()
                 .h(2.0)
