@@ -16,6 +16,7 @@ pub mod catalog;
 mod merge;
 mod paint;
 mod proof;
+mod release;
 mod review;
 mod runner;
 mod settings;

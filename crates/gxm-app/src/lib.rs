@@ -15,6 +15,7 @@ pub mod review;
 pub mod settings;
 pub mod sheet;
 pub mod state;
+pub mod tag;
 pub mod theme;
 pub mod toast;
 pub mod ui;
@@ -58,7 +59,7 @@ fn poll(s: &mut App, t: f64, tx: &mut Tx) -> bool {
         // A pull request's index can arrive after its commit was selected: read it now.
         s.prefetch_pull();
     }
-    let sheet = s.land_sheet(tx);
+    let sheet = s.land_sheet(tx) | s.land_tag(tx);
     let account = s.land_account(tx);
     let update = s.land_update(tx);
     let settings = s.land_settings();
@@ -126,6 +127,7 @@ pub fn app() -> rune::App<App> {
             s.ops.set_waker(waker.clone());
             s.pulls.set_waker(&waker);
             s.sheet_jobs.set_waker(waker.clone());
+            s.tag_jobs.set_waker(waker.clone());
             s.account_jobs.set_waker(waker.clone());
             s.update_jobs.set_waker(waker.clone());
             s.settings_jobs.set_waker(&waker);

@@ -27,6 +27,17 @@ pub const REVERT: &str = "revert";
 pub const BRANCH_FROM_HERE: &str = "branch-from-here";
 pub const BISECT: &str = "bisect";
 pub const SQUASH: &str = "squash";
+/// Create tag on the selected commit: "Tag a release" where pushing a tag releases.
+pub const CREATE_TAG: &str = "create-tag";
+/// The tag sheet: the commit it tags, the name and message, Push to origin, what pushing starts,
+/// and why the commit may not be the one to tag.
+pub const TAG_COMMIT: &str = "tag-commit";
+pub const TAG_NAME: &str = "tag-name";
+pub const TAG_MESSAGE: &str = "tag-message";
+pub const TAG_PUSH: &str = "tag-push";
+pub const TAG_RELEASE: &str = "tag-release";
+pub const TAG_WARNING: &str = "tag-warning";
+pub const TAG_CONFIRM: &str = "tag-confirm";
 /// Why the last operation failed.
 pub const OP_ERROR: &str = "op-error";
 pub const BRANCH_SUMMARY: &str = "branch-summary";

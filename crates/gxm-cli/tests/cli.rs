@@ -163,3 +163,39 @@ fn someone_reads_the_settings_of_a_repository_and_tidies_its_merged_branches_fro
     let again = gxm(&w, &["tidy", &atlas]);
     assert!(!again.contains('✓'), "nothing left to tidy:\n{again}");
 }
+
+#[test]
+fn someone_releases_the_next_version_by_pushing_a_tag_from_the_terminal() {
+    use gxm_world::fixtures::{ANA, KENJI};
+    let w = World::new();
+    let beacon = w.repo("github.com", "studio", "beacon");
+    beacon.write(".github/workflows/release.yml", "name: release\non:\n  push:\n    tags: ['v*']\n");
+    beacon.commit(ANA, w.ago(gxm_world::days(3)), "Release from version tags", &["src/main.rs"]);
+    beacon.tag("v0.1.0");
+    beacon.commit(KENJI, w.ago(gxm_world::days(1)), "Fix the --json flag", &["src/cli.rs"]);
+    beacon.push("main");
+    let repo = w.code().join("beacon");
+    let repo = repo.to_str().unwrap();
+
+    // Whether a pushed tag releases, and what comes next.
+    let tags = gxm(&w, &["tags", repo]);
+    assert_eq!(
+        tags,
+        "Releases: pushing a tag matching v* starts the release workflow (.github/workflows/release.yml)\nNext tag: v0.1.1\n"
+    );
+
+    // Tagging HEAD and pushing it is the release.
+    let tagged = gxm(&w, &["tag", "v0.1.1", "-C", repo, "-m", "Beacon 0.1.1", "--push"]);
+    assert!(tagged.starts_with("Tagged v0.1.1 on "), "{tagged}");
+    assert!(
+        tagged.ends_with("Pushed v0.1.1 to origin\nThat starts the release workflow (.github/workflows/release.yml)\n"),
+        "{tagged}"
+    );
+    let remote = w.remote("github.com", "studio", "beacon");
+    assert_eq!(w.git(&remote, &["tag", "-l", "--format=%(contents:subject)", "v0.1.1"]).trim(), "Beacon 0.1.1");
+
+    // A name that's taken, on another commit, is refused with where it is.
+    let taken = gxm_run(&w, &["tag", "v0.1.1", "HEAD~1", "-C", repo]);
+    assert!(!taken.status.success());
+    assert!(String::from_utf8_lossy(&taken.stderr).contains("v0.1.1 already exists, on "), "{taken:?}");
+}

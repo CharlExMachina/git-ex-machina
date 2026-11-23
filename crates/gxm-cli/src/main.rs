@@ -4,6 +4,7 @@
 
 mod prs;
 mod settings;
+mod tags;
 
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -25,6 +26,9 @@ Usage:
   gxm prs [PATH]                  Pull requests on the repository's provider (gxm auth login, or GH_TOKEN)
   gxm settings [PATH]             The repository's settings, on its provider and on this computer
   gxm tidy [PATH] [--delete]      Its merged branches, here and on origin; --delete deletes them
+  gxm tags [PATH]                 Whether pushing a tag releases, and the next version
+  gxm tag NAME [COMMIT] [-C PATH] [-m MESSAGE] [--push]
+                                  Tag COMMIT (default HEAD); --push sends the tag to origin
   gxm add PATH                    Add a repository on disk to the workspace
   gxm clone URL [INTO]            Clone over SSH into INTO (default ~/code) and add it
   gxm auth login                  Sign in to GitHub with a one-time code
@@ -44,6 +48,8 @@ fn main() -> ExitCode {
         Some("prs") => prs::prs(&env, &args[1..], &mut out),
         Some("settings") => settings::settings(&env, &args[1..], &mut out),
         Some("tidy") => settings::tidy(&env, &args[1..], &mut out),
+        Some("tags") => tags::tags(&env, &args[1..], &mut out),
+        Some("tag") => tags::tag(&env, &args[1..], &mut out),
         Some("add") => add(&env, &args[1..], &mut out),
         Some("clone") => clone(&env, &args[1..], &mut out),
         Some("auth") => auth(&env, &args[1..], &mut out),
