@@ -1,4 +1,4 @@
-//! A sheet over the window (Add, Init, Clone, Account, Update, Tag): a 460-wide panel raised over a dimmed window, with a
+//! A sheet over the window (Add, Init, Clone, Account, Update): a 460-wide panel raised over a dimmed window, with a
 //! title, what it's for, its fields, what went wrong, and Cancel beside the primary button.
 
 use rune::{El, col, el, row, text};
@@ -17,10 +17,6 @@ pub fn layer(s: &App, t: &Theme) -> Vec<El> {
         Sheet::Account(state) => {
             let (title, about, body, footer) = super::account::sheet(t, state);
             return panel(t, title, about, body, footer);
-        }
-        Sheet::Tag(tag) => {
-            let (title, about, body, footer, width) = super::tag::sheet(s, t, tag);
-            return panel_of(t, width, title, about, body, footer);
         }
         Sheet::Update { error } => {
             let (title, about, body, footer) = super::update::sheet(s, t, error.as_deref());
@@ -89,16 +85,11 @@ pub(super) fn error(t: &Theme, e: &str) -> El {
 
 /// The panel and its scrim: title, what it's for, the body, and the buttons at the foot.
 fn panel(t: &Theme, title: String, about: String, body: Vec<El>, footer: El) -> Vec<El> {
-    panel_of(t, size::SHEET, title, about, body, footer)
-}
-
-/// [`panel`], `width` wide.
-fn panel_of(t: &Theme, width: f32, title: String, about: String, body: Vec<El>, footer: El) -> Vec<El> {
     let mut panel = col()
         .key(keys::SHEET)
         .role("dialog")
         .label(title.clone())
-        .w(width)
+        .w(size::SHEET)
         .padding(20.0)
         .gap(16.0)
         .radius(size::RADIUS_LG)

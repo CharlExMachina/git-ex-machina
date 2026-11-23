@@ -1,7 +1,6 @@
 //! The sheets over the window: Add (a repository already on disk), Init (a folder Add found
 //! without git, made a repository where it is) and Clone (one from a remote, over SSH). (The
-//! account's, the update's and the tag's sheets have machines of their own: `account`, `update`,
-//! `tag`.) Each is
+//! account's and the update's sheets have machines of their own: `account`, `update`.) Each is
 //! a small machine: editing, then working off the UI thread, then closed with the repository
 //! open in the window, or back to editing with what went wrong. A clone can be cancelled while
 //! it runs.
@@ -36,8 +35,6 @@ pub enum Sheet {
     Update {
         error: Option<String>,
     },
-    /// Tagging a commit (`tag.rs`).
-    Tag(Box<crate::tag::TagSheet>),
 }
 
 impl Sheet {
@@ -45,7 +42,6 @@ impl Sheet {
         match self {
             Sheet::Closed | Sheet::Account(_) | Sheet::Update { .. } => None,
             Sheet::Add(phase) | Sheet::Clone(phase) | Sheet::Init { phase, .. } => Some(phase),
-            Sheet::Tag(tag) => Some(&tag.phase),
         }
     }
 }

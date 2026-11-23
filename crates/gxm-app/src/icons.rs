@@ -60,6 +60,22 @@ icon!(
     r#"<rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M6.5 6 4.5 8l2 2M9.5 6l2 2-2 2"/>"#
 );
 icon!(FOLD, "gxm-fold", r#"<path d="M4.5 3.5 7.5 6.5 4.5 9.5"/><path d="M9.5 6.5h4M4.5 12.5h9"/>"#);
+icon!(
+    TASKS,
+    "gxm-tasks",
+    r#"<rect x="2.5" y="3" width="4" height="4" rx="1"/><path d="M3.5 11 4.5 12 6.5 10M9 5h4.5M9 11h4.5"/>"#
+);
+icon!(
+    ATTACH,
+    "gxm-attach",
+    r#"<path d="M12.5 7.5 8 12a3 3 0 0 1-4.25-4.25l4.75-4.75a2 2 0 0 1 2.8 2.8L6.6 10.5a1 1 0 0 1-1.4-1.4L9.5 4.8"/>"#
+);
+icon!(
+    IMAGE,
+    "gxm-image",
+    r#"<rect x="2" y="3" width="12" height="10" rx="2"/><circle cx="6" cy="6.5" r="1"/><path d="M14 11 10.5 7.5 4 13"/>"#
+);
+icon!(FILE, "gxm-file", r#"<path d="M4 2.5h5L12 5.5v8H4z"/><path d="M9 2.5v3h3"/>"#);
 icon!(SPARKLE, "gxm-sparkle", r#"<path d="M8 2.5 9.2 6.8 13.5 8 9.2 9.2 8 13.5 6.8 9.2 2.5 8 6.8 6.8z"/>"#);
 icon!(PERSON, "gxm-person", r#"<circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c0-2.6 2.2-4 5-4s5 1.4 5 4"/>"#);
 icon!(CHECK, "gxm-check", r#"<path d="M3.5 8.5 6.5 11.5 12.5 4.5"/>"#);

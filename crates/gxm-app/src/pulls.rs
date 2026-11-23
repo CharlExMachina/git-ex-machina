@@ -461,6 +461,11 @@ impl Pulls {
         index.pulls.iter().find(|p| p.number == *n)
     }
 
+    /// Every pull request the index has, newest first.
+    pub fn all(&self) -> &[PullSummary] {
+        self.index.as_ref().map_or(&[], |i| i.pulls.as_slice())
+    }
+
     /// The person the provider knows the token as.
     pub fn viewer(&self) -> Option<&User> {
         self.index.as_ref()?.viewer.as_ref()

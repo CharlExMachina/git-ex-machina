@@ -3,14 +3,23 @@
 //! across the parts as though they were one document; the formatting bar works on the part the
 //! caret is in. The notes go out as markdown (`gxm_core::notes`).
 
-use gxm_core::notes::{self, Line, Notes, Part, Rich, Span};
-use rune::{Block, Key, KeyEvent, Mark, MarkRange, TextEdit};
+mod chips;
+mod convert;
+pub mod pad;
+
+use gxm_core::notes::{self, Chip, Line, Notes, Part, Rich, Span};
+use rune::{Block, Key, KeyEvent, Mark, TextEdit};
+
+pub use chips::{Pick, PickKind};
+use convert::{caret_of, caret_to, edit_of, plain_len, plain_text, rich_of};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Heading(u8),
     /// A collapsed section's summary: the parts after it, up to the next one, fold under it.
     Fold,
+    /// A task list's item, checked or not: a checkbox to click, and its words.
+    Task(bool),
     Body,
 }
 
@@ -38,6 +47,15 @@ pub struct NotesEditor {
     /// The link's address while one is being made.
     pub link: Option<TextEdit>,
     pub draft: Draft,
+    /// Files attached: each one's name in the notes, and where it is.
+    pub files: Vec<(String, std::path::PathBuf)>,
+    /// The commit holding them, once made: the notes link the files by it.
+    pub files_commit: Option<String>,
+    /// The `@` or `#` popup, while one is open.
+    pub pick: Option<Pick>,
+    /// Where each part's field was last drawn, in window points: whether the caret is on its
+    /// first or last row as drawn.
+    pub rects: std::collections::HashMap<u64, [f32; 4]>,
 }
 
 impl Default for NotesEditor {
@@ -46,99 +64,34 @@ impl Default for NotesEditor {
     }
 }
 
-/// The marks markdown can hold (no underline).
-fn marks() -> [Mark; 5] {
-    [Mark::Bold, Mark::Italic, Mark::Strike, Mark::Code, Mark::Link(String::new())]
-}
-
-fn configure(kind: Kind, edit: TextEdit) -> TextEdit {
-    match kind {
-        Kind::Body => edit.rich().allow_marks(marks()).allow_blocks([
-            Block::Bullet(0),
-            Block::Numbered(0),
-            Block::Quote,
-            Block::Code,
-        ]),
-        Kind::Heading(_) => edit.rich().allow_marks(marks()).allow_blocks([]),
-        Kind::Fold => edit.rich().allow_marks([]).allow_blocks([]),
-    }
-}
-
-fn edit_of(kind: Kind, rich: &Rich) -> TextEdit {
-    let marks = rich
-        .marks
-        .iter()
-        .map(|s| {
-            let mark = match &s.mark {
-                notes::Mark::Bold => Mark::Bold,
-                notes::Mark::Italic => Mark::Italic,
-                notes::Mark::Strike => Mark::Strike,
-                notes::Mark::Code => Mark::Code,
-                notes::Mark::Link(url) => Mark::Link(url.clone()),
-            };
-            MarkRange::new(s.start..s.end, mark)
-        })
-        .collect();
-    let blocks = rich
-        .lines
-        .iter()
-        .map(|l| match l {
-            Line::Paragraph => Block::Paragraph,
-            Line::Bullet(n) => Block::Bullet(*n),
-            Line::Numbered(n) => Block::Numbered(*n),
-            Line::Quote => Block::Quote,
-            Line::Code => Block::Code,
-        })
-        .collect();
-    configure(kind, TextEdit::from_parts(rich.text.clone(), marks, blocks))
-}
-
-fn rich_of(edit: &TextEdit) -> Rich {
-    let marks = edit
-        .marks()
-        .iter()
-        .filter_map(|m| {
-            let mark = match &m.mark {
-                Mark::Bold => notes::Mark::Bold,
-                Mark::Italic => notes::Mark::Italic,
-                Mark::Strike => notes::Mark::Strike,
-                Mark::Code => notes::Mark::Code,
-                Mark::Link(url) => notes::Mark::Link(url.clone()),
-                _ => return None,
-            };
-            Some(Span { start: m.start, end: m.end, mark })
-        })
-        .collect();
-    let lines = edit
-        .blocks()
-        .iter()
-        .map(|b| match b {
-            Block::Bullet(n) => Line::Bullet(*n),
-            Block::Numbered(n) => Line::Numbered(*n),
-            Block::Quote => Line::Quote,
-            Block::Code => Line::Code,
-            Block::Paragraph => Line::Paragraph,
-        })
-        .collect();
-    Rich { text: edit.text.clone(), marks, lines }
-}
-
-fn caret_to(edit: &mut TextEdit, byte: usize) {
-    let byte = byte.min(edit.text.len());
-    edit.anchor = byte;
-    edit.focus = byte;
-}
-
 impl NotesEditor {
     pub fn from_notes(notes: &Notes) -> NotesEditor {
-        let mut e =
-            NotesEditor { parts: Vec::new(), next: 0, at: 0, markdown_shown: false, link: None, draft: Draft::Idle };
+        let mut e = NotesEditor {
+            parts: Vec::new(),
+            next: 0,
+            at: 0,
+            markdown_shown: false,
+            link: None,
+            draft: Draft::Idle,
+            files: Vec::new(),
+            files_commit: None,
+            pick: None,
+            rects: std::collections::HashMap::new(),
+        };
         for part in &notes.parts {
             match part {
-                Part::Heading(level, rich) => e.push(Kind::Heading(*level), rich),
-                Part::Fold(summary) => e.push(Kind::Fold, &Rich::plain(summary)),
-                Part::Body(rich) => e.push(Kind::Body, rich),
-            };
+                Part::Heading(level, rich) => {
+                    e.push(Kind::Heading(*level), rich);
+                }
+                Part::Fold(summary) => {
+                    e.push(Kind::Fold, &Rich::plain(summary));
+                }
+                Part::Body(rich) => {
+                    for (kind, rich) in split_tasks(rich) {
+                        e.push(kind, &rich);
+                    }
+                }
+            }
         }
         e.normalize();
         e.at = e.parts.first().map_or(0, |p| p.id);
@@ -146,25 +99,44 @@ impl NotesEditor {
     }
 
     pub fn notes(&self) -> Notes {
-        let parts = self
-            .parts
-            .iter()
-            .map(|p| match p.kind {
-                Kind::Heading(level) => Part::Heading(level, rich_of(&p.edit)),
-                Kind::Fold => Part::Fold(p.edit.text.clone()),
-                Kind::Body => Part::Body(rich_of(&p.edit)),
-            })
-            .collect();
+        let mut parts: Vec<Part> = Vec::new();
+        for p in &self.parts {
+            let rich = match p.kind {
+                Kind::Heading(level) => {
+                    parts.push(Part::Heading(level, rich_of(&p.edit)));
+                    continue;
+                }
+                Kind::Fold => {
+                    parts.push(Part::Fold(plain_text(&p.edit)));
+                    continue;
+                }
+                // A task is a line of text led by its checkbox, among the text around it.
+                Kind::Task(done) => task_line(done, &rich_of(&p.edit)),
+                Kind::Body => rich_of(&p.edit),
+            };
+            match parts.last_mut() {
+                Some(Part::Body(before)) => before.append(&rich),
+                _ => parts.push(Part::Body(rich)),
+            }
+        }
         Notes { parts }
     }
 
-    /// The notes as the tag will carry them.
-    pub fn markdown(&self) -> String {
-        notes::markdown(&self.notes())
+    /// The notes as the tag will carry them, attached files linked under `assets` (the release's
+    /// download URL).
+    pub fn markdown(&self, assets: Option<&str>) -> String {
+        notes::markdown_with(&self.notes(), assets)
     }
 
     pub fn is_empty(&self) -> bool {
-        self.parts.iter().all(|p| p.edit.text.trim().is_empty())
+        self.parts.iter().all(|p| plain_text(&p.edit).trim().is_empty())
+    }
+
+    /// Every field's pads where they belong (after an edit Rune made).
+    pub fn repad(&mut self) {
+        for p in &mut self.parts {
+            pad::pad(&mut p.edit);
+        }
     }
 
     fn push(&mut self, kind: Kind, rich: &Rich) -> u64 {
@@ -197,7 +169,7 @@ impl NotesEditor {
         if self.is_empty() {
             *self = NotesEditor::from_notes(draft);
             if let Some(first) = self.parts.first_mut() {
-                let end = first.edit.text.len();
+                let end = plain_len(&first.edit);
                 caret_to(&mut first.edit, end);
                 self.at = first.id;
             }
@@ -217,8 +189,28 @@ impl NotesEditor {
         match self.index(id).map(|i| self.parts[i].kind) {
             Some(Kind::Body) => self.lift(id, Kind::Heading(3)),
             Some(Kind::Heading(_)) => self.lower(id),
-            Some(Kind::Fold) => self.rekind(id, Kind::Heading(3)),
+            Some(Kind::Fold | Kind::Task(_)) => self.rekind(id, Kind::Heading(3)),
             None => {}
+        }
+    }
+
+    /// The caret's line as a task, unchecked, or a task back to text.
+    pub fn toggle_task(&mut self) {
+        let id = self.current();
+        match self.index(id).map(|i| self.parts[i].kind) {
+            Some(Kind::Body) => self.lift(id, Kind::Task(false)),
+            Some(Kind::Task(_)) => self.lower(id),
+            Some(Kind::Heading(_) | Kind::Fold) => self.rekind(id, Kind::Task(false)),
+            None => {}
+        }
+    }
+
+    /// Task `id` checked, or unchecked.
+    pub fn check(&mut self, id: u64) {
+        let at = self.at;
+        if let Some(Kind::Task(done)) = self.index(id).map(|i| self.parts[i].kind) {
+            self.rekind(id, Kind::Task(!done));
+            self.at = at;
         }
     }
 
@@ -228,7 +220,7 @@ impl NotesEditor {
         match self.index(id).map(|i| self.parts[i].kind) {
             Some(Kind::Body) => self.lift(id, Kind::Fold),
             Some(Kind::Fold) => self.lower(id),
-            Some(Kind::Heading(_)) => self.rekind(id, Kind::Fold),
+            Some(Kind::Heading(_) | Kind::Task(_)) => self.rekind(id, Kind::Fold),
             None => {}
         }
     }
@@ -250,6 +242,7 @@ impl NotesEditor {
         let id = self.at;
         if let Some(p) = self.part_mut(id) {
             p.edit.toggle_block(block);
+            pad::pad(&mut p.edit);
         }
     }
 
@@ -284,7 +277,9 @@ impl NotesEditor {
         }
         p.edit.set_link(Some(url));
         let end = p.edit.anchor.max(p.edit.focus);
-        caret_to(&mut p.edit, end);
+        p.edit.anchor = end;
+        p.edit.focus = end;
+        pad::pad(&mut p.edit);
     }
 
     /// Splits the caret's line out of a body as a part of `kind`.
@@ -292,9 +287,9 @@ impl NotesEditor {
         let Some(i) = self.index(id) else { return };
         let edit = &self.parts[i].edit;
         let rich = rich_of(edit);
-        let caret = edit.focus.min(edit.text.len());
-        let line = edit.text[..caret].matches('\n').count();
-        let column = caret - edit.text[..caret].rfind('\n').map_or(0, |n| n + 1);
+        let caret = caret_of(edit);
+        let line = rich.text[..caret].matches('\n').count();
+        let column = caret - rich.text[..caret].rfind('\n').map_or(0, |n| n + 1);
         let count = rich.line_count();
         let mut made = Vec::new();
         if let Some(before) = rich.lines_between(0, line) {
@@ -325,7 +320,7 @@ impl NotesEditor {
     /// A heading or summary back to a line of text, joined to the text around it.
     fn lower(&mut self, id: u64) {
         let Some(i) = self.index(id) else { return };
-        let caret = self.parts[i].edit.focus;
+        let caret = caret_of(&self.parts[i].edit);
         let mut rich = rich_of(&self.parts[i].edit);
         rich.lines = vec![Line::Paragraph; rich.line_count()];
         let mut edit = edit_of(Kind::Body, &rich);
@@ -337,7 +332,7 @@ impl NotesEditor {
 
     fn rekind(&mut self, id: u64, kind: Kind) {
         let Some(i) = self.index(id) else { return };
-        let caret = self.parts[i].edit.focus;
+        let caret = caret_of(&self.parts[i].edit);
         let mut edit = edit_of(kind, &rich_of(&self.parts[i].edit));
         caret_to(&mut edit, caret);
         self.parts[i] = EditPart { id, kind, edit };
@@ -353,9 +348,9 @@ impl NotesEditor {
             if self.parts[i].kind == Kind::Body && self.parts[i + 1].kind == Kind::Body {
                 let next = self.parts.remove(i + 1);
                 let first = &mut self.parts[i];
-                let shift = first.edit.text.len() + 1;
-                let caret = if self.at == next.id { Some(shift + next.edit.focus) } else { None };
-                let keep = if self.at == first.id { Some(first.edit.focus) } else { None };
+                let shift = plain_len(&first.edit) + 1;
+                let caret = if self.at == next.id { Some(shift + caret_of(&next.edit)) } else { None };
+                let keep = if self.at == first.id { Some(caret_of(&first.edit)) } else { None };
                 let mut rich = rich_of(&first.edit);
                 rich.append(&rich_of(&next.edit));
                 first.edit = edit_of(Kind::Body, &rich);
@@ -371,7 +366,7 @@ impl NotesEditor {
         let last = self.parts.len().saturating_sub(1);
         let mut n = 0;
         self.parts.retain(|p| {
-            let keep = p.kind != Kind::Body || !p.edit.text.is_empty() || p.id == at || n == last;
+            let keep = p.kind != Kind::Body || !plain_text(&p.edit).is_empty() || p.id == at || n == last;
             n += 1;
             keep
         });
@@ -384,40 +379,66 @@ impl NotesEditor {
     }
 
     /// A key in part `id`'s field, before the field has it: the ones that cross into the parts
-    /// around it. True when it was taken; the caret is then in `self.at`.
-    pub fn key(&mut self, id: u64, ev: &KeyEvent) -> bool {
+    /// around it, and the ones that step over a pad or a task's checkbox. True when it was
+    /// taken; the caret is then in `self.at`. `rows` says whether the caret is on the field's
+    /// first and last rows as drawn (a long line wraps onto several), when that's known.
+    pub fn key(&mut self, id: u64, ev: &KeyEvent, rows: Option<(bool, bool)>) -> bool {
         let Some(i) = self.index(id) else { return false };
         self.at = id;
         let plain = !ev.mods.cmd && !ev.mods.alt && !ev.mods.ctrl && !ev.mods.shift;
         let p = &self.parts[i];
-        let (text, caret, collapsed) =
-            (&p.edit.text, p.edit.focus.min(p.edit.text.len()), p.edit.anchor == p.edit.focus);
-        let first_line = !text[..caret].contains('\n');
-        let last_line = !text[caret..].contains('\n');
+        let (text, caret, collapsed) = (plain_text(&p.edit), caret_of(&p.edit), p.edit.anchor == p.edit.focus);
+        let (first_row, last_row) = rows.unwrap_or((!text[..caret].contains('\n'), !text[caret..].contains('\n')));
         let kind = p.kind;
         let go = |e: &mut NotesEditor, to: usize, end: bool| {
             let part = &mut e.parts[to];
-            let byte = if end { part.edit.text.len() } else { 0 };
+            let byte = if end { plain_len(&part.edit) } else { 0 };
             caret_to(&mut part.edit, byte);
             e.at = part.id;
             true
         };
+        let crossing = match ev.key {
+            Key::Up => plain && first_row && i > 0,
+            Key::Down => plain && last_row && i + 1 < self.parts.len(),
+            Key::Left => plain && collapsed && caret == 0 && i > 0,
+            Key::Right => plain && collapsed && caret == text.len() && i + 1 < self.parts.len(),
+            _ => false,
+        };
+        if !crossing && kind == Kind::Body && collapsed && self.step_over(i, ev) {
+            return true;
+        }
         match ev.key {
-            Key::Up if plain && first_line && i > 0 => go(self, i - 1, true),
-            Key::Down if plain && last_line && i + 1 < self.parts.len() => go(self, i + 1, false),
+            Key::Up if plain && first_row && i > 0 => go(self, i - 1, true),
+            Key::Down if plain && last_row && i + 1 < self.parts.len() => go(self, i + 1, false),
             Key::Left if plain && collapsed && caret == 0 && i > 0 => go(self, i - 1, true),
             Key::Right if plain && collapsed && caret == text.len() && i + 1 < self.parts.len() => {
                 go(self, i + 1, false)
             }
+            Key::Enter if kind == Kind::Body && plain && self.parts[i].edit.current_block() == Block::Paragraph => {
+                // Rune's Return in a paragraph submits the field (a chat box's); in notes it starts
+                // the next paragraph.
+                let edit = &mut self.parts[i].edit;
+                edit.insert("\n");
+                edit.set_block(Block::Paragraph);
+                pad::pad(edit);
+                true
+            }
+            Key::Enter if matches!(kind, Kind::Task(_)) && !ev.mods.shift && text.trim().is_empty() => {
+                // Return in an empty task ends the list: it's a line of text again.
+                self.lower(id);
+                true
+            }
             Key::Enter if kind != Kind::Body && !ev.mods.shift => {
-                // Return in a heading starts the text under it, taking what was after the caret.
+                // Return in a heading starts the text under it, and in a task the next task,
+                // taking what was after the caret.
                 let rich = rich_of(&self.parts[i].edit);
                 let mut tail = rich.slice(caret, rich.text.len());
                 tail.lines = vec![Line::Paragraph];
                 let head = rich.slice(0, caret);
                 self.parts[i].edit = edit_of(kind, &head);
+                let next = if matches!(kind, Kind::Task(_)) { Kind::Task(false) } else { Kind::Body };
                 let new = self.fresh();
-                self.parts.insert(i + 1, EditPart { id: new, kind: Kind::Body, edit: edit_of(Kind::Body, &tail) });
+                self.parts.insert(i + 1, EditPart { id: new, kind: next, edit: edit_of(next, &tail) });
                 caret_to(&mut self.parts[i + 1].edit, 0);
                 self.at = new;
                 self.normalize();
@@ -435,7 +456,7 @@ impl NotesEditor {
                 let count = rich.line_count();
                 let first = rich.lines_between(0, 1).unwrap_or_default();
                 let rest = rich.lines_between(1, count);
-                let joined_at = self.parts[prev].edit.text.len();
+                let joined_at = plain_len(&self.parts[prev].edit);
                 if !first.text.is_empty() {
                     let mut heading = rich_of(&self.parts[prev].edit);
                     let mut line = first;
@@ -459,8 +480,65 @@ impl NotesEditor {
     }
 }
 
+/// A body's lines as text, with each task line (led by its checkbox) a task of its own.
+fn split_tasks(rich: &Rich) -> Vec<(Kind, Rich)> {
+    let mut out: Vec<(Kind, Rich)> = Vec::new();
+    for n in 0..rich.line_count() {
+        let Some(line) = rich.lines_between(n, n + 1) else { continue };
+        let task = line.marks.iter().find_map(|m| match m.mark {
+            notes::Mark::Chip(Chip::Task(done)) if m.start == 0 => Some((done, m.end)),
+            _ => None,
+        });
+        match task {
+            Some((done, end)) => {
+                let skip = end + line.text[end..].len() - line.text[end..].trim_start().len();
+                out.push((Kind::Task(done), line.slice(skip, line.text.len())));
+            }
+            None => match out.last_mut() {
+                Some((Kind::Body, before)) => before.append(&line),
+                _ => out.push((Kind::Body, line)),
+            },
+        }
+    }
+    out
+}
+
+/// A task's words as a line of text led by its checkbox.
+fn task_line(done: bool, words: &Rich) -> Rich {
+    let label = Chip::Task(done).label();
+    let shift = label.len();
+    let mut marks = vec![Span { start: 0, end: shift, mark: notes::Mark::Chip(Chip::Task(done)) }];
+    marks.extend(words.marks.iter().map(|m| Span { start: m.start + shift, end: m.end + shift, mark: m.mark.clone() }));
+    Rich { text: format!("{label}{}", words.text), marks, lines: vec![Line::Paragraph] }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_task_has_a_checkbox_to_click_and_its_own_line() {
+        let mut e = editor("Before\n\n- [ ] Ship it\n- [x] Tag it\n\nAfter\n");
+        let kinds: Vec<Kind> = e.parts.iter().map(|p| p.kind).collect();
+        assert_eq!(kinds, [Kind::Body, Kind::Task(false), Kind::Task(true), Kind::Body]);
+        assert_eq!(e.parts[1].edit.text, "Ship it");
+        let first = e.parts[1].id;
+        e.check(first);
+        assert_eq!(e.markdown(None), "Before\n\n- [x] Ship it\n- [x] Tag it\n\nAfter\n");
+        // Return starts the next task; in an empty one it ends the list.
+        let tag = at_line(&mut e, 2, 6);
+        assert!(e.key(tag, &key(Key::Enter), None));
+        assert_eq!(e.parts[3].kind, Kind::Task(false));
+        let empty = e.parts[3].id;
+        assert!(e.key(empty, &key(Key::Enter), None));
+        assert_eq!(e.parts[3].kind, Kind::Body);
+        assert_eq!(e.markdown(None), "Before\n\n- [x] Ship it\n- [x] Tag it\n\nAfter\n");
+        // The button makes a line a task, and a task a line again.
+        at_line(&mut e, 0, 3);
+        e.toggle_task();
+        assert_eq!(e.parts[0].kind, Kind::Task(false));
+        e.toggle_task();
+        assert_eq!(e.markdown(None), "Before\n\n- [x] Ship it\n- [x] Tag it\n\nAfter\n");
+    }
+
     use super::*;
 
     fn key(key: Key) -> KeyEvent {
@@ -483,11 +561,11 @@ mod tests {
         let mut e = editor("one\n\ntwo\n\nthree\n");
         at_line(&mut e, 0, 5);
         e.toggle_heading();
-        assert_eq!(e.markdown(), "one\n\n### two\n\nthree\n");
+        assert_eq!(e.markdown(None), "one\n\n### two\n\nthree\n");
         assert_eq!(e.parts.iter().map(|p| p.kind).collect::<Vec<_>>(), [Kind::Body, Kind::Heading(3), Kind::Body]);
         assert_eq!(e.parts[1].edit.focus, 1, "the caret stays in its place on the line");
         e.toggle_heading();
-        assert_eq!(e.markdown(), "one\n\ntwo\n\nthree\n");
+        assert_eq!(e.markdown(None), "one\n\ntwo\n\nthree\n");
         assert_eq!(e.parts.len(), 1, "the text joins up again");
         assert_eq!(e.parts[0].edit.focus, 5);
     }
@@ -497,18 +575,21 @@ mod tests {
         let mut e = editor("Highlights\n\nFull changelog\n\n- one\n");
         at_line(&mut e, 0, 11);
         e.toggle_fold();
-        assert_eq!(e.markdown(), "Highlights\n\n<details>\n<summary>Full changelog</summary>\n\n- one\n\n</details>\n");
+        assert_eq!(
+            e.markdown(None),
+            "Highlights\n\n<details>\n<summary>Full changelog</summary>\n\n- one\n\n</details>\n"
+        );
     }
 
     #[test]
     fn return_in_a_heading_starts_its_text_and_backspace_joins_it_back() {
         let mut e = editor("## What's Changed\n\n- one\n");
         let id = at_line(&mut e, 0, 6);
-        assert!(e.key(id, &key(Key::Enter)));
-        assert_eq!(e.markdown(), "## What's\n\n Changed\n\n- one\n");
+        assert!(e.key(id, &key(Key::Enter), None));
+        assert_eq!(e.markdown(None), "## What's\n\n Changed\n\n- one\n");
         let body = e.at;
-        assert!(e.key(body, &key(Key::Backspace)));
-        assert_eq!(e.markdown(), "## What's Changed\n\n- one\n");
+        assert!(e.key(body, &key(Key::Backspace), None));
+        assert_eq!(e.markdown(None), "## What's Changed\n\n- one\n");
         assert_eq!(e.parts[0].edit.focus, 6, "the caret is where they joined");
     }
 
@@ -516,12 +597,12 @@ mod tests {
     fn arrows_cross_from_part_to_part() {
         let mut e = editor("## Title\n\nfirst\nsecond\n");
         let title = at_line(&mut e, 0, 3);
-        assert!(e.key(title, &key(Key::Down)));
+        assert!(e.key(title, &key(Key::Down), None));
         assert_eq!((e.at, e.parts[1].edit.focus), (e.parts[1].id, 0));
         let body = e.parts[1].id;
-        assert!(!e.key(body, &key(Key::Down)), "within the text, the field moves the caret");
+        assert!(!e.key(body, &key(Key::Down), None), "within the text, the field moves the caret");
         caret_to(&mut e.parts[1].edit, 2);
-        assert!(e.key(body, &key(Key::Up)));
+        assert!(e.key(body, &key(Key::Up), None));
         assert_eq!((e.at, e.parts[0].edit.focus), (title, 5));
     }
 
@@ -530,13 +611,17 @@ mod tests {
         let draft = notes::draft("v1.0.0", "## What's Changed\n* One by @ana in x\n");
         let mut e = NotesEditor::default();
         e.take_draft(&draft);
-        assert!(e.markdown().starts_with("**v1.0.0** · 1 change from 1 contributor\n\n<details>"), "{}", e.markdown());
+        assert!(
+            e.markdown(None).starts_with("**v1.0.0** · 1 change from 1 contributor\n\n<details>"),
+            "{}",
+            e.markdown(None)
+        );
         let mut written = editor("My own words\n");
         written.take_draft(&draft);
         assert!(
-            written.markdown().starts_with("My own words\n\n<details>\n<summary>Full changelog</summary>"),
+            written.markdown(None).starts_with("My own words\n\n<details>\n<summary>Full changelog</summary>"),
             "{}",
-            written.markdown()
+            written.markdown(None)
         );
     }
 }

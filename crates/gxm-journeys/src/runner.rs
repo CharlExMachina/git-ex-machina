@@ -3,6 +3,7 @@
 use std::fmt;
 
 use gxm_app::state::App;
+use gxm_app::tag_window::{self, TagLink, TagWindow};
 use gxm_world::World;
 use rune::{ElementInfo, Key, KeyEvent, Mods, PhysicalInput, Runtime};
 use serde_json::{Value, json};
@@ -37,6 +38,8 @@ pub struct Recording {
     pub events: Vec<Value>,
     pub marks: Vec<Mark>,
     pub end: f64,
+    /// A window besides the main one showed: the replay records the desktop, every window on it.
+    pub windows: bool,
 }
 
 /// A moment worth a screenshot, as the journey saw it.
@@ -82,16 +85,27 @@ impl std::error::Error for Failure {}
 pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
     // At the screenshots' scale, so layout snaps to the pixels the screenshots show.
     let env = rune::Env { system_dark: j.dark, scale: crate::paint::SCALE };
-    let mut rt = gxm_app::app().headless_runtime(gxm_app::SIZE, env);
+    // The main window, and the tag window it opens: each its own runtime, as each is its own
+    // window, linked as the app links them.
+    let link = TagLink::default();
+    let mut rt = gxm_app::main_app().headless_runtime(gxm_app::SIZE, env);
     rt.set_font_smoothing(gxm_app::FONT_SMOOTHING);
     rt.state = App::new(world.env().clone());
+    rt.state.tag_link = link.clone();
+    let mut tag = tag_window::app(link.clone()).headless_runtime(tag_window::SIZE, env);
+    tag.set_font_smoothing(gxm_app::FONT_SMOOTHING);
+    tag.state = TagWindow::new(world.env().clone(), link);
     // The person's own clipboard stays theirs: copies land here, for `Copied` to read.
     let clipboard = rune::clipboard::memory();
     rt.use_clipboard(&clipboard);
-    let painter = crate::paint::Painter::new(&mut rt);
+    tag.use_clipboard(&clipboard);
+    let painter = crate::paint::Painter::new(&mut rt, gxm_app::SIZE);
     let mut d = Driver {
         rt,
+        tag,
         painter,
+        tag_painter: None,
+        windows: false,
         clipboard,
         held: None,
         opened: Vec::new(),
@@ -120,7 +134,7 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                     d.scroll_into_view(key).map_err(|why| fail(why, &d))?;
                 }
                 let t = d.now;
-                let (x, y) = d.rt.find(key).ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
+                let (x, y) = d.win().find(key).ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
                 d.tap(x, y);
                 d.events.push(json!({ "t": t, "type": "tap", "key": key }));
                 d.advance_to(t + AFTER_TAP);
@@ -128,7 +142,8 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
             Step::TapText(text) => {
                 let (x, y) = d.find_text(text).ok_or_else(|| fail(format!("nothing on screen shows {text:?}"), &d))?;
                 d.tap(x, y);
-                d.events.push(json!({ "t": t, "type": "tap", "x": x, "y": y }));
+                let (ox, oy) = d.origin();
+                d.events.push(json!({ "t": t, "type": "tap", "x": x + ox, "y": y + oy }));
                 d.advance_to(t + AFTER_TAP);
             }
             Step::Down(key) => {
@@ -136,30 +151,38 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                     d.scroll_into_view(key).map_err(|why| fail(why, &d))?;
                 }
                 let t = d.now;
-                let (x, y) = d.rt.find(key).ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
-                d.rt.pointer_move(x, y);
-                d.rt.pointer_down(x, y);
+                let (x, y) = d.win().find(key).ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
+                d.win_mut().pointer_move(x, y);
+                d.win_mut().pointer_down(x, y);
                 d.held = Some((x, y));
                 d.events.push(json!({ "t": t, "type": "down", "key": key }));
                 d.advance_to(t + AFTER_PRESS);
             }
             Step::Up => {
                 let (x, y) = d.held.take().ok_or_else(|| fail("no mouse button is held".to_owned(), &d))?;
-                d.rt.pointer_up(x, y);
+                d.win_mut().pointer_up(x, y);
                 d.events.push(json!({ "t": t, "type": "up" }));
                 d.advance_to(t + AFTER_TAP);
             }
             Step::Type(text) => {
                 d.events.push(json!({ "t": t, "type": "type", "text": text }));
                 for ch in text.chars() {
-                    d.rt.key(KeyEvent { key: Key::Text(ch.to_string()), mods: Mods::default() });
+                    d.win_mut().key(KeyEvent { key: Key::Text(ch.to_string()), mods: Mods::default() });
                     d.advance_to(d.now + PER_CHAR);
                 }
                 d.advance_to(t + PER_CHAR * text.chars().count() as f64 + AFTER_TYPE);
             }
+            Step::Drop { key, path } => {
+                let (x, y) = d.win().find(key).ok_or_else(|| fail(format!("no element is keyed {key:?}"), &d))?;
+                d.win_mut().drop_files(vec![world.code().join(path)], Some((x, y)));
+                // A replay runs in its own world's `~/code`, where the same file is.
+                d.events.push(json!({ "t": t, "drop_files": { "paths": [path], "key": key } }));
+                d.advance_to(t + AFTER_TAP);
+            }
             Step::Press(p) => {
                 let key = key_of(p).ok_or_else(|| fail(format!("journeys can't press {:?} yet", p.name), &d))?;
-                d.rt.key(KeyEvent { key, mods: Mods { cmd: p.cmd, shift: p.shift, alt: p.alt, ..Mods::default() } });
+                d.win_mut()
+                    .key(KeyEvent { key, mods: Mods { cmd: p.cmd, shift: p.shift, alt: p.alt, ..Mods::default() } });
                 d.events.push(
                     json!({ "t": t, "type": "key", "name": p.name, "cmd": p.cmd, "shift": p.shift, "alt": p.alt }),
                 );
@@ -175,7 +198,7 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                         other => return Err(fail(format!("journeys can't hold {other:?}"), &d)),
                     }
                 }
-                d.rt.physical_input(PhysicalInput::Modifiers(mods));
+                d.win_mut().physical_input(PhysicalInput::Modifiers(mods));
                 d.events.push(json!({ "t": t, "hold": names }));
                 d.advance_to(t + DT);
             }
@@ -201,11 +224,16 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                 d.settle_motion();
                 let t = d.now;
                 d.events.push(json!({ "t": t, "type": "mark", "name": name }));
-                let pixels = d.painter.paint(&mut d.rt);
+                let pixels = d.paint();
                 if pixels.is_blank() {
                     return Err(fail("its screenshot is blank: the renderer drew nothing".to_owned(), &d));
                 }
-                d.marks.push(Mark { name, t, tree: crate::tree::tree(&d.rt, t, d.dark), pixels });
+                let tree = if d.tag_front() {
+                    crate::tree::tree(&d.tag, t, d.dark)
+                } else {
+                    crate::tree::tree(&d.rt, t, d.dark)
+                };
+                d.marks.push(Mark { name, t, tree, pixels });
                 d.advance_to(t + AFTER_MARK);
             }
             Step::See(text) => {
@@ -227,7 +255,7 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                 }
             }
             Step::Gone(key) => {
-                if d.rt.find(key).is_some() {
+                if d.win().find(key).is_some() {
                     return Err(fail(format!("[{key}] is still there"), &d));
                 }
             }
@@ -255,12 +283,17 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
     }
     let end = d.now + TAIL;
     d.events.push(json!({ "t": end, "type": "mark", "name": "end" }));
-    Ok(Recording { events: d.events, marks: d.marks, end })
+    Ok(Recording { events: d.events, marks: d.marks, end, windows: d.windows })
 }
 
 struct Driver {
     rt: Runtime<App>,
+    /// The tag window, in front of the main one while it shows.
+    tag: Runtime<TagWindow>,
     painter: crate::paint::Painter,
+    tag_painter: Option<crate::paint::Painter>,
+    /// The tag window has shown: the video records every window, as a screen recording would.
+    windows: bool,
     clipboard: rune::clipboard::MemoryClipboard,
     /// Where a [`Step::Down`] pressed the mouse button, until [`Step::Up`] lets go.
     held: Option<(f32, f32)>,
@@ -275,15 +308,59 @@ struct Driver {
 }
 
 impl Driver {
+    /// Whether the tag window is in front, with the keyboard.
+    fn tag_front(&self) -> bool {
+        self.tag.state.shown
+    }
+
+    /// The window in front: where input goes and what expectations look at.
+    fn win(&self) -> &dyn Window {
+        if self.tag_front() { &self.tag } else { &self.rt }
+    }
+
+    fn win_mut(&mut self) -> &mut dyn Window {
+        if self.tag_front() { &mut self.tag } else { &mut self.rt }
+    }
+
+    /// Where the front window's top left corner is in the main window's points, as a desktop
+    /// recording places it: the tag window centred over the main one.
+    fn origin(&self) -> (f32, f32) {
+        if !self.tag_front() {
+            return (0.0, 0.0);
+        }
+        let (w, h) = self.tag.viewport;
+        (((gxm_app::SIZE.0 - w) / 2.0).round(), ((gxm_app::SIZE.1 - h) / 2.0).round())
+    }
+
+    /// Either window is waiting on work off the UI thread, or on the other.
+    fn busy(&self) -> bool {
+        self.rt.state.busy() || self.tag.state.busy() || self.rt.state.tag_link.done.pending()
+    }
+
+    /// The screen: the main window, with the tag window over it while it shows.
+    fn paint(&mut self) -> crate::paint::Pixels {
+        let mut pixels = self.painter.paint(&mut self.rt);
+        if self.tag_front() {
+            let tag = &mut self.tag;
+            let painter = self.tag_painter.get_or_insert_with(|| crate::paint::Painter::new(tag, tag_window::SIZE));
+            let window = painter.paint(tag);
+            pixels.composite(&window, self.origin());
+        }
+        pixels
+    }
+
     fn advance_to(&mut self, t: f64) {
         // Every step acts, then advances: its first frame takes the input, so it's one frame.
         let mut first = true;
         while self.now + DT / 2.0 < t {
             let frames = if std::mem::take(&mut first) { 1 } else { self.frames_until(t) };
             let dt = frames as f64 * DT;
-            self.animating = self.rt.frame(dt);
+            let tag = self.tag.frame(dt);
+            self.animating = self.rt.frame(dt) | tag;
             self.now += dt;
             self.opened.extend(self.rt.take_url_requests());
+            self.opened.extend(self.tag.take_url_requests());
+            self.windows |= self.tag.state.shown;
         }
     }
 
@@ -293,11 +370,17 @@ impl Driver {
     /// (`Runtime::wake_deadline`) or `t`. That's most of a journey's time, and the screen is the
     /// same either way.
     fn frames_until(&self, t: f64) -> usize {
-        if self.animating || self.rt.state.busy() {
+        if self.animating || self.busy() {
             return 1;
         }
         let left = ((t - self.now) / DT).round();
-        let wake = self.rt.wake_deadline().map_or(f64::INFINITY, |at| ((at - self.rt.clock) / DT).ceil());
+        let wake = [
+            self.rt.wake_deadline().map(|at| at - self.rt.clock),
+            self.tag.wake_deadline().map(|at| at - self.tag.clock),
+        ]
+        .into_iter()
+        .flatten()
+        .fold(f64::INFINITY, |soonest, left| soonest.min((left / DT).ceil()));
         left.min(wake).max(1.0) as usize
     }
 
@@ -321,7 +404,7 @@ impl Driver {
             if started.elapsed() > crate::WAIT_LIMIT {
                 return Err(format!("a background read was still running after {:?}", crate::WAIT_LIMIT));
             }
-            if self.rt.state.busy() {
+            if self.busy() {
                 quiet = 0;
                 std::thread::sleep(POLL);
             } else {
@@ -336,7 +419,7 @@ impl Driver {
 
     /// Whether the element keyed `key` is on screen in full.
     fn wholly_visible(&self, key: &str) -> bool {
-        self.rt
+        self.win()
             .elements()
             .into_iter()
             .find(|e| e.key.as_deref() == Some(key) && !e.exiting)
@@ -346,7 +429,7 @@ impl Driver {
     /// Wheels, as a person would, until the element keyed `key` is wholly in view.
     fn scroll_into_view(&mut self, key: &str) -> Result<(), String> {
         for _ in 0..80 {
-            let all = self.rt.elements();
+            let all = self.win().elements();
             let i = all
                 .iter()
                 .position(|e| e.key.as_deref() == Some(key) && !e.exiting)
@@ -371,23 +454,25 @@ impl Driver {
                 }
                 None => (e.rect[0] + e.rect[2] / 2.0, (e.rect[1]).clamp(80.0, gxm_app::SIZE.1 - 40.0)),
             };
-            self.rt.pointer_move(x, y);
-            self.rt.wheel(x, y, dy);
-            self.events.push(json!({ "t": self.now, "type": "wheel", "x": x, "y": y, "dy": dy }));
+            self.win_mut().pointer_move(x, y);
+            self.win_mut().wheel(x, y, dy);
+            let (ox, oy) = self.origin();
+            self.events.push(json!({ "t": self.now, "type": "wheel", "x": x + ox, "y": y + oy, "dy": dy }));
             self.advance_to(self.now + DT * 2.0);
         }
         Ok(())
     }
 
     fn tap(&mut self, x: f32, y: f32) {
-        self.rt.pointer_move(x, y);
-        self.rt.pointer_down(x, y);
-        self.rt.pointer_up(x, y);
+        let win = self.win_mut();
+        win.pointer_move(x, y);
+        win.pointer_down(x, y);
+        win.pointer_up(x, y);
     }
 
     /// Elements a person could see: on screen, not clipped away, not faded out or leaving.
     fn visible(&self) -> Vec<ElementInfo> {
-        self.rt
+        self.win()
             .elements()
             .into_iter()
             .filter(|e| !e.exiting && e.opacity > 0.01 && e.visible[2] > 0.5 && e.visible[3] > 0.5)
@@ -405,7 +490,7 @@ impl Driver {
 
     /// The element keyed `key`'s label, then every visible text inside it, joined by spaces.
     fn text_in(&self, key: &str) -> Option<String> {
-        let all = self.rt.elements();
+        let all = self.win().elements();
         let root = all.iter().position(|e| e.key.as_deref() == Some(key) && !e.exiting)?;
         let inside = |mut i: usize| loop {
             if i == root {
@@ -469,4 +554,47 @@ fn key_of(p: &Press) -> Option<Key> {
         name if name.chars().count() == 1 => Key::Text(name.to_owned()),
         _ => return None,
     })
+}
+
+/// What the runner does with a window, whichever window it is.
+trait Window {
+    fn elements(&self) -> Vec<ElementInfo>;
+    fn find(&self, key: &str) -> Option<(f32, f32)>;
+    fn pointer_move(&mut self, x: f32, y: f32);
+    fn pointer_down(&mut self, x: f32, y: f32);
+    fn pointer_up(&mut self, x: f32, y: f32);
+    fn wheel(&mut self, x: f32, y: f32, dy: f32);
+    fn key(&mut self, ev: KeyEvent);
+    fn physical_input(&mut self, input: PhysicalInput);
+    fn drop_files(&mut self, files: Vec<std::path::PathBuf>, at: Option<(f32, f32)>);
+}
+
+impl<S: 'static> Window for Runtime<S> {
+    fn elements(&self) -> Vec<ElementInfo> {
+        Runtime::elements(self)
+    }
+    fn find(&self, key: &str) -> Option<(f32, f32)> {
+        Runtime::find(self, key)
+    }
+    fn pointer_move(&mut self, x: f32, y: f32) {
+        Runtime::pointer_move(self, x, y);
+    }
+    fn pointer_down(&mut self, x: f32, y: f32) {
+        Runtime::pointer_down(self, x, y);
+    }
+    fn pointer_up(&mut self, x: f32, y: f32) {
+        Runtime::pointer_up(self, x, y);
+    }
+    fn wheel(&mut self, x: f32, y: f32, dy: f32) {
+        Runtime::wheel(self, x, y, dy);
+    }
+    fn key(&mut self, ev: KeyEvent) {
+        Runtime::key(self, ev);
+    }
+    fn physical_input(&mut self, input: PhysicalInput) {
+        Runtime::physical_input(self, input);
+    }
+    fn drop_files(&mut self, files: Vec<std::path::PathBuf>, at: Option<(f32, f32)>) {
+        Runtime::drop_files(self, files, at);
+    }
 }
