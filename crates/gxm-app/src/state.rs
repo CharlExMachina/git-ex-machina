@@ -48,8 +48,8 @@ pub struct App {
     pub sheet: Sheet,
     pub fields: Fields,
     pub sheet_jobs: SheetJobs,
-    pub tag_fields: crate::tag::TagFields,
-    pub tag_jobs: crate::tag::TagJobs,
+    /// The tag window: opening it on a commit, and hearing what it tagged.
+    pub tag_link: crate::tag_window::TagLink,
     /// Who's signed in to GitHub; None when no one is.
     pub account: Option<gxm_core::forge::model::User>,
     pub account_jobs: AccountJobs,
@@ -200,8 +200,7 @@ impl App {
             sheet: Sheet::Closed,
             fields: Fields::default(),
             sheet_jobs: SheetJobs::default(),
-            tag_fields: crate::tag::TagFields::default(),
-            tag_jobs: crate::tag::TagJobs::default(),
+            tag_link: crate::tag_window::TagLink::default(),
             account: None,
             account_jobs: AccountJobs::new(env_token),
             update: Update::Idle,

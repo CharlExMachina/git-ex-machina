@@ -68,6 +68,9 @@ impl NotesEditor {
     /// Attaches the file at `path`: a chip where the caret is (an image shows in the notes),
     /// under the name the release will keep it by.
     pub fn add_file(&mut self, path: PathBuf) {
+        // The system drops absolute paths; a script's (a journey's replay) may be relative to
+        // where the app started, and the files' commit is made in the repository's folder.
+        let path = std::path::absolute(&path).unwrap_or(path);
         let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let base = asset_name(&file);
         let mut name = base.clone();

@@ -152,31 +152,33 @@ pub fn tag_a_release() -> Journey {
     .tap_text("Fix the --json flag (#6)")
     .see_in(keys::CREATE_TAG, "Tag a release")
     .mark("release-ready")
-    // The sheet suggests the version after the newest one, and says what pushing it starts.
+    // A window of its own opens on the commit: it suggests the version after the newest one,
+    // and says what pushing it starts.
     .tap(keys::CREATE_TAG)
-    .see_in(keys::SHEET, "Tag a release")
+    .see_in(keys::TAG_TITLE, "Tag a release")
     .see_in(keys::TAG_COMMIT, "Fix the --json flag (#6)")
     .see_in(keys::TAG_NAME, "v0.1.2")
     .see_in(keys::TAG_PUSH, "Push to origin")
     .see_in(keys::TAG_RELEASE, "Pushing v0.1.2 to origin starts the release workflow (release.yml), with these notes.")
     .gone(keys::TAG_WARNING)
-    // The workflow takes the release's notes from the tag, so the sheet writes them.
+    // The workflow takes the release's notes from the tag, so the window writes them, in the
+    // height it has left.
     .see_in(keys::NOTES, "Release notes")
     .gone(keys::TAG_MESSAGE)
-    .mark("tag-sheet")
+    .mark("tag-window")
     // A version that's already out is refused before anything happens.
     .tap(keys::TAG_NAME)
     .press(Press::cmd("a"))
     .type_text("v0.1.1")
     .tap(keys::TAG_CONFIRM)
-    .see_in(keys::SHEET_ERROR, "v0.1.1 already exists, on 450f3e1")
+    .see_in(keys::TAG_ERROR, "v0.1.1 already exists, on 450f3e1")
     .mark("taken")
     // A name the workflow doesn't watch for says it won't release anything.
     .tap(keys::TAG_NAME)
     .press(Press::cmd("a"))
     .type_text("0.1.2")
     .see_in(keys::TAG_RELEASE, "0.1.2 doesn't match v*, so it won't start the release workflow")
-    .gone(keys::SHEET_ERROR)
+    .gone(keys::TAG_ERROR)
     .mark("not-a-release")
     .tap(keys::TAG_NAME)
     .press(Press::cmd("a"))
@@ -253,9 +255,10 @@ pub fn tag_a_release() -> Journey {
     .see_in(keys::NOTES, "Plus a steadier progress bar")
     // Tag a release tags the commit and pushes the tag: that push is the release.
     .tap(keys::TAG_CONFIRM)
-    // The screenshot goes up in the same push as the tag: nothing waits for the workflow.
+    // The screenshot goes up in the same push as the tag: nothing waits for the workflow. The
+    // window closes, and the main window says what went up.
     .wait_for(keys::TOASTS, "Pushed v0.1.2 and progress.png to origin")
-    .gone(keys::SHEET)
+    .gone(keys::TAG_WINDOW)
     .see_in(keys::HISTORY, "v0.1.2")
     .world_check("origin has the screenshot, as it was, under refs/release-files/v0.1.2", |w| {
         let remote = w.remote("github.com", "studio", "beacon");
@@ -281,28 +284,28 @@ pub fn tag_a_release() -> Journey {
         }
     })
     .mark("released")
-    // A commit off main that was never pushed: the sheet says what tagging it would mean.
+    // A commit off main that was never pushed: the window says what tagging it would mean.
     .tap_text("Watch the folder for changes")
     .tap(keys::CREATE_TAG)
     .see_in(keys::TAG_NAME, "v0.1.3")
     .see_in(keys::TAG_WARNING, "This commit isn't on main.")
     .see_in(keys::TAG_WARNING, "It isn't on origin yet: pushing the tag sends it too.")
     .mark("off-main")
-    .press(Press::ESCAPE)
-    .gone(keys::SHEET)
+    .tap(keys::TAG_CANCEL)
+    .gone(keys::TAG_WINDOW)
     // field-notes doesn't release from tags: a plain tag, which stays on this computer.
     .tap(keys::repo("field-notes"))
     .tap_text("Notes from the Lisbon workshop")
     .see_in(keys::CREATE_TAG, "Create tag")
     .tap(keys::CREATE_TAG)
-    .see_in(keys::SHEET, "Create a tag")
+    .see_in(keys::TAG_TITLE, "Create a tag")
     .see_in(keys::TAG_PUSH, "Push to origin")
     .gone(keys::TAG_RELEASE)
     .type_text("lisbon-2026")
     .mark("plain-tag")
     .tap(keys::TAG_CONFIRM)
     .wait_for(keys::TOASTS, "Tagged lisbon-2026")
-    .gone(keys::SHEET)
+    .gone(keys::TAG_WINDOW)
     .see_in(keys::HISTORY, "lisbon-2026")
     .world_check("lisbon-2026 is here, on its commit, and not on origin", |w| {
         let here = w.git(&w.code().join("field-notes"), &["log", "-1", "--format=%s", "lisbon-2026"]);
