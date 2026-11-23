@@ -34,10 +34,12 @@ Seeing it
   journeys                  List the journeys
 
 Releases
-  appimage [--tag vX.Y.Z]   Build the Linux AppImage into target/appimage/ and try it (--tag: check it names this version)
+  appimage [--tag vX.Y.Z]   Build the Linux AppImage into target/appimage/ and try it (--tag: as that version, written into Cargo.toml)
   macapp [--tag vX.Y.Z] [--unsigned]
                             Build the macOS app and its disk image into target/macapp/, signed with a Developer ID, notarized, and
-                            tried as Gatekeeper would (--unsigned: ad-hoc signed and not notarized, for a machine without the certificate)
+                            tried as Gatekeeper would (--tag: as that version; --unsigned: ad-hoc signed and not notarized, for a
+                            machine without the certificate)
+  notes vX.Y.Z              Print the release's notes: the tag's message, or else the pull requests merged since the last release
 
 Pull requests
   pr open BODY.md [--base BRANCH] [--title TITLE]   Check the body's proof, then create or update this branch's PR with every file it references attached
@@ -59,6 +61,7 @@ fn main() -> ExitCode {
         Some("pr") => pr::pr(rest),
         Some("appimage") => appimage::appimage(rest),
         Some("macapp") => macapp::macapp(rest),
+        Some("notes") => release::notes(rest),
         Some("help" | "--help" | "-h") | None => {
             print!("{USAGE}");
             Ok(())
@@ -146,6 +149,23 @@ pub fn cargo_bin(package: &str, bin: &str) -> Result<PathBuf, String> {
 /// The value after `name` in a command's arguments.
 pub fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).map(String::as_str)
+}
+
+/// A command's trimmed output, failing with its error when it fails.
+pub fn stdout(cmd: &mut Command) -> Result<String, String> {
+    let shown = format!("{cmd:?}");
+    let out = cmd.output().map_err(|e| format!("{shown}: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("{shown}: {}", String::from_utf8_lossy(&out.stderr).trim()));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_owned())
+}
+
+/// git, in the workspace.
+pub fn git() -> Command {
+    let mut c = Command::new("git");
+    c.current_dir(root());
+    c
 }
 
 /// Runs a command, failing with its name when it fails.

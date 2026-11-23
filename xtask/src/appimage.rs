@@ -43,8 +43,8 @@ const BIN: &str = "git-ex-machina";
 /// The window's id, which names its desktop entry and icon.
 const ID: &str = gxm_app::APP_ID;
 
-/// `appimage [--tag vX.Y.Z]`. With a tag (as the release workflow passes it), the tag must name
-/// this version and its notes must be written.
+/// `appimage [--tag vX.Y.Z]`. With a tag (as the release workflow passes it), it builds that
+/// version.
 pub fn appimage(args: &[String]) -> Result<(), String> {
     let version = release::version(args)?;
     let arch = std::env::consts::ARCH;
@@ -77,7 +77,7 @@ pub fn appimage(args: &[String]) -> Result<(), String> {
         .env("ARCH", arch)
         // CI's runners have no FUSE: appimagetool runs from its own extracted copy.
         .env("APPIMAGE_EXTRACT_AND_RUN", "1")
-        .env("VERSION", version))?;
+        .env("VERSION", &version))?;
     try_it(&file, &out.join("check"))?;
     println!("appimage: {} ({version})", file.display());
     Ok(())
