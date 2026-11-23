@@ -22,6 +22,7 @@ mod runner;
 mod settings;
 mod tree;
 mod update;
+mod window;
 
 pub use paint::{Pixels, SCALE};
 pub use proof::{proof_dir, write_proof};
@@ -60,6 +61,12 @@ pub enum Step {
     /// Drop a file from another app (Finder, a file manager) on the element with this key: the
     /// file at `path`, from the world's `~/code`.
     Drop { key: String, path: &'static str },
+    /// The system's folder chooser is up, titled `title`, starting in `starts_in` (from the home
+    /// folder; `""` is the home folder itself).
+    Chooser { title: &'static str, starts_in: &'static str },
+    /// Pick `Some(folder)` (from the home folder) in the folder chooser that's up, or cancel it
+    /// with `None`.
+    Choose(Option<&'static str>),
     /// Press a key.
     Press(Press),
     /// Hold modifiers (`"cmd"`, `"shift"`, `"cmd+shift"`) until the next hold; `""` lets go.
@@ -159,6 +166,21 @@ impl Journey {
         self.step(Step::Drop { key: key.into(), path })
     }
 
+    /// The folder chooser is up, titled `title` and starting in `starts_in`, from the home folder.
+    pub fn chooser_shows(self, title: &'static str, starts_in: &'static str) -> Journey {
+        self.step(Step::Chooser { title, starts_in })
+    }
+
+    /// Picks `folder` (from the home folder; `""` is the home folder) in the folder chooser.
+    pub fn choose_folder(self, folder: &'static str) -> Journey {
+        self.step(Step::Choose(Some(folder)))
+    }
+
+    /// Cancels the folder chooser.
+    pub fn cancel_chooser(self) -> Journey {
+        self.step(Step::Choose(None))
+    }
+
     pub fn press(self, p: Press) -> Journey {
         self.step(Step::Press(p))
     }
@@ -230,6 +252,9 @@ impl std::fmt::Display for Step {
             Step::Up => write!(f, "let go of the mouse"),
             Step::Type(t) => write!(f, "type {t:?}"),
             Step::Drop { key, path } => write!(f, "drop ~/code/{path} on [{key}]"),
+            Step::Chooser { title, starts_in } => write!(f, "the folder chooser {title:?} is up, in ~/{starts_in}"),
+            Step::Choose(Some(folder)) => write!(f, "choose ~/{folder} in the folder chooser"),
+            Step::Choose(None) => write!(f, "cancel the folder chooser"),
             Step::Press(p) => {
                 write!(f, "press {}{}{}", if p.cmd { "⌘" } else { "" }, if p.shift { "⇧" } else { "" }, p.name)
             }
