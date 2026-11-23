@@ -78,4 +78,4 @@ Put the media in the PR itself, not just in CI artifacts: copy the GIFs, mp4s an
 
 Open and update PRs with `cargo xtask pr open body.md [--base BRANCH]`, never with `gh pr create` or `gh pr edit --body-file`. It checks the body the way CI's `proof` job does (the same code), tells you what's missing, and only then creates the branch's PR, or updates it, with every file the body references attached. The `**Journeys:**` line starts with the journeys' names, as `cargo xtask journeys` lists them; each must exist.
 
-A PR without proof isn't ready for review. CI runs every journey on Linux and macOS, each drawing its marks as it goes, and attaches those screenshots to the run (`proof` and `proof-macos`).
+A PR without proof isn't ready for review. CI runs every journey on Linux and macOS, each drawing its marks as it goes, and attaches those screenshots to the run (`proof` and `proof-macos`). A PR runs only the checks its changes need (`.github/changes.sh`): docs and the release workflow alone run none, and xtask alone skips macOS.

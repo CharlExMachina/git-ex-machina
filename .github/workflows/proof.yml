@@ -1,6 +1,7 @@
 name: proof
 
-# A PR that touches what people see says how it was proven (CLAUDE.md, "Pull requests").
+# A PR that touches what people see says how it was proven (CLAUDE.md, "Pull requests"); one
+# that doesn't skips the check (.github/changes.sh).
 # `cargo xtask pr open` runs this same check before the PR exists. It's a workflow of its own so
 # that editing the PR's body re-runs it, and nothing else; the body is read live, not from the
 # event, so a re-run sees the latest edit too.
@@ -21,7 +22,24 @@ env:
   CI: "true"
 
 jobs:
+  changes:
+    # Whether this PR touches what people see (.github/changes.sh). If not, `proof` is skipped,
+    # which main's required checks count as passed; if this job fails, `proof` runs.
+    runs-on: ubuntu-24.04
+    outputs:
+      proof: ${{ steps.changes.outputs.proof }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A PR is checked out as its merge into main, whose first parent is main.
+          fetch-depth: 2
+      - name: What changed
+        id: changes
+        run: git diff --name-only HEAD^1 HEAD | bash .github/changes.sh | tee -a "$GITHUB_OUTPUT"
+
   proof:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.proof != 'false' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
