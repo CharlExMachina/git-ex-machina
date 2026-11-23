@@ -48,7 +48,7 @@ pub fn macapp(args: &[String]) -> Result<(), String> {
         .args(["build", "--release", "--quiet", "-p", "gxm-app", "--bin", BIN])
         .current_dir(root()))?;
     let app = out.join(format!("{BIN}.app"));
-    lay_out(&app, &target().join("release").join(BIN), version, &out)?;
+    lay_out(&app, &target().join("release").join(BIN), &version, &out)?;
 
     let dmg = out.join(format!("{BIN}-{arch}.dmg"));
     if signed {

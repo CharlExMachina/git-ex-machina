@@ -4,6 +4,8 @@ members = ["crates/*", "xtask"]
 default-members = ["crates/*"]
 
 [workspace.package]
+# What local builds call themselves. A release takes its version from its tag instead
+# (.github/workflows/release.yml), so this isn't bumped for releases.
 version = "0.1.5"
 edition = "2024"
 rust-version = "1.99"

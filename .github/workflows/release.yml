@@ -1,17 +1,25 @@
 name: release
 
-# A tag `vX.Y.Z` releases that version, and nothing else releases anything. The tag carries the
-# release's notes as its message (an annotated tag: Tag a release in git-ex-machina writes them),
-# checked first. The Linux AppImage is built and tried (`cargo xtask appimage`: it must extract,
-# hold what it should, and start), and so is the macOS disk image (`cargo xtask macapp`: signed
-# with the Developer ID, notarized by Apple, accepted by Gatekeeper, and it starts). Then both are
-# published as a GitHub release with the tag's message as its notes. If the notes are missing or a
-# build or try fails, nothing is published: fix it on main, then move the tag to the fix (or tag the
-# next patch version).
+# A tag `vX.Y.Z` releases that version, and nothing else releases anything. Make one either way:
+#   - push it (`git tag v0.1.6 && git push origin v0.1.6`, or Tag a release in git-ex-machina), or
+#   - on GitHub: Actions → release → Run workflow, with the version. The tag is made on main's
+#     newest commit, and only once the release is ready.
+# The version comes from the tag: the builds write it into Cargo.toml, so nothing is bumped by
+# hand. The notes are the tag's message when it was pushed annotated with one, or else the pull
+# requests merged since the last release (`cargo xtask notes`); edit them on the release's page
+# afterwards if you like, and the app shows the edited ones.
 #
-# The AppImage updates itself from the latest release (crates/gxm-core/src/update.rs), looking for
-# `git-ex-machina-<arch>.AppImage` and the SHA-256 GitHub keeps for it, and shows those notes
-# when it offers the restart.
+# The Linux AppImage is built and tried (`cargo xtask appimage`: it must extract, hold what it
+# should, and start), and so is the macOS disk image (`cargo xtask macapp`: signed with the
+# Developer ID, notarized by Apple, accepted by Gatekeeper, and it starts). Only then are both
+# published, together, as a GitHub release: the apps update themselves from the latest release,
+# so one is never seen without its files. If a build or try fails, nothing is published, and a
+# Run workflow release makes no tag: fix it on main, then run it again (or move a pushed tag to
+# the fix, or tag the next patch version).
+#
+# The apps update themselves from the latest release (crates/gxm-core/src/update.rs), looking for
+# `git-ex-machina-<arch>.AppImage` and the SHA-256 GitHub keeps for it, and show its notes when
+# they offer the restart.
 #
 # Signing and notarizing need these repository secrets (Settings → Secrets and variables →
 # Actions):
@@ -23,10 +31,16 @@ name: release
 #   APPLE_API_ISSUER_ID   the Issuer ID above App Store Connect's keys table
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The version to release, as in 0.1.6 (tagged v0.1.6 on main)"
+        required: true
+        type: string
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.version || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -37,28 +51,54 @@ env:
   CI: "true"
 
 jobs:
-  notes:
-    # The release's notes are the tag's message: a lightweight tag has none. Checked before
-    # anything is built.
+  tag:
+    # Which tag this releases, checked before anything is built.
     runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-      - name: The tag carries the release's notes
+      - name: The tag
+        id: tag
+        env:
+          EVENT: ${{ github.event_name }}
+          VERSION: ${{ inputs.version }}
         run: |
-          # checkout makes the tag it was started by a lightweight one: fetch it as it was pushed.
-          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
-          if [ "$(git cat-file -t "$GITHUB_REF_NAME")" != tag ] || [ -z "$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | tr -d '[:space:]')" ]; then
-            echo "::error::$GITHUB_REF_NAME has no release notes. Tag it with Tag a release in git-ex-machina, or git tag --annotate --cleanup=verbatim, with the notes as its message."
+          if [ "$EVENT" = push ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            if [ "$GITHUB_REF" != refs/heads/main ]; then
+              echo "::error::Releases are made from main: run the workflow on main."
+              exit 1
+            fi
+            tag="v${VERSION#v}"
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+              echo "::error::$tag is already tagged: release the next version."
+              exit 1
+            fi
+          fi
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::$tag isn't a release tag: release a version X.Y.Z, as in 0.1.6."
             exit 1
           fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
   appimage:
     # The oldest Ubuntu GitHub hosts: the binary needs only the glibc it was built against
     # (2.35), so the AppImage runs on any distribution since.
-    needs: notes
+    needs: tag
     runs-on: ubuntu-22.04
+    env:
+      TAG: ${{ needs.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Every release's tag and the changes since the last one, for the notes.
+          fetch-depth: 0
+      - name: The tag, as it was pushed
+        if: github.event_name == 'push'
+        # checkout makes the tag it was started by a lightweight one, which has no message.
+        run: git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
       - name: System libraries
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev
       - name: Toolchain
@@ -67,20 +107,33 @@ jobs:
         with:
           shared-key: linux-release
       - name: cargo xtask appimage
-        # The tag must name the workspace's version.
-        run: cargo xtask appimage --tag "$GITHUB_REF_NAME"
+        run: cargo xtask appimage --tag "$TAG"
+      - name: The release's notes
+        # Here, where xtask is built already.
+        run: |
+          mkdir -p target/notes
+          cargo xtask notes "$TAG" > target/notes/notes.md
+          cat target/notes/notes.md
       - uses: actions/upload-artifact@v4
         with:
           name: appimage
           path: target/appimage/*.AppImage
           if-no-files-found: error
           retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes
+          path: target/notes/notes.md
+          if-no-files-found: error
+          retention-days: 30
 
   macos:
     # GitHub's macOS runners are Apple Silicon, so this is the aarch64 disk image. macOS 26's
     # image has the Xcode whose actool compiles the Icon Composer icon (assets/macos/AppIcon.icon).
-    needs: notes
+    needs: tag
     runs-on: macos-26
+    env:
+      TAG: ${{ needs.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
@@ -114,7 +167,7 @@ jobs:
         env:
           GXM_NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           GXM_NOTARY_ISSUER: ${{ secrets.APPLE_API_ISSUER_ID }}
-        run: cargo xtask macapp --tag "$GITHUB_REF_NAME"
+        run: cargo xtask macapp --tag "$TAG"
       - uses: actions/upload-artifact@v4
         with:
           name: macapp
@@ -129,7 +182,7 @@ jobs:
 
   publish:
     # Only once every platform's build was built and tried.
-    needs: [appimage, macos]
+    needs: [tag, appimage, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -142,12 +195,12 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
         run: |
-          # The notes are the tag's message, so the tag comes as it was pushed (see `notes`).
-          # gh reads them from this checkout's tag, and refuses `--notes-from-tag` with `--repo`:
-          # the checkout's origin names the repository instead.
-          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
-          gh release create "$GITHUB_REF_NAME" dist/*.AppImage dist/*.dmg \
-            --title "git-ex-machina ${GITHUB_REF_NAME#v}" \
-            --notes-from-tag \
-            --verify-tag
+          # A pushed tag is there already. Run workflow's is made now, on the commit it built, with
+          # this workflow's token, so making it doesn't start this workflow again.
+          if [ "$GITHUB_EVENT_NAME" = push ]; then made=(--verify-tag); else made=(--target "$GITHUB_SHA"); fi
+          gh release create "$TAG" dist/*.AppImage dist/*.dmg \
+            --title "git-ex-machina ${TAG#v}" \
+            --notes-file dist/notes.md \
+            "${made[@]}"

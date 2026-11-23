@@ -8,7 +8,7 @@ use std::process::Command;
 
 use gxm_journeys::catalog;
 
-use crate::{flag, root, run};
+use crate::{flag, git, root, run, stdout};
 
 /// The crates whose changes a person sees: a PR touching one needs proof.
 const USER_FACING: &[&str] = &["crates/gxm-app/", "crates/gxm-journeys/", "crates/gxm-core/", "crates/gxm-cli/"];
@@ -211,22 +211,6 @@ fn first_commit_subject(base: &str) -> Result<String, String> {
     let range = format!("origin/{base}..HEAD");
     let subjects = stdout(git().args(["log", "--reverse", "--format=%s", &range]))?;
     subjects.lines().next().map(str::to_owned).ok_or_else(|| format!("no commits in {range}; pass --title"))
-}
-
-/// A command's trimmed output, failing with its error when it fails.
-fn stdout(cmd: &mut Command) -> Result<String, String> {
-    let shown = format!("{cmd:?}");
-    let out = cmd.output().map_err(|e| format!("{shown}: {e}"))?;
-    if !out.status.success() {
-        return Err(format!("{shown}: {}", String::from_utf8_lossy(&out.stderr).trim()));
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_owned())
-}
-
-fn git() -> Command {
-    let mut c = Command::new("git");
-    c.current_dir(root());
-    c
 }
 
 fn read(path: &Path) -> Result<String, String> {
