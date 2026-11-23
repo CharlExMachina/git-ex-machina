@@ -17,7 +17,7 @@ use crate::ui::{self, Variant};
 pub const LIGHTS_W: f32 = if cfg!(target_os = "macos") { 52.0 } else { 0.0 };
 
 pub fn sidebar(s: &App, t: &Theme) -> El {
-    let mut top = bar(t).px(12.0);
+    let mut top = bar(t).px(12.0).key(keys::SIDEBAR_BAR);
     if LIGHTS_W > 0.0 {
         top = top.child(rune::el().w(LIGHTS_W).h(12.0).key("traffic-lights"));
     }

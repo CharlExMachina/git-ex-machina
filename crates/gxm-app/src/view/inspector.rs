@@ -33,6 +33,7 @@ pub fn inspector(s: &App, t: &Theme) -> El {
         None => copy.disabled(true).opacity(0.6),
     };
     let top = bar(t)
+        .key(keys::INSPECTOR_BAR)
         .pl(16.0)
         .pr(12.0)
         .child(ui::segmented(

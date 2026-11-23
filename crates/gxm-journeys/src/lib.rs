@@ -75,6 +75,9 @@ pub enum Step {
     Wait(f64),
     /// Scroll with the wheel until the element with this key is wholly in view.
     ScrollTo(String),
+    /// A press on the widest empty stretch of the bar with this key (clear of its keyed
+    /// controls) moves the window, and a second press there zooms it, as a title bar does.
+    MovesWindow(String),
     /// Keep the app running until this text shows inside the element with this key: for work
     /// that runs in real time off the UI thread, such as a push.
     WaitFor { key: String, text: String },
@@ -195,6 +198,11 @@ impl Journey {
         self.step(Step::ScrollTo(key.into()))
     }
 
+    /// A press on the empty part of the bar keyed `key` moves the window; a double press zooms it.
+    pub fn moves_window(self, key: impl Into<String>) -> Journey {
+        self.step(Step::MovesWindow(key.into()))
+    }
+
     pub fn wait(self, secs: f64) -> Journey {
         self.step(Step::Wait(secs))
     }
@@ -262,6 +270,7 @@ impl std::fmt::Display for Step {
             Step::Hold(m) => write!(f, "hold {m}"),
             Step::Wait(s) => write!(f, "wait {s}s"),
             Step::ScrollTo(k) => write!(f, "scroll to [{k}]"),
+            Step::MovesWindow(k) => write!(f, "pressing [{k}] where it's empty moves the window, twice zooms it"),
             Step::WaitFor { key, text } => write!(f, "wait for {text:?} in [{key}]"),
             Step::Mark(m) => write!(f, "mark {m:?}"),
             Step::See(t) => write!(f, "see {t:?}"),

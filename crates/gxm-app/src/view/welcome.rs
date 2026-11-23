@@ -33,7 +33,7 @@ pub fn screen(s: &App, t: &Theme) -> El {
         .h_full()
         .fill(t.canvas)
         // The band the window's title bar and traffic lights sit in.
-        .child(rune::el().w_full().h(size::TOOLBAR + 1.0))
+        .child(rune::el().w_full().h(size::TOOLBAR + 1.0).key(keys::TITLE_BAND).window_drag())
         .child(col().w_full().grow(1.0).center().child(ask))
         // As tall as the band above, so the question sits at the window's centre. A newer version
         // is offered in its left corner, as the sidebar's foot offers it once there's a sidebar.
