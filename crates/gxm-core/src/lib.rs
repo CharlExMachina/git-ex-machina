@@ -13,6 +13,7 @@ pub mod graph;
 pub mod history;
 pub mod init;
 pub mod local;
+pub mod notes;
 pub mod ops;
 pub mod release;
 pub mod remote;

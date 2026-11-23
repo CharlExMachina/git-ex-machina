@@ -272,6 +272,19 @@ impl Theme {
     }
 
     /// `inset 0 1px 2px <shade>, inset 0 0 0 1px <ring>`.
+    /// Rich text's marks and blocks: code on the well, links in the accent, quotes and list
+    /// markers faint.
+    pub fn rich(&self) -> rune::RichStyle {
+        rune::RichStyle {
+            code_fg: Some(self.ink),
+            code_bg: self.control,
+            code_block_bg: self.control,
+            link: self.accent,
+            quote_bar: self.edge,
+            marker: Some(self.ink_faint),
+        }
+    }
+
     pub fn shadow_well(&self) -> [Shadow; 2] {
         let [shade, ring] = self.shadows.well;
         [inset(0.0, 0.0, 0.0, 1.0, ring), inset(0.0, 1.0, 2.0, 0.0, shade)]
@@ -316,6 +329,10 @@ pub mod size {
     pub const PILL: f32 = 999.0;
     pub const SIDEBAR: f32 = 248.0;
     pub const SHEET: f32 = 460.0;
+    /// A sheet with a document to write in it (the tag sheet's release notes).
+    pub const SHEET_WIDE: f32 = 640.0;
+    /// How tall release notes grow before they scroll.
+    pub const NOTES_MAX_H: f32 = 280.0;
     /// The repository settings dialog, and its sidebar of sections.
     pub const SETTINGS_W: f32 = 960.0;
     pub const SETTINGS_H: f32 = 720.0;
@@ -401,4 +418,9 @@ pub mod ty {
     pub const TAB_COUNT: TextStyle = mono(10.5, 400.0, 14.0);
     /// 500 12px/18px mono: a name in a review thread (threads sit in the hunk's mono).
     pub const MONO_STRONG: TextStyle = mono(12.0, 500.0, 18.0);
+    /// Headings in release notes, as GitHub sizes them against the 13px text (2em, 1.5em,
+    /// 1.25em): `#`, `##`, `###`.
+    pub const NOTES_H1: TextStyle = sans(26.0, 600.0, 32.0).tracking(-0.26);
+    pub const NOTES_H2: TextStyle = sans(19.5, 600.0, 26.0).tracking(-0.2);
+    pub const NOTES_H3: TextStyle = sans(16.25, 600.0, 22.0).tracking(-0.1);
 }

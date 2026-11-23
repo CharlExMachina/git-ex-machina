@@ -15,7 +15,7 @@ On Linux, download `git-ex-machina-x86_64.AppImage` from the [latest release](ht
 
 On a Mac with Apple silicon, download `git-ex-machina-aarch64.dmg` from the same release, open it, and drag git-ex-machina onto Applications. It's signed and notarized by Apple, so macOS opens it after asking once whether you meant to open an app from the internet. It uses the `git` that comes with Apple's command line tools (`xcode-select --install`). On the Mac, updating means downloading the new release yourself, for now.
 
-Releases come from a `vX.Y.Z` tag: `.github/workflows/release.yml` builds the AppImage with `cargo xtask appimage` and the disk image with `cargo xtask macapp`, then publishes both with `docs/releases/vX.Y.Z.md` as their notes, which the app shows when it offers the update.
+Releases come from a `vX.Y.Z` tag: `.github/workflows/release.yml` builds the AppImage with `cargo xtask appimage` and the disk image with `cargo xtask macapp`, then publishes both with the tag's message as their notes (Tag a release in the app writes them), which the app shows when it offers the update.
 
 ## Contributions
 

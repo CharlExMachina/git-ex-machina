@@ -124,6 +124,19 @@ pub fn version(name: &str) -> Option<(&str, Vec<u64>)> {
     Some((prefix, parts.filter(|p| (2..=4).contains(&p.len()))?))
 }
 
+/// The newest tag before `commit` that the release trigger runs for (any tag without one): what
+/// GitHub's notes count from.
+pub fn previous(env: &Env, repo: &Path, commit: &str, trigger: Option<&Trigger>) -> Option<String> {
+    let mut args = vec!["describe".to_owned(), "--tags".to_owned(), "--abbrev=0".to_owned()];
+    for p in trigger.map(|t| t.patterns.as_slice()).unwrap_or_default() {
+        args.push(format!("--match={p}"));
+    }
+    // The commit's parent: a tag already on the commit is the one being made, not the last one.
+    args.push(format!("{commit}^"));
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    git::run(env, repo, &args).ok().map(|t| t.trim().to_owned()).filter(|t| !t.is_empty())
+}
+
 /// The full id of the commit `rev` names (`HEAD`, a branch, a short id).
 pub fn resolve(env: &Env, repo: &Path, rev: &str) -> Result<String, GitError> {
     let out = git::run(env, repo, &["rev-parse", "--verify", "--quiet", &format!("{rev}^{{commit}}")]);
@@ -148,7 +161,9 @@ pub fn create(env: &Env, repo: &Path, tag: &NewTag) -> Result<Option<String>, Gi
         }
         Err(_) => {
             let message = if tag.message.trim().is_empty() { tag.name.as_str() } else { tag.message.trim() };
-            git::run(env, repo, &["tag", "--annotate", "--message", message, &tag.name, &tag.commit])?;
+            // Verbatim: the message may be markdown, whose headings git would take for comments.
+            let args = ["tag", "--annotate", "--cleanup=verbatim", "--message", message, &tag.name, &tag.commit];
+            git::run(env, repo, &args)?;
         }
     }
     if !tag.push {
@@ -169,6 +184,7 @@ mod tests {
                 patterns: p.iter().map(|s| (*s).to_owned()).collect(),
                 what: "the release workflow".to_owned(),
                 file: ".github/workflows/release.yml".to_owned(),
+                notes: release::NotesFrom::Unknown,
             }),
             tags: tags.iter().map(|t| ((*t).to_owned(), "c0ffee".to_owned())).collect(),
             remote: Some("origin".to_owned()),

@@ -8,6 +8,7 @@ pub mod account;
 pub mod icons;
 pub mod keys;
 pub mod load;
+pub mod notes;
 pub mod ops;
 pub mod pull_disk;
 pub mod pulls;

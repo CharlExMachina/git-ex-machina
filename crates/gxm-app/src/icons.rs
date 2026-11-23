@@ -28,6 +28,39 @@ icon!(PULL, "gxm-pull", r#"<path d="M8 2.5v8"/><path d="M4.5 7 8 10.5 11.5 7"/><
 icon!(PUSH, "gxm-push", r#"<path d="M8 13.5v-8"/><path d="M4.5 9 8 5.5 11.5 9"/><path d="M3 2.5h10"/>"#);
 icon!(TAG, "gxm-tag", r#"<path d="M2.5 2.5h5l6 6-5 5-6-6z"/><circle cx="5.5" cy="5.5" r="0.75"/>"#);
 icon!(PLUS, "gxm-plus", r#"<path d="M8 3v10M3 8h10"/>"#);
+// The release notes' formatting bar.
+icon!(HEADING, "gxm-heading", r#"<path d="M4 3v10M12 3v10M4 8h8"/>"#);
+icon!(
+    BOLD,
+    "gxm-bold",
+    r#"<path d="M5 3h3.75a2.5 2.5 0 0 1 0 5H5zM5 8h4.25a2.5 2.5 0 0 1 0 5H5z" stroke-width="1.75"/>"#
+);
+icon!(ITALIC, "gxm-italic", r#"<path d="M7 3h5M4 13h5M9.5 3l-3 10"/>"#);
+icon!(
+    STRIKE,
+    "gxm-strike",
+    r#"<path d="M2.5 8h11"/><path d="M11 4.5C10.4 3.6 9.3 3 8 3 6.3 3 5 3.9 5 5.2c0 .8.4 1.4 1.2 1.8"/><path d="M5 11.5c.6.9 1.7 1.5 3 1.5 1.7 0 3-.9 3-2.3 0-.6-.2-1-.6-1.4"/>"#
+);
+icon!(CODE, "gxm-code", r#"<path d="M6 4.5 2.5 8 6 11.5M10 4.5 13.5 8 10 11.5"/>"#);
+icon!(
+    LINK,
+    "gxm-link",
+    r#"<path d="M7 9a2.5 2.5 0 0 0 3.5 0l2-2A2.5 2.5 0 0 0 9 3.5l-.5.5"/><path d="M9 7a2.5 2.5 0 0 0-3.5 0l-2 2A2.5 2.5 0 0 0 7 12.5l.5-.5"/>"#
+);
+icon!(
+    BULLETS,
+    "gxm-bullets",
+    r#"<path d="M6.5 4.5h7M6.5 8h7M6.5 11.5h7"/><circle cx="3.25" cy="4.5" r=".6"/><circle cx="3.25" cy="8" r=".6"/><circle cx="3.25" cy="11.5" r=".6"/>"#
+);
+icon!(NUMBERS, "gxm-numbers", r#"<path d="M7 4.5h6.5M7 8h6.5M7 11.5h6.5M2.75 3.25h1v3M2.5 9.75h2l-2 2.5h2"/>"#);
+icon!(QUOTE, "gxm-quote", r#"<path d="M3 3.5v9M6.5 5h7M6.5 8h7M6.5 11h4.5"/>"#);
+icon!(
+    CODE_BLOCK,
+    "gxm-code-block",
+    r#"<rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M6.5 6 4.5 8l2 2M9.5 6l2 2-2 2"/>"#
+);
+icon!(FOLD, "gxm-fold", r#"<path d="M4.5 3.5 7.5 6.5 4.5 9.5"/><path d="M9.5 6.5h4M4.5 12.5h9"/>"#);
+icon!(SPARKLE, "gxm-sparkle", r#"<path d="M8 2.5 9.2 6.8 13.5 8 9.2 9.2 8 13.5 6.8 9.2 2.5 8 6.8 6.8z"/>"#);
 icon!(PERSON, "gxm-person", r#"<circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c0-2.6 2.2-4 5-4s5 1.4 5 4"/>"#);
 icon!(CHECK, "gxm-check", r#"<path d="M3.5 8.5 6.5 11.5 12.5 4.5"/>"#);
 icon!(SIDEBAR, "gxm-sidebar", r#"<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/>"#);

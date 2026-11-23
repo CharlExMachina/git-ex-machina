@@ -38,6 +38,32 @@ pub const TAG_PUSH: &str = "tag-push";
 pub const TAG_RELEASE: &str = "tag-release";
 pub const TAG_WARNING: &str = "tag-warning";
 pub const TAG_CONFIRM: &str = "tag-confirm";
+/// The release notes the tag carries, where the release takes its notes from the tag: the
+/// editor, its formatting bar, GitHub's draft, and Write beside Markdown (what will be sent).
+pub const NOTES: &str = "notes";
+pub const NOTES_GENERATE: &str = "notes-generate";
+pub const NOTES_WRITE: &str = "notes-write";
+pub const NOTES_SOURCE: &str = "notes-source";
+pub const NOTES_MARKDOWN: &str = "notes-markdown";
+pub const NOTES_HEADING: &str = "notes-heading";
+pub const NOTES_BOLD: &str = "notes-bold";
+pub const NOTES_ITALIC: &str = "notes-italic";
+pub const NOTES_STRIKE: &str = "notes-strike";
+pub const NOTES_CODE: &str = "notes-code";
+pub const NOTES_LINK: &str = "notes-link";
+pub const NOTES_BULLETS: &str = "notes-bullets";
+pub const NOTES_NUMBERS: &str = "notes-numbers";
+pub const NOTES_QUOTE: &str = "notes-quote";
+pub const NOTES_CODE_BLOCK: &str = "notes-code-block";
+pub const NOTES_FOLD: &str = "notes-fold";
+/// The link's address, under the formatting bar while a link is being made.
+pub const NOTES_LINK_URL: &str = "notes-link-url";
+
+/// One part of the release notes (a heading, a collapsed section's summary, or the text
+/// between them), by its id.
+pub fn notes_part(id: u64) -> String {
+    format!("notes-part-{id}")
+}
 /// Why the last operation failed.
 pub const OP_ERROR: &str = "op-error";
 pub const BRANCH_SUMMARY: &str = "branch-summary";

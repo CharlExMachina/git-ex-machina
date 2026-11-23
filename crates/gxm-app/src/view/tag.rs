@@ -4,6 +4,8 @@
 
 use rune::{El, col, icon, row, text};
 
+use gxm_core::release::NotesFrom;
+
 use crate::icons;
 use crate::keys;
 use crate::sheet::Event;
@@ -22,8 +24,9 @@ pub fn button(s: &App, t: &Theme, commit: &str) -> El {
         .on_press_tx(move |s: &mut App, tx| s.tag_event(TagEvent::Open(id.clone()), Some(tx)))
 }
 
-/// The sheet's title, what it's for, its body and its buttons.
-pub fn sheet(s: &App, t: &Theme, tag: &TagSheet) -> (String, String, Vec<El>, El) {
+/// The sheet's title, what it's for, its body, its buttons and its width: wide when it holds
+/// release notes to write.
+pub fn sheet(s: &App, t: &Theme, tag: &TagSheet) -> (String, String, Vec<El>, El, f32) {
     let f = &s.tag_fields;
     let trigger = tag.tagging.trigger.as_ref();
     let remote = tag.tagging.remote.as_deref();
@@ -66,7 +69,9 @@ pub fn sheet(s: &App, t: &Theme, tag: &TagSheet) -> (String, String, Vec<El>, El
             ui::check(t, false, "Push").disabled(true).opacity(0.5).help("This repository has no remote to push to")
         }
     };
-    let mut body = vec![commit, name, message, push.key(keys::TAG_PUSH)];
+    let writes_notes = tag.writes_notes();
+    let words = if writes_notes { super::notes::editor(s, t) } else { message };
+    let mut body = vec![commit, name, words, push.key(keys::TAG_PUSH)];
     if let Some(trigger) = trigger {
         let name = f.name.text.trim();
         let name = if name.is_empty() { "the tag" } else { name };
@@ -76,7 +81,13 @@ pub fn sheet(s: &App, t: &Theme, tag: &TagSheet) -> (String, String, Vec<El>, El
                 false,
             ),
             Some(remote) if f.push => {
-                (format!("Pushing {name} to {remote} starts {} ({}).", trigger.what, trigger.file_name()), true)
+                let notes = match &trigger.notes {
+                    NotesFrom::Tag => ", with these notes".to_owned(),
+                    NotesFrom::File(file) => format!(", with the notes in {}", ref_name(file, name)),
+                    NotesFrom::Generated => ", with notes GitHub writes from the pull requests".to_owned(),
+                    NotesFrom::Unknown => String::new(),
+                };
+                (format!("Pushing {name} to {remote} starts {} ({}){notes}.", trigger.what, trigger.file_name()), true)
             }
             _ => (format!("{name} stays on this computer, so it won't start {} yet.", trigger.what), false),
         };
@@ -105,7 +116,15 @@ pub fn sheet(s: &App, t: &Theme, tag: &TagSheet) -> (String, String, Vec<El>, El
     if let crate::sheet::Phase::Editing { error: Some(e) } = &tag.phase {
         body.push(super::sheet::error(t, e));
     }
-    (title.to_owned(), about.to_owned(), body, buttons(s, t, tag))
+    let width = if writes_notes { size::SHEET_WIDE } else { size::SHEET };
+    (title.to_owned(), about.to_owned(), body, buttons(s, t, tag), width)
+}
+
+/// A workflow's path with the tag's name where it names the tag (`$GITHUB_REF_NAME`).
+fn ref_name(path: &str, tag: &str) -> String {
+    ["${{ github.ref_name }}", "${GITHUB_REF_NAME}", "$GITHUB_REF_NAME"]
+        .iter()
+        .fold(path.to_owned(), |p, v| p.replace(v, tag))
 }
 
 /// Why this commit may not be the one to tag, once the inspector has read which refs contain it.

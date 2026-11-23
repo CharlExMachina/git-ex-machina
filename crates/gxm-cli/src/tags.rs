@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use gxm_core::env::Env;
 use gxm_core::history;
+use gxm_core::release::NotesFrom;
 use gxm_core::tag::{self, NewTag};
 
 fn w(out: &mut impl Write, line: impl std::fmt::Display) -> Result<(), String> {
@@ -24,6 +25,13 @@ pub fn tags(env: &Env, args: &[String], out: &mut impl Write) -> Result<(), Stri
                 format!("a tag matching {}", trigger.patterns.join(" or "))
             };
             w(out, format!("Releases: pushing {which} starts {} ({})", trigger.what, trigger.file))?;
+            let notes = match &trigger.notes {
+                NotesFrom::Tag => "the tag's message (gxm tag NAME -m \"$(cat notes.md)\")".to_owned(),
+                NotesFrom::File(file) => file.clone(),
+                NotesFrom::Generated => "GitHub, from the merged pull requests".to_owned(),
+                NotesFrom::Unknown => "the workflow doesn't say".to_owned(),
+            };
+            w(out, format!("Notes: {notes}"))?;
         }
         None => w(out, "Releases: nothing here runs when a tag is pushed")?,
     }

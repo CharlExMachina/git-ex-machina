@@ -34,7 +34,7 @@ Seeing it
   journeys                  List the journeys
 
 Releases
-  appimage [--tag vX.Y.Z]   Build the Linux AppImage into target/appimage/ and try it (--tag: check it names this version and has docs/releases/TAG.md)
+  appimage [--tag vX.Y.Z]   Build the Linux AppImage into target/appimage/ and try it (--tag: check it names this version)
   macapp [--tag vX.Y.Z] [--unsigned]
                             Build the macOS app and its disk image into target/macapp/, signed with a Developer ID, notarized, and
                             tried as Gatekeeper would (--unsigned: ad-hoc signed and not notarized, for a machine without the certificate)

@@ -16,6 +16,45 @@ pub struct Trigger {
     pub what: String,
     /// The file that says so, from the repository's root.
     pub file: String,
+    /// Where the release it makes takes its notes from.
+    pub notes: NotesFrom,
+}
+
+/// Where a release's notes come from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NotesFrom {
+    /// The tag's message (`gh release create --notes-from-tag`): the tag sheet writes them.
+    Tag,
+    /// A file in the repository (`--notes-file`, `body_path:`), as the workflow names it.
+    File(String),
+    /// GitHub writes them from the merged pull requests (`--generate-notes`).
+    Generated,
+    /// The workflow doesn't say in a way this reads.
+    Unknown,
+}
+
+impl NotesFrom {
+    /// Where a GitHub workflow's release takes its notes from: `gh release create`'s flags, or
+    /// `softprops/action-gh-release`'s inputs.
+    pub fn of(doc: &str) -> NotesFrom {
+        let words: Vec<&str> = doc.split_whitespace().collect();
+        let after = |flag: &str| {
+            words.iter().position(|w| *w == flag || w.starts_with(&format!("{flag}="))).map(|i| {
+                let w = words[i];
+                let value = w.split_once('=').map_or_else(|| words.get(i + 1).copied().unwrap_or_default(), |(_, v)| v);
+                value.trim_matches(['"', '\'']).to_owned()
+            })
+        };
+        if words.contains(&"--notes-from-tag") {
+            NotesFrom::Tag
+        } else if let Some(file) = after("--notes-file").or_else(|| after("-F")).or_else(|| after("body_path:")) {
+            NotesFrom::File(file)
+        } else if words.contains(&"--generate-notes") || doc.contains("generate_release_notes: true") {
+            NotesFrom::Generated
+        } else {
+            NotesFrom::Unknown
+        }
+    }
 }
 
 impl Trigger {
@@ -59,7 +98,7 @@ pub fn github(doc: &str, file: &str) -> Option<Trigger> {
     let stem = file.rsplit('/').next().unwrap_or(file).trim_end_matches(".yml").trim_end_matches(".yaml");
     let name = find(&lines, &["name"]).map(|(v, _)| unquote(v)).filter(|n| !n.is_empty());
     let name = name.unwrap_or_else(|| stem.to_owned());
-    Some(Trigger { patterns, what: format!("the {name} workflow"), file: file.to_owned() })
+    Some(Trigger { patterns, what: format!("the {name} workflow"), file: file.to_owned(), notes: NotesFrom::of(doc) })
 }
 
 /// GitLab CI with a job for tags: a rule on `$CI_COMMIT_TAG`, or `only: tags`.
@@ -81,6 +120,7 @@ pub fn gitlab(doc: &str) -> Option<Trigger> {
         patterns: Vec::new(),
         what: "the tag pipeline".to_owned(),
         file: ".gitlab-ci.yml".to_owned(),
+        notes: NotesFrom::Unknown,
     })
 }
 
@@ -89,7 +129,12 @@ pub fn bitbucket(doc: &str) -> Option<Trigger> {
     let lines = lines(doc);
     let (_, block) = find(&lines, &["pipelines", "tags"])?;
     let patterns = keys_of(&lines, block).into_iter().filter(|p| p != "*" && p != "**").collect();
-    Some(Trigger { patterns, what: "the tag pipeline".to_owned(), file: "bitbucket-pipelines.yml".to_owned() })
+    Some(Trigger {
+        patterns,
+        what: "the tag pipeline".to_owned(),
+        file: "bitbucket-pipelines.yml".to_owned(),
+        notes: NotesFrom::Unknown,
+    })
 }
 
 /// GitHub's tag filter globs: `*` within a path segment, `**` across them, `?` one character.
@@ -203,6 +248,20 @@ mod tests {
 
         let same_indent = "on:\n  push:\n    tags:\n    - v*\n";
         assert_eq!(github(same_indent, "x.yml").unwrap().patterns, ["v*"]);
+    }
+
+    #[test]
+    fn a_release_takes_its_notes_from_the_tag_a_file_or_github() {
+        let notes = |step: &str| {
+            NotesFrom::of(&format!("on:\n  push:\n    tags: [v*]\njobs:\n  a:\n    steps:\n      - run: {step}\n"))
+        };
+        assert_eq!(notes("gh release create \"$TAG\" --notes-from-tag --verify-tag"), NotesFrom::Tag);
+        let file = notes("gh release create \"$TAG\" --notes-file \"docs/releases/$GITHUB_REF_NAME.md\"");
+        assert_eq!(file, NotesFrom::File("docs/releases/$GITHUB_REF_NAME.md".to_owned()));
+        assert_eq!(notes("gh release create $TAG --generate-notes"), NotesFrom::Generated);
+        assert_eq!(notes("make release"), NotesFrom::Unknown);
+        let action = "steps:\n  - uses: softprops/action-gh-release@v2\n    with:\n      body_path: CHANGELOG.md\n";
+        assert_eq!(NotesFrom::of(action), NotesFrom::File("CHANGELOG.md".to_owned()));
     }
 
     #[test]

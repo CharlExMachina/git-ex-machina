@@ -7,6 +7,7 @@ mod cockpit_side;
 mod graph;
 mod history;
 mod inspector;
+mod notes;
 mod on_graph;
 mod pull;
 mod pull_parts;

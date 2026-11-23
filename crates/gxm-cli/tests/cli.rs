@@ -169,7 +169,10 @@ fn someone_releases_the_next_version_by_pushing_a_tag_from_the_terminal() {
     use gxm_world::fixtures::{ANA, KENJI};
     let w = World::new();
     let beacon = w.repo("github.com", "studio", "beacon");
-    beacon.write(".github/workflows/release.yml", "name: release\non:\n  push:\n    tags: ['v*']\n");
+    beacon.write(
+        ".github/workflows/release.yml",
+        "name: release\non:\n  push:\n    tags: ['v*']\njobs:\n  a:\n    steps:\n      - run: gh release create \"$GITHUB_REF_NAME\" --notes-from-tag\n",
+    );
     beacon.commit(ANA, w.ago(gxm_world::days(3)), "Release from version tags", &["src/main.rs"]);
     beacon.tag("v0.1.0");
     beacon.commit(KENJI, w.ago(gxm_world::days(1)), "Fix the --json flag", &["src/cli.rs"]);
@@ -181,18 +184,20 @@ fn someone_releases_the_next_version_by_pushing_a_tag_from_the_terminal() {
     let tags = gxm(&w, &["tags", repo]);
     assert_eq!(
         tags,
-        "Releases: pushing a tag matching v* starts the release workflow (.github/workflows/release.yml)\nNext tag: v0.1.1\n"
+        "Releases: pushing a tag matching v* starts the release workflow (.github/workflows/release.yml)\nNotes: the tag's message (gxm tag NAME -m \"$(cat notes.md)\")\nNext tag: v0.1.1\n"
     );
 
     // Tagging HEAD and pushing it is the release.
-    let tagged = gxm(&w, &["tag", "v0.1.1", "-C", repo, "-m", "Beacon 0.1.1", "--push"]);
+    // The notes are the tag's message, markdown headings and all.
+    let notes = "## Fixed\n\n- The --json flag\n";
+    let tagged = gxm(&w, &["tag", "v0.1.1", "-C", repo, "-m", notes, "--push"]);
     assert!(tagged.starts_with("Tagged v0.1.1 on "), "{tagged}");
     assert!(
         tagged.ends_with("Pushed v0.1.1 to origin\nThat starts the release workflow (.github/workflows/release.yml)\n"),
         "{tagged}"
     );
     let remote = w.remote("github.com", "studio", "beacon");
-    assert_eq!(w.git(&remote, &["tag", "-l", "--format=%(contents:subject)", "v0.1.1"]).trim(), "Beacon 0.1.1");
+    assert_eq!(w.git(&remote, &["tag", "-l", "--format=%(contents)", "v0.1.1"]), notes);
 
     // A name that's taken, on another commit, is refused with where it is.
     let taken = gxm_run(&w, &["tag", "v0.1.1", "HEAD~1", "-C", repo]);
