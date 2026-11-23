@@ -19,7 +19,7 @@ use crate::theme::Theme;
 use crate::ui::{self, Variant};
 
 pub fn toolbar(s: &App, t: &Theme) -> El {
-    let mut bar = bar(t).px(16.0);
+    let mut bar = bar(t).px(16.0).key(keys::TOOLBAR);
     if !s.sidebar_open {
         // With the sidebar hidden, its toggle moves here, so it can come back, clear of any
         // traffic lights the sidebar's bar made room for (12 in, their width, then its 8 gap).

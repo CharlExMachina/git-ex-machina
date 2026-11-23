@@ -101,6 +101,8 @@ pub fn get_started() -> Journey {
     // Updates, in the corner: none found on start, so it offers to check, as an icon.
     .see_in(keys::UPDATE, "Check for updates")
     .not_see("Check for updates")
+    // The band along the top is still the window's title bar.
+    .moves_window(keys::TITLE_BAND)
     .mark("empty")
     // Checking by hand says what it found: this is the latest.
     .tap(keys::UPDATE)
@@ -286,6 +288,11 @@ pub fn first_look() -> Journey {
     .see_in(keys::changed_file("src/graph/legacy_layout.rs"), "D")
     .see_in(keys::HUNK, "fn layout_row(row: &Row)")
     .see_in(keys::HUNK, "draw_rail(x, y, H, lane.color);")
+    // The bars along the top are the window's title bar: grabbing any of them where nothing
+    // else is moves the window, and a double click zooms it.
+    .moves_window(keys::SIDEBAR_BAR)
+    .moves_window(keys::TOOLBAR)
+    .moves_window(keys::INSPECTOR_BAR)
     .mark("history")
     // A click inspects another commit; the keyboard walks the history from there.
     .tap_text("Evict avatars by last paint, not insert")

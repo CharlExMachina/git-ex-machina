@@ -71,9 +71,12 @@ fn message(t: &Theme, e: &str) -> El {
     rune::col().center().fill(t.canvas).child(text(e.to_owned()).font(ty::BODY).color(t.removed).wrap())
 }
 
-/// A 48-point bar with a bottom rule, as each column's top bar is drawn.
+/// A 48-point bar with a bottom rule, as each column's top bar is drawn. The window draws no
+/// title bar of its own over its content (`CHROME`), so these bars are its title bar: a press on
+/// any part without a control of its own moves the window, and a double click zooms it.
 fn bar(t: &Theme) -> El {
     row()
+        .window_drag()
         .w_full()
         .h(size::TOOLBAR + 1.0)
         .center_y()

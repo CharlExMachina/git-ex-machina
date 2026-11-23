@@ -8,6 +8,13 @@ pub const WORKTREE_ROW: &str = "worktree";
 pub const REPO_FILTER: &str = "repo-filter";
 pub const COMMIT_SEARCH: &str = "commit-search";
 pub const SIDEBAR_TOGGLE: &str = "sidebar-toggle";
+/// The bars along the window's top edge, which move the window as its title bar would: the
+/// sidebar's, the toolbar over the history, the inspector's, and the band over an empty
+/// workspace.
+pub const SIDEBAR_BAR: &str = "sidebar-bar";
+pub const TOOLBAR: &str = "toolbar";
+pub const INSPECTOR_BAR: &str = "inspector-bar";
+pub const TITLE_BAND: &str = "title-band";
 pub const ADD_REPO: &str = "add-repo";
 /// The menu the sidebar's + opens, and its two ways in: Add (from disk) and Clone.
 pub const ADD_MENU: &str = "add-menu";

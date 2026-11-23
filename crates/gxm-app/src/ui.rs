@@ -225,7 +225,8 @@ pub fn check_box(t: &Theme, on: bool) -> El {
 /// `SegmentedControl`: a well with 2 of padding and gap, radius 8; options 24 tall, 12 a side,
 /// radius 6, 12px medium; the selected one raised.
 pub fn segmented(t: &Theme, options: Vec<(El, bool)>) -> El {
-    let mut w = row().padding(2.0).gap(2.0).radius(size::RADIUS_MD).fill(t.well);
+    // The track between its segments is part of the control, even in a bar that moves the window.
+    let mut w = row().padding(2.0).gap(2.0).radius(size::RADIUS_MD).fill(t.well).no_window_drag();
     for s in t.shadow_well() {
         w = w.box_shadow(s);
     }

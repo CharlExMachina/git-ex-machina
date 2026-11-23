@@ -5,7 +5,7 @@ use std::fmt;
 use gxm_app::state::App;
 use gxm_app::tag_window::{self, TagLink, TagWindow};
 use gxm_world::World;
-use rune::{ElementInfo, Key, KeyEvent, Mods, PhysicalInput, Runtime};
+use rune::{ElementInfo, Key, KeyEvent, Mods, PhysicalInput, Runtime, TitlebarAction};
 
 use crate::window::Window;
 use serde_json::{Value, json};
@@ -229,6 +229,23 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
             Step::ScrollTo(key) => {
                 d.scroll_into_view(key).map_err(|why| fail(why, &d))?;
                 d.advance_to(d.now + AFTER_PRESS);
+            }
+            Step::MovesWindow(key) => {
+                let (x, y) = crate::window::empty_spot(d.win(), key)
+                    .ok_or_else(|| fail(format!("[{key}] has no empty stretch to grab"), &d))?;
+                // Left out of the replay's script: a double press there would zoom the very
+                // window the video records.
+                let mut asked = Vec::new();
+                for _ in 0..2 {
+                    d.win_mut().pointer_move(x, y);
+                    d.win_mut().pointer_down(x, y);
+                    asked.push(d.win_mut().take_titlebar_action());
+                    d.win_mut().pointer_up(x, y);
+                }
+                if asked != [Some(TitlebarAction::Drag), Some(TitlebarAction::DoubleClick)] {
+                    return Err(fail(format!("pressing it twice at ({x}, {y}) asked the window for {asked:?}"), &d));
+                }
+                d.advance_to(t + AFTER_TAP);
             }
             Step::WaitFor { key, text } => {
                 let started = std::time::Instant::now();
