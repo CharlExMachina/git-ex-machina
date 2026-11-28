@@ -40,6 +40,9 @@ pub struct Env {
     /// bring (`claude`, `codex`) are looked up here, never in the developer's own `PATH` when
     /// isolated.
     pub path: Vec<PathBuf>,
+    /// Where a replayed recording writes its window clock as it goes, for the tool replaying it
+    /// to keep pace (an isolated run only; see `cargo xtask journey --video`).
+    pub clock_file: Option<PathBuf>,
 }
 
 /// The running app as an installation: its version, and the bundle it was started from. Only an
@@ -160,6 +163,8 @@ pub const VERSION_VAR: &str = "GXM_VERSION";
 pub const BUNDLE_VAR: &str = "GXM_BUNDLE";
 /// The tool search path a sandboxed run uses in place of `PATH`.
 pub const PATH_VAR: &str = "GXM_PATH";
+/// Where a sandboxed replay writes its window clock (see [`Env::clock_file`]).
+pub const CLOCK_FILE_VAR: &str = "GXM_CLOCK_FILE";
 
 impl Env {
     /// The real environment, with the `GXM_*` overrides a sandboxed run sets.
@@ -198,7 +203,21 @@ impl Env {
         // An isolated run finds only the tools its sandbox put on its path.
         let path = if isolated { var(PATH_VAR) } else { var("PATH") };
         let path = path.map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
-        Env { home, config_dir, clock, tz, isolated, git_vars, forge, secrets, install, path, ui_thread: None }
+        let clock_file = if isolated { var(CLOCK_FILE_VAR).map(PathBuf::from) } else { None };
+        Env {
+            home,
+            config_dir,
+            clock,
+            tz,
+            isolated,
+            git_vars,
+            forge,
+            secrets,
+            install,
+            path,
+            clock_file,
+            ui_thread: None,
+        }
     }
 
     /// A sandboxed environment rooted at `home`, at a fixed time, in UTC.
@@ -214,6 +233,7 @@ impl Env {
             secrets: Secrets::File(home.join(".config/git-ex-machina/secrets.json")),
             install: Install::this_build(),
             path: vec![home.join(".local/bin")],
+            clock_file: None,
             ui_thread: None,
         }
     }
@@ -229,6 +249,15 @@ impl Env {
     pub fn off_ui_thread(&self, what: &dyn std::fmt::Display) {
         if cfg!(debug_assertions) && self.ui_thread == Some(std::thread::current().id()) {
             panic!("{what} on the UI thread; run it on a background job (see gxm-app's load.rs)");
+        }
+    }
+
+    /// Writes the window clock `t` where a replay's tool reads it, when it asks to. Tooling for
+    /// recordings only: a few bytes, so it stays on the window's thread.
+    pub fn tell_clock(&self, t: f64) {
+        if let Some(f) = &self.clock_file {
+            // A tool that stopped listening isn't the app's problem.
+            std::fs::write(f, format!("{t}")).ok();
         }
     }
 

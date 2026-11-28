@@ -14,8 +14,8 @@ NEEDS YOUR REVIEW
 
 YOUR OPEN PULL REQUESTS
    23d  #118 Load avatars in parallel
-        perf/avatar-loading · +3 −3 · Kenji reviewed · worktree avatar-loading (clean · 48 behind main) · → Resolve conflicts
-        ✕ Conflicts with main in src/avatars/cache.rs, since #129 landed
+        perf/avatar-loading · +9 −9 · Kenji reviewed · worktree avatar-loading (clean · 48 behind main) · → Resolve conflicts
+        ✕ Conflicts with main in src/avatars/cache.rs and 3 more files, since #129 landed
         ✕ 2 checks are failing
         ! You haven't answered 2 of Kenji's comments in 19 days
     6d  #127 Fade the lanes of merged branches

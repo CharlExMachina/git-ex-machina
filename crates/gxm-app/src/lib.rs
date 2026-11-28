@@ -12,6 +12,7 @@ pub mod notes;
 pub mod ops;
 pub mod pull_disk;
 pub mod pulls;
+pub mod resolve_window;
 pub mod review;
 pub mod settings;
 pub mod sheet;
@@ -51,6 +52,7 @@ fn init() -> App {
 /// Nothing is read before the first frame; the workspace starts loading on the first poll, off
 /// the UI thread, and every read lands here.
 fn poll(s: &mut App, t: f64, tx: &mut Tx) -> bool {
+    s.env.tell_clock(t);
     if s.load == Load::NotStarted {
         s.load_workspace();
         s.update_event(update::UpdateEvent::Boot, Some(tx));
@@ -66,7 +68,7 @@ fn poll(s: &mut App, t: f64, tx: &mut Tx) -> bool {
     let account = s.land_account(tx);
     let update = s.land_update(tx);
     let settings = s.land_settings();
-    let work = s.land_work(tx);
+    let work = s.land_work(tx) | s.land_resolve(tx);
     let toasts = s.toasts.tick(t, tx);
     s.land() | landed | pulled | sheet | account | update | settings | work | toasts
 }
@@ -127,19 +129,22 @@ fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
     true
 }
 
-/// The app as both the window and headless runs build it: the main window, and the tag window
-/// beside it, hidden until a commit is tagged.
+/// The app as both the window and headless runs build it: the main window, and beside it the
+/// tag window and the resolve-conflicts window, each hidden until it's opened.
 pub fn app() -> rune::App<App> {
     let mut app = main_app();
     let link = tag_window::add_to(&mut app);
+    let resolve = resolve_window::add_to(&mut app);
     app.init(move || {
         let mut s = init();
         s.tag_link = link;
+        s.resolve_link = resolve;
         s
     })
 }
 
-/// The main window alone, as journeys drive it (beside a tag window of their own).
+/// The main window alone, as journeys drive it (beside a tag window and a resolve window of
+/// their own).
 pub fn main_app() -> rune::App<App> {
     rune::App::new(AppSpec {
         poll: Some(poll),
@@ -148,6 +153,7 @@ pub fn main_app() -> rune::App<App> {
             s.pulls.set_waker(&waker);
             s.sheet_jobs.set_waker(waker.clone());
             s.tag_link.done.set_waker(waker.clone());
+            s.resolve_link.notes.set_waker(waker.clone());
             s.account_jobs.set_waker(waker.clone());
             s.update_jobs.set_waker(waker.clone());
             s.settings_jobs.set_waker(&waker);

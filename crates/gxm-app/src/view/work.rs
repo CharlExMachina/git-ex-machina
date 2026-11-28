@@ -52,7 +52,7 @@ fn summary(s: &App, t: &Theme) -> El {
         .center_y()
         .child(text(title).font(ty::CAPTION_STRONG).color(t.ink))
         .child(text(format!("· {}", parts.join(" · "))).font(ty::CAPTION).color(t.ink_muted));
-    let mut bar = row()
+    let bar = row()
         .w_full()
         .pt(10.0)
         .pb(10.0)
@@ -64,12 +64,26 @@ fn summary(s: &App, t: &Theme) -> El {
         .border_sides([0.0, 0.0, 1.0, 0.0], t.line)
         .border_layout()
         .child(line);
-    if let Some(p) = problem {
-        bar = bar.child(text(p).key(keys::WORK_NOTICE).font(ty::CAPTION).color(t.ink_faint).truncate());
-    } else {
-        bar = bar.child(text("Oldest first").font(ty::HINT).color(t.ink_faint));
-    }
-    bar
+    let right = match problem {
+        Some(p) => text(p).key(keys::WORK_NOTICE).font(ty::CAPTION).color(t.ink_faint).truncate().min_w(0.0),
+        None => text("Oldest first").font(ty::HINT).color(t.ink_faint),
+    };
+    // Settings, as beside the history's search: this repository's, and Agents for every one.
+    let settings = ui::button_in(t, Variant::Secondary, Some(&icons::SETTINGS), "", None, s.settings.open)
+        .key(keys::SETTINGS)
+        .label("Settings".to_owned())
+        .help("Settings: this repository's, and the coding agents every repository uses")
+        .on_press(|s: &mut App| s.open_settings());
+    bar.child(row().gap(12.0).center_y().min_w(0.0).child(right).child(settings))
+}
+
+/// The teal mark on a worktree's tile while an agent gxm started works in it.
+fn agent_working(t: &Theme) -> El {
+    row()
+        .gap(4.0)
+        .center_y()
+        .child(rune::el().size(6.0, 6.0).radius(3.0).fill(t.agent()))
+        .child(text("agent working").font(ty::TILE_STATE).color(t.agent()))
 }
 
 fn list(s: &App, t: &Theme) -> El {
@@ -132,7 +146,10 @@ fn item(s: &App, r: &Row<'_>, picked: bool, t: &Theme) -> El {
                 r.work.conflict(*n).is_some() || p.mergeable == gxm_core::forge::model::Mergeable::Conflicts;
             let is_here = wt.is_some_and(|w| here.as_ref() == Some(&w.path));
             let key = keys::work_pull(&r.repo_name(), *n);
-            let tile = tile(t, wt, conflicts, is_here, base, &keys::work_tile(&key), r.entry.section);
+            let mut tile = tile(t, wt, conflicts, is_here, base, &keys::work_tile(&key), r.entry.section);
+            if wt.is_some_and(|w| s.agent_at.as_ref() == Some(&w.path)) {
+                tile = tile.child(agent_working(t));
+            }
             (key, pull_main(s, r, p, t), tile, pull_action(s, r, p, t))
         }
         Item::Worktree(path) => {
@@ -232,10 +249,10 @@ fn pull_action(s: &App, r: &Row<'_>, p: &Pull, t: &Theme) -> El {
             .on_press(move |s: &mut App| s.review_pull(&repo, n));
     }
     match rules::next(p) {
-        Next::ResolveConflicts => ui::button(t, Variant::DangerSoft, None, "Resolve conflicts", None)
-            .key(keys::work_action(&r.repo_name(), n))
-            .help("Coming next: resolve every conflict in one window")
-            .disabled(true),
+        Next::ResolveConflicts => {
+            resolve_button(r, p, ui::button(t, Variant::DangerSoft, None, "Resolve conflicts", None))
+                .key(keys::work_action(&r.repo_name(), n))
+        }
         Next::Merge => {
             let running = s.work.running(n) == Some(&Action::Merge);
             let label = if running { "Merging…" } else { "Merge" };
@@ -251,6 +268,24 @@ fn pull_action(s: &App, r: &Row<'_>, p: &Pull, t: &Theme) -> El {
         }
         Next::Wait(word) => ui::pill(t, word, Tone::Quiet).key(keys::work_action(&r.repo_name(), n)),
     }
+}
+
+/// Resolve conflicts on `button`: it opens every conflict in a window of its own, merging the
+/// base into the pull request's worktree; without a worktree there's nowhere to merge yet.
+pub fn resolve_button(r: &Row<'_>, p: &Pull, button: El) -> El {
+    let n = p.summary.number;
+    if r.work.local.on_branch(&p.summary.head_ref).is_none() {
+        return button
+            .help(format!("Coming next: check out {} in a worktree to resolve it here", p.summary.head_ref))
+            .disabled(true);
+    }
+    let repo = r.repo.to_path_buf();
+    button
+        .help(format!(
+            "Merge {} into {} in its worktree, and resolve every conflict",
+            p.summary.base_ref, p.summary.head_ref
+        ))
+        .on_press(move |s: &mut App| s.open_resolve(&repo, n))
 }
 
 /// The worktree column: a recessed tile with the worktree's name and state, coloured by its

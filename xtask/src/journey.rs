@@ -11,11 +11,43 @@ use crate::{build_world, build_world_in, cargo_bin, proof_dir, run};
 
 /// Runs the replay, doing what the person did outside the app (`Step::Outside`) to its world when
 /// the app announces that step's mark (`rune-mark outside-N`, on stdout in a `--realtime` run).
-fn replay_with_outside(c: &mut Command, j: &gxm_journeys::Journey, world: &gxm_world::World) -> Result<(), String> {
+/// A replay of several windows (`--desktop`) announces no marks, so there the app writes its
+/// clock to `clock` (`GXM_CLOCK_FILE`), and each step happens when that reaches its mark.
+fn replay_with_outside(
+    c: &mut Command,
+    j: &gxm_journeys::Journey,
+    world: &gxm_world::World,
+    recording: &gxm_journeys::Recording,
+    clock: Option<&std::path::Path>,
+) -> Result<(), String> {
     use std::io::BufRead as _;
     let shown = format!("{c:?}");
     let mut child = c.spawn().map_err(|e| format!("{shown}: {e}"))?;
     let acts = j.outside_acts();
+    if let Some(clock) = clock {
+        // The replay of several windows runs slower than the clock on a software renderer, so
+        // each step waits for the app's own clock to reach its mark.
+        let started = std::time::Instant::now();
+        for (n, act) in acts.iter().enumerate() {
+            let name = gxm_journeys::outside_mark(n);
+            let at = recording.events.iter().find(|e| e["type"] == "mark" && e["name"] == name.as_str());
+            let at = at.and_then(|e| e["t"].as_f64()).unwrap_or_default();
+            loop {
+                let now = std::fs::read_to_string(clock).ok().and_then(|t| t.trim().parse::<f64>().ok());
+                if now.is_some_and(|now| now >= at) {
+                    break;
+                }
+                if child.try_wait().map_err(|e| format!("{shown}: {e}"))?.is_some() {
+                    return Err(format!("{shown} ended before {name}, at {at}s"));
+                }
+                if started.elapsed() > std::time::Duration::from_secs(600) {
+                    return Err(format!("{shown} never reached {name}, at {at}s"));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            act(world);
+        }
+    }
     if let Some(out) = child.stdout.take() {
         for line in std::io::BufReader::new(out).lines() {
             let line = line.map_err(|e| format!("{shown}: {e}"))?;
@@ -74,7 +106,15 @@ pub fn journey(args: &[String]) -> Result<(), String> {
             c.arg("--desktop").arg(&backdrop).args(["--size", &format!("{w}x{h}")]);
         }
         c.arg("--video").arg(&mp4).args(["--keys", "--pointer", "--scale", "1", "--fps", "30"]);
-        replay_with_outside(&mut c, &j, &replay)?;
+        let clock = recording.windows.then(|| dir.join("clock"));
+        if let Some(clock) = &clock {
+            std::fs::remove_file(clock).ok();
+            c.env(gxm_core::env::CLOCK_FILE_VAR, clock);
+        }
+        replay_with_outside(&mut c, &j, &replay, &recording, clock.as_deref())?;
+        if let Some(clock) = &clock {
+            std::fs::remove_file(clock).ok();
+        }
         drop(replay);
         let gif = dir.join(format!("{name}.gif"));
         let filter = "fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4";

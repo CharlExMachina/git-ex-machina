@@ -20,6 +20,7 @@ pub mod ops;
 pub mod release;
 pub mod remote;
 pub mod repo;
+pub mod resolve;
 pub mod secrets;
 pub mod tag;
 pub mod tidy;

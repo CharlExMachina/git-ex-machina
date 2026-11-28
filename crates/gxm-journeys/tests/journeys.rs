@@ -30,6 +30,11 @@ fn work_queue() {
 }
 
 #[test]
+fn resolve_conflicts() {
+    journey("resolve_conflicts");
+}
+
+#[test]
 fn first_look() {
     journey("first_look");
 }

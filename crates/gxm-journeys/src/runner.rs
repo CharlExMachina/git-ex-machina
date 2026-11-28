@@ -2,23 +2,19 @@
 
 use std::fmt;
 
+use gxm_app::resolve_window::{self, ResolveLink, ResolveWindow};
 use gxm_app::state::App;
 use gxm_app::tag_window::{self, TagLink, TagWindow};
 use gxm_world::World;
-use rune::{ElementInfo, Key, KeyEvent, Mods, PhysicalInput, Runtime, TitlebarAction};
+use rune::{Key, KeyEvent, Mods, PhysicalInput, TitlebarAction};
 
-use crate::window::Window;
+use crate::driver::{DT, Driver, Front, POLL};
 use serde_json::{Value, json};
 
 use crate::{Journey, Step};
 
-/// Frames advance at 60 Hz on the runtime's virtual clock, as `--script` renders do.
-const DT: f64 = 1.0 / 60.0;
 /// When the first step happens: after the workspace loads and the first frame settles.
 const START: f64 = 0.8;
-/// How long the runner sleeps between frames while a background read is in flight, so the read
-/// gets real time to finish.
-const POLL: std::time::Duration = std::time::Duration::from_millis(1);
 /// Time after each kind of step, so animations land and a viewer can follow the video.
 const AFTER_TAP: f64 = 0.7;
 const PER_CHAR: f64 = 0.07;
@@ -26,10 +22,6 @@ const AFTER_TYPE: f64 = 0.5;
 const AFTER_PRESS: f64 = 0.5;
 /// A mark's screenshot is taken at its time; the next step waits this long so it can't leak in.
 const AFTER_MARK: f64 = 0.3;
-/// The longest a mark waits for the screen to come to rest before its screenshot.
-const MARK_SETTLE: f64 = 1.0;
-/// One wheel step of a [`Step::ScrollTo`], in points.
-const WHEEL: f32 = 60.0;
 /// The video runs this long past the last step.
 const TAIL: f64 = 1.2;
 
@@ -97,16 +89,24 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
     let mut tag = tag_window::app(link.clone()).headless_runtime(tag_window::SIZE, env);
     tag.set_font_smoothing(gxm_app::FONT_SMOOTHING);
     tag.state = TagWindow::new(world.env().clone(), link);
+    let resolving = ResolveLink::default();
+    rt.state.resolve_link = resolving.clone();
+    let mut resolve = resolve_window::app(resolving.clone()).headless_runtime(resolve_window::SIZE, env);
+    resolve.set_font_smoothing(gxm_app::FONT_SMOOTHING);
+    resolve.state = ResolveWindow::new(world.env().clone(), resolving);
     // The person's own clipboard stays theirs: copies land here, for `Copied` to read.
     let clipboard = rune::clipboard::memory();
     rt.use_clipboard(&clipboard);
     tag.use_clipboard(&clipboard);
+    resolve.use_clipboard(&clipboard);
     let painter = crate::paint::Painter::new(&mut rt, gxm_app::SIZE);
     let mut d = Driver {
         rt,
         tag,
+        resolve,
         painter,
         tag_painter: None,
+        resolve_painter: None,
         windows: false,
         clipboard,
         held: None,
@@ -269,10 +269,10 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                 if pixels.is_blank() {
                     return Err(fail("its screenshot is blank: the renderer drew nothing".to_owned(), &d));
                 }
-                let tree = if d.tag_front() {
-                    crate::tree::tree(&d.tag, t, d.dark)
-                } else {
-                    crate::tree::tree(&d.rt, t, d.dark)
+                let tree = match d.front() {
+                    Front::Tag => crate::tree::tree(&d.tag, t, d.dark),
+                    Front::Resolve => crate::tree::tree(&d.resolve, t, d.dark),
+                    Front::Main => crate::tree::tree(&d.rt, t, d.dark),
                 };
                 d.marks.push(Mark { name, t, tree, pixels });
                 d.advance_to(t + AFTER_MARK);
@@ -332,257 +332,4 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
     let end = d.now + TAIL;
     d.events.push(json!({ "t": end, "type": "mark", "name": "end" }));
     Ok(Recording { events: d.events, marks: d.marks, end, windows: d.windows })
-}
-
-struct Driver {
-    rt: Runtime<App>,
-    /// The tag window, in front of the main one while it shows.
-    tag: Runtime<TagWindow>,
-    painter: crate::paint::Painter,
-    tag_painter: Option<crate::paint::Painter>,
-    /// The tag window has shown: the video records every window, as a screen recording would.
-    windows: bool,
-    clipboard: rune::clipboard::MemoryClipboard,
-    /// Where a [`Step::Down`] pressed the mouse button, until [`Step::Up`] lets go.
-    held: Option<(f32, f32)>,
-    /// URLs the app asked to open, since the last `Opened` step looked.
-    opened: Vec<String>,
-    now: f64,
-    /// Whether the last frame was still animating.
-    animating: bool,
-    dark: bool,
-    events: Vec<Value>,
-    marks: Vec<Mark>,
-}
-
-impl Driver {
-    /// Whether the tag window is in front, with the keyboard.
-    fn tag_front(&self) -> bool {
-        self.tag.state.shown
-    }
-
-    /// The window in front: where input goes and what expectations look at.
-    fn win(&self) -> &dyn Window {
-        if self.tag_front() { &self.tag } else { &self.rt }
-    }
-
-    fn win_mut(&mut self) -> &mut dyn Window {
-        if self.tag_front() { &mut self.tag } else { &mut self.rt }
-    }
-
-    /// Where the front window's top left corner is in the main window's points, as a desktop
-    /// recording places it: the tag window centred over the main one.
-    fn origin(&self) -> (f32, f32) {
-        if !self.tag_front() {
-            return (0.0, 0.0);
-        }
-        let (w, h) = self.tag.viewport;
-        (((gxm_app::SIZE.0 - w) / 2.0).round(), ((gxm_app::SIZE.1 - h) / 2.0).round())
-    }
-
-    /// Either window is waiting on work off the UI thread, or on the other.
-    fn busy(&self) -> bool {
-        self.rt.state.busy() || self.tag.state.busy() || self.rt.state.tag_link.done.pending()
-    }
-
-    /// The screen: the main window, with the tag window over it while it shows.
-    fn paint(&mut self) -> crate::paint::Pixels {
-        let mut pixels = self.painter.paint(&mut self.rt);
-        if self.tag_front() {
-            let tag = &mut self.tag;
-            let painter = self.tag_painter.get_or_insert_with(|| crate::paint::Painter::new(tag, tag_window::SIZE));
-            let window = painter.paint(tag);
-            pixels.composite(&window, self.origin());
-        }
-        pixels
-    }
-
-    fn advance_to(&mut self, t: f64) {
-        // Every step acts, then advances: its first frame takes the input, so it's one frame.
-        let mut first = true;
-        while self.now + DT / 2.0 < t {
-            let frames = if std::mem::take(&mut first) { 1 } else { self.frames_until(t) };
-            let dt = frames as f64 * DT;
-            let tag = self.tag.frame(dt);
-            self.animating = self.rt.frame(dt) | tag;
-            self.now += dt;
-            self.opened.extend(self.rt.take_url_requests());
-            self.opened.extend(self.tag.take_url_requests());
-            self.windows |= self.tag.state.shown;
-        }
-    }
-
-    /// How many 60 Hz frames the next frame covers. While something moves or a background read
-    /// runs, one. At rest a window draws nothing until input, a timer or a read's answer wakes
-    /// it, so neither does the runner: one frame spans the rest, up to the runtime's next wake
-    /// (`Runtime::wake_deadline`) or `t`. That's most of a journey's time, and the screen is the
-    /// same either way.
-    fn frames_until(&self, t: f64) -> usize {
-        if self.animating || self.busy() {
-            return 1;
-        }
-        let left = ((t - self.now) / DT).round();
-        let wake = [
-            self.rt.wake_deadline().map(|at| at - self.rt.clock),
-            self.tag.wake_deadline().map(|at| at - self.tag.clock),
-        ]
-        .into_iter()
-        .flatten()
-        .fold(f64::INFINITY, |soonest, left| soonest.min((left / DT).ceil()));
-        left.min(wake).max(1.0) as usize
-    }
-
-    /// Runs frames until nothing animates, for at most [`MARK_SETTLE`] (a caret blinks forever).
-    fn settle_motion(&mut self) {
-        let until = self.now + MARK_SETTLE;
-        while self.animating && self.now + DT / 2.0 < until {
-            self.advance_to(self.now + DT);
-        }
-    }
-
-    /// Runs frames until no background read is in flight and none has an answer waiting. Reads
-    /// run in real time, so a replay keeps pace with the wall clock (`--realtime`) to land them
-    /// at the same moments.
-    fn settle(&mut self) -> Result<(), String> {
-        let started = std::time::Instant::now();
-        // Not pending can still mean landed but not yet taken: only a frame that takes every
-        // answer without asking for more, after a check that found nothing running, is settled.
-        let mut quiet = 0;
-        while quiet < 2 {
-            if started.elapsed() > crate::WAIT_LIMIT {
-                return Err(format!("a background read was still running after {:?}", crate::WAIT_LIMIT));
-            }
-            if self.busy() {
-                quiet = 0;
-                std::thread::sleep(POLL);
-            } else {
-                quiet += 1;
-            }
-            if quiet < 2 {
-                self.advance_to(self.now + DT);
-            }
-        }
-        Ok(())
-    }
-
-    /// Whether the element keyed `key` is on screen in full.
-    fn wholly_visible(&self, key: &str) -> bool {
-        self.win()
-            .elements()
-            .into_iter()
-            .find(|e| e.key.as_deref() == Some(key) && !e.exiting)
-            .is_none_or(|e| e.visible[3] >= e.rect[3] - 0.5)
-    }
-
-    /// Wheels, as a person would, until the element keyed `key` is wholly in view.
-    fn scroll_into_view(&mut self, key: &str) -> Result<(), String> {
-        for _ in 0..80 {
-            let all = self.win().elements();
-            let i = all
-                .iter()
-                .position(|e| e.key.as_deref() == Some(key) && !e.exiting)
-                .ok_or_else(|| format!("no element is keyed {key:?}"))?;
-            let e = &all[i];
-            if e.visible[3] >= e.rect[3] - 0.5 {
-                break;
-            }
-            // Positive moves the content down, showing what's above.
-            let dy = if e.rect[1] < e.visible[1] { WHEEL } else { -WHEEL };
-            // The wheel turns over what's showing of the element, or of the nearest thing
-            // holding it that shows (its scroll view, inside a dialog, say).
-            let mut shown = Some(i);
-            while let Some(j) = shown.filter(|j| all[*j].visible[3] <= 1.0) {
-                shown = all[j].parent;
-            }
-            let (x, y) = match shown {
-                Some(j) => {
-                    let v = all[j].visible;
-                    let edge = if dy < 0.0 { v[1] + v[3] - 4.0 } else { v[1] + 4.0 };
-                    (v[0] + v[2] / 2.0, edge.clamp(v[1], v[1] + v[3]))
-                }
-                None => (e.rect[0] + e.rect[2] / 2.0, (e.rect[1]).clamp(80.0, gxm_app::SIZE.1 - 40.0)),
-            };
-            self.win_mut().pointer_move(x, y);
-            self.win_mut().wheel(x, y, dy);
-            let (ox, oy) = self.origin();
-            self.events.push(json!({ "t": self.now, "type": "wheel", "x": x + ox, "y": y + oy, "dy": dy }));
-            self.advance_to(self.now + DT * 2.0);
-        }
-        Ok(())
-    }
-
-    fn tap(&mut self, x: f32, y: f32) {
-        let win = self.win_mut();
-        win.pointer_move(x, y);
-        win.pointer_down(x, y);
-        win.pointer_up(x, y);
-    }
-
-    /// Elements a person could see: on screen, not clipped away, not faded out or leaving.
-    fn visible(&self) -> Vec<ElementInfo> {
-        self.win()
-            .elements()
-            .into_iter()
-            .filter(|e| !e.exiting && e.opacity > 0.01 && e.visible[2] > 0.5 && e.visible[3] > 0.5)
-            .collect()
-    }
-
-    /// The centre of the smallest visible element whose text contains `text`.
-    fn find_text(&self, text: &str) -> Option<(f32, f32)> {
-        self.visible()
-            .into_iter()
-            .filter(|e| e.text.as_deref().is_some_and(|s| s.contains(text)))
-            .min_by(|a, b| (a.rect[2] * a.rect[3]).total_cmp(&(b.rect[2] * b.rect[3])))
-            .map(|e| (e.visible[0] + e.visible[2] / 2.0, e.visible[1] + e.visible[3] / 2.0))
-    }
-
-    /// The element keyed `key`'s label, then every visible text inside it, joined by spaces.
-    fn text_in(&self, key: &str) -> Option<String> {
-        let all = self.win().elements();
-        let root = all.iter().position(|e| e.key.as_deref() == Some(key) && !e.exiting)?;
-        let inside = |mut i: usize| loop {
-            if i == root {
-                return true;
-            }
-            match all[i].parent {
-                Some(p) => i = p,
-                None => return false,
-            }
-        };
-        // An icon button's label is what it says (its tooltip, and what a screen reader reads).
-        let label = all[root].label.as_deref().filter(|l| !l.is_empty());
-        let texts: Vec<&str> = label
-            .into_iter()
-            .chain(
-                (0..all.len())
-                    .filter(|&i| inside(i) && all[i].opacity > 0.01 && all[i].visible[2] > 0.5)
-                    .filter_map(|i| all[i].text.as_deref()),
-            )
-            .collect();
-        Some(texts.join(" "))
-    }
-
-    /// The screen as text, for failure messages: each visible element with a key or text.
-    fn screen(&self) -> String {
-        let lines: Vec<String> = self
-            .visible()
-            .iter()
-            .filter(|e| e.text.is_some() || e.key.is_some())
-            .filter(|e| e.text.is_some() || e.role != "group")
-            .map(|e| {
-                let name = e.key.as_deref().unwrap_or(e.role);
-                match &e.text {
-                    Some(t) => format!("  [{name}] {t:?}"),
-                    None => format!("  [{name}] ({})", e.role),
-                }
-            })
-            .collect();
-        const MAX: usize = 120;
-        let more = lines.len().saturating_sub(MAX);
-        let mut s = lines.into_iter().take(MAX).collect::<Vec<_>>().join("\n");
-        if more > 0 {
-            s.push_str(&format!("\n  … and {more} more"));
-        }
-        s
-    }
 }

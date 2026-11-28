@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 gxm-app = { path = "../crates/gxm-app" }
+gxm-core.workspace = true
 gxm-journeys = { path = "../crates/gxm-journeys" }
 gxm-world.workspace = true
 

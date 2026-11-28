@@ -14,10 +14,12 @@
 
 mod agents;
 pub mod catalog;
+mod driver;
 mod merge;
 mod paint;
 mod proof;
 mod release;
+mod resolve;
 mod review;
 mod runner;
 mod settings;
@@ -136,6 +138,11 @@ impl Press {
     /// ⌘ on macOS, Ctrl elsewhere, with a letter.
     pub const fn cmd(name: &'static str) -> Press {
         Press { name, cmd: true, shift: false, alt: false }
+    }
+
+    /// ⌥ (Alt) with a key.
+    pub const fn alt(name: &'static str) -> Press {
+        Press { name, cmd: false, shift: false, alt: true }
     }
 
     /// The key Rune presses for it, if journeys know how.
@@ -305,7 +312,9 @@ impl std::fmt::Display for Step {
             Step::Choose(Some(folder)) => write!(f, "choose ~/{folder} in the folder chooser"),
             Step::Choose(None) => write!(f, "cancel the folder chooser"),
             Step::Press(p) => {
-                write!(f, "press {}{}{}", if p.cmd { "⌘" } else { "" }, if p.shift { "⇧" } else { "" }, p.name)
+                let (cmd, shift, alt) =
+                    (if p.cmd { "⌘" } else { "" }, if p.shift { "⇧" } else { "" }, if p.alt { "⌥" } else { "" });
+                write!(f, "press {cmd}{shift}{alt}{}", p.name)
             }
             Step::Hold("") => write!(f, "let go of the modifiers"),
             Step::Hold(m) => write!(f, "hold {m}"),

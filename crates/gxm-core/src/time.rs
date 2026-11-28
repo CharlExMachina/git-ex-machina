@@ -62,6 +62,11 @@ pub fn long(at: Timestamp, now: Timestamp, tz: &TimeZone) -> String {
     format!("{} at {clock}", at_z.strftime("%b %-d, %Y"))
 }
 
+/// The day alone: `Nov 9`.
+pub fn day(at: Timestamp, tz: &TimeZone) -> String {
+    at.to_zoned(tz.clone()).strftime("%b %-d").to_string()
+}
+
 /// The date and time, compact: `Nov 10, 2026, 18:42`.
 pub fn date_time(at: Timestamp, tz: &TimeZone) -> String {
     at.to_zoned(tz.clone()).strftime("%b %-d, %Y, %H:%M").to_string()
