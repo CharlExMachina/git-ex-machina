@@ -12,6 +12,7 @@
 //! Write fewer, longer journeys (see CLAUDE.md): one per workflow, with expectations at every
 //! step, never one per assertion.
 
+mod agents;
 pub mod catalog;
 mod merge;
 mod paint;
@@ -99,6 +100,16 @@ pub enum Step {
     Copied(String),
     /// Something about the world itself, such as what a remote now holds.
     World { what: &'static str, check: fn(&World) -> Result<(), String> },
+    /// The person changes the world outside the app (installs a tool, signs in from a
+    /// terminal). The video's replay does it at the same moment: the script marks it as
+    /// [`outside_mark`]`(n)`, `n` counting these steps from 0.
+    Outside { what: &'static str, act: fn(&World) },
+}
+
+/// The script mark that stands for a journey's `n`th [`Step::Outside`], which the video's replay
+/// acts on when the app announces it.
+pub fn outside_mark(n: usize) -> String {
+    format!("outside-{n}")
 }
 
 /// A key press, as Rune's scripts name it.
@@ -124,6 +135,25 @@ impl Press {
     /// ⌘ on macOS, Ctrl elsewhere, with a letter.
     pub const fn cmd(name: &'static str) -> Press {
         Press { name, cmd: true, shift: false, alt: false }
+    }
+
+    /// The key Rune presses for it, if journeys know how.
+    fn rune_key(&self) -> Option<rune::Key> {
+        use rune::Key;
+        Some(match self.name {
+            "Down" => Key::Down,
+            "Up" => Key::Up,
+            "Left" => Key::Left,
+            "Right" => Key::Right,
+            "Enter" => Key::Enter,
+            "Escape" => Key::Escape,
+            "Tab" => Key::Tab,
+            "Home" => Key::Home,
+            "End" => Key::End,
+            name if self.cmd && name.chars().count() == 1 => Key::Command(name.chars().next()?.to_ascii_lowercase()),
+            name if name.chars().count() == 1 => Key::Text(name.to_owned()),
+            _ => return None,
+        })
     }
 }
 
@@ -236,6 +266,16 @@ impl Journey {
         self.step(Step::World { what, check })
     }
 
+    /// The person does `what` outside the app, as `act` does it to the world.
+    pub fn outside(self, what: &'static str, act: fn(&World)) -> Journey {
+        self.step(Step::Outside { what, act })
+    }
+
+    /// The journey's [`Step::Outside`] acts, in order.
+    pub fn outside_acts(&self) -> Vec<fn(&World)> {
+        self.steps.iter().filter_map(|s| if let Step::Outside { act, .. } = s { Some(*act) } else { None }).collect()
+    }
+
     /// The app has asked to quit.
     pub fn quits(self) -> Journey {
         self.step(Step::Quits)
@@ -281,6 +321,7 @@ impl std::fmt::Display for Step {
             Step::Quits => write!(f, "the app quits"),
             Step::Copied(t) => write!(f, "copied {t:?}"),
             Step::World { what, .. } => write!(f, "world: {what}"),
+            Step::Outside { what, .. } => write!(f, "outside the app: {what}"),
         }
     }
 }

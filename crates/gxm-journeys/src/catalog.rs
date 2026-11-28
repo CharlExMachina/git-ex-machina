@@ -19,6 +19,7 @@ pub fn all() -> Vec<Journey> {
         crate::settings::repository_settings(),
         crate::settings::settings_without_admin(),
         crate::update::update_app(),
+        crate::agents::agents_settings(),
     ]
 }
 

@@ -2,6 +2,7 @@
 //!
 //! The CLI and the app share `gxm-core`, so anything the app shows can be checked here as text.
 
+mod agents;
 mod prs;
 mod settings;
 mod tags;
@@ -35,6 +36,10 @@ Usage:
   gxm auth status                 Who's signed in, checked with GitHub
   gxm auth token                  Print the token, for scripts
   gxm auth logout                 Forget the sign-in
+  gxm agents [--json]             The agent harnesses here (Claude Code, Codex), and which is preferred
+  gxm agents prefer NAME          Use NAME (claude-code, codex) from now on
+  gxm agents run [--in DIR] [--agent NAME] [--full-access] PROMPT
+                                  Run PROMPT in DIR (default .) with the preferred agent, streamed
   gxm help                        This message
 ";
 
@@ -53,6 +58,7 @@ fn main() -> ExitCode {
         Some("add") => add(&env, &args[1..], &mut out),
         Some("clone") => clone(&env, &args[1..], &mut out),
         Some("auth") => auth(&env, &args[1..], &mut out),
+        Some("agents") => agents::agents(&env, &args[1..], &mut out),
         Some("help" | "--help" | "-h") | None => out.write_all(USAGE.as_bytes()).map_err(|e| e.to_string()),
         Some(other) => Err(format!("unknown command {other:?}\n\n{USAGE}")),
     };
