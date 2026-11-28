@@ -274,7 +274,7 @@ pub fn first_look() -> Journey {
     .see_in(keys::repo("atlas-web"), "↑4")
     .see_in(keys::repo("payments-api"), "release/2.3 · studio")
     .see_in(keys::repo("infra-terraform"), "↓1")
-    .see_in(keys::BRANCH_SUMMARY, "main ↑4 · 1,284 commits · fetched 2 minutes ago")
+    .see_in(keys::BRANCH_SUMMARY, "main ↑4 · 1,297 commits · fetched 2 minutes ago")
     .see_in(keys::PUSH, "Push 4")
     .see("Uncommitted changes")
     .see_in(keys::HISTORY, "3 files changed")
@@ -396,7 +396,7 @@ pub fn push_and_pull() -> Journey {
     .see_in(keys::PUSH, "Push 4")
     .see_in(keys::BRANCH_SUMMARY, "main ↑4")
     .tap(keys::PUSH)
-    .wait_for(keys::BRANCH_SUMMARY, "main · 1,284 commits")
+    .wait_for(keys::BRANCH_SUMMARY, "main · 1,297 commits")
     .see_in(keys::PUSH, "Push")
     .not_see("↑4")
     .world_check("the remote's main is the local merge", |w| {

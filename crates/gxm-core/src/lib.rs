@@ -25,4 +25,5 @@ pub mod tag;
 pub mod tidy;
 pub mod time;
 pub mod update;
+pub mod work;
 pub mod workspace;

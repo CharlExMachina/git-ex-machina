@@ -13,10 +13,12 @@ pub mod agents;
 mod atlas;
 mod pulls;
 mod settings;
+mod work;
 
 pub use atlas::atlas_web;
 pub use pulls::{DESCRIPTION, atlas_pulls, dotfiles_pull};
 pub use settings::{atlas_branches, atlas_settings};
+pub use work::{atlas_work, worktrees_dir};
 
 // The app colours people by a hash of their email; these addresses give the colours the
 // design gives them (Ana blue, Kenji teal, Lea rose).
@@ -35,11 +37,12 @@ pub struct Mockup {
     pub infra_terraform: PathBuf,
 }
 
-/// The demo workspace: atlas-web with its branches, tag and uncommitted work, and
-/// six more repositories across GitHub, GitLab and Bitbucket in different states.
+/// The demo workspace: atlas-web with its branches, tag, uncommitted work, worktrees and open
+/// pull requests, and six more repositories across GitHub, GitLab and Bitbucket in different states.
 pub fn mockup(w: &World) -> Mockup {
     let atlas_web = atlas_web(w);
     atlas_pulls(w, &atlas_web);
+    atlas_work(w, &atlas_web);
     let m = Mockup {
         rune_playground: simple(
             w,

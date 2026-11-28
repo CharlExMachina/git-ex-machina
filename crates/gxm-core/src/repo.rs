@@ -57,6 +57,8 @@ pub struct Status {
     pub changed: u32,
     /// Of those, the files with every change staged.
     pub staged: u32,
+    /// Of those, the files a merge, rebase or cherry-pick left conflicted.
+    pub conflicted: u32,
 }
 
 pub fn status(env: &Env, repo: &Path) -> Result<Status, GitError> {
@@ -92,7 +94,11 @@ fn parse_status(out: &str) -> Result<Status, GitError> {
                 s.changed += 1;
                 s.staged += u32::from(fully_staged());
             }
-            Some(b'u' | b'?') => s.changed += 1,
+            Some(b'u') => {
+                s.changed += 1;
+                s.conflicted += 1;
+            }
+            Some(b'?') => s.changed += 1,
             Some(b'2') => {
                 s.changed += 1;
                 s.staged += u32::from(fully_staged());
@@ -122,12 +128,14 @@ mod tests {
             "2 R. N... 100644 100644 100644 aaaa bbbb R100 src/new.rs",
             "src/old.rs",
             "? notes.md",
+            "u UU N... 100644 100644 100644 100644 aaaa bbbb cccc src/both.rs",
             "",
         ]
         .join("\0");
         let s = parse_status(&out).unwrap();
         assert_eq!((s.branch.as_deref(), s.upstream.as_deref()), (Some("main"), Some("origin/main")));
         assert_eq!((s.ahead, s.behind), (4, 1));
-        assert_eq!((s.changed, s.staged), (5, 2), "staged.rs and the rename are fully staged");
+        assert_eq!((s.changed, s.staged), (6, 2), "staged.rs and the rename are fully staged");
+        assert_eq!(s.conflicted, 1, "both.rs is conflicted");
     }
 }

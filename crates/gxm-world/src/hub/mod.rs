@@ -6,6 +6,7 @@
 //! Only the network edge is fake. The commits a pull request points at are real commits in the
 //! world's repositories, and the app reads its diff from git.
 
+mod actions;
 pub mod admin;
 mod graphql;
 mod notes;
@@ -57,6 +58,8 @@ pub struct PullData {
     pub title: String,
     pub body: String,
     pub merged: bool,
+    /// Opened as a draft, not yet ready for review.
+    pub draft: bool,
     pub author: Person,
     pub head_ref: String,
     pub head_sha: String,
@@ -64,11 +67,19 @@ pub struct PullData {
     pub merge_commit: Option<String>,
     pub created: Timestamp,
     pub commits: u32,
-    pub requested: Vec<Person>,
+    /// Who's asked to review it, and when they were last asked.
+    pub requested: Vec<Request>,
     pub reviews: Vec<ReviewData>,
     pub comments: Vec<CommentData>,
     pub threads: Vec<ThreadData>,
     pub checks: Vec<CheckData>,
+}
+
+/// A review asked of someone.
+#[derive(Clone, Debug)]
+pub struct Request {
+    pub person: Person,
+    pub at: Timestamp,
 }
 
 #[derive(Clone, Debug)]
@@ -116,6 +127,8 @@ pub struct CheckData {
     pub passed: bool,
     pub title: String,
     pub seconds: i64,
+    /// Asked to run again and not finished yet: GitHub shows it queued.
+    pub queued: bool,
 }
 
 /// A comment a review carried: a new thread on a line, or a reply to `thread`.
@@ -159,6 +172,8 @@ struct State {
     damaged: u32,
     /// The API root, for the download links a release hands out.
     url: String,
+    /// The checks asked to run again, in order: `owner/name`, the pull request, the check.
+    reruns: Vec<(String, u64, String)>,
 }
 
 /// The world's GitHub. Stops when the world is dropped.
@@ -184,6 +199,7 @@ impl Hub {
             releases: Vec::new(),
             damaged: 0,
             url: String::new(),
+            reruns: Vec::new(),
         }));
         let shared = Arc::clone(&state);
         let server = server::Server::start(move |req| {
@@ -204,6 +220,9 @@ impl Hub {
             let mut s = shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             if req.method == "POST" && req.path == "/graphql" {
                 return (200, graphql::answer(&mut s, &req.body).to_string()).into();
+            }
+            if let Some(answer) = actions::answer(&mut s, &req.method, &req.path) {
+                return answer.into();
             }
             rest::answer(&mut s, &req.method, &req.path, &req.body, token == Some(TOKEN_DELETE)).into()
         })
@@ -281,6 +300,29 @@ impl Hub {
     pub fn merged(&self, owner: &str, name: &str, number: u64) -> Option<String> {
         let s = self.lock();
         graphql::find(&s, owner, name, number).filter(|p| p.merged).and_then(|p| p.merge_commit.clone())
+    }
+
+    /// Asks `person` to review a pull request at `at`, again if they were asked before.
+    pub fn request_review(&self, owner: &str, name: &str, number: u64, person: Person, at: Timestamp) {
+        let mut s = self.lock();
+        let p = graphql::find_mut(&mut s, owner, name, number)
+            .unwrap_or_else(|| panic!("the world's GitHub has no {owner}/{name}#{number}"));
+        p.requested.retain(|r| r.person != person);
+        p.requested.push(Request { person, at });
+    }
+
+    /// Points a pull request at a new head commit, as a push to its branch does.
+    pub fn moved(&self, owner: &str, name: &str, number: u64, head_sha: &str) {
+        let mut s = self.lock();
+        let p = graphql::find_mut(&mut s, owner, name, number)
+            .unwrap_or_else(|| panic!("the world's GitHub has no {owner}/{name}#{number}"));
+        head_sha.clone_into(&mut p.head_sha);
+    }
+
+    /// The checks asked to run again on a pull request, in order, by name.
+    pub fn reruns(&self, owner: &str, name: &str, number: u64) -> Vec<String> {
+        let repo = format!("{owner}/{name}");
+        self.lock().reruns.iter().filter(|(r, n, _)| *r == repo && *n == number).map(|(_, _, c)| c.clone()).collect()
     }
 
     /// The reviews submitted on a pull request, oldest first.

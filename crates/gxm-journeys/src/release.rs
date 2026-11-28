@@ -115,6 +115,7 @@ fn release_world(w: &World) {
                 title: subject.to_owned(),
                 body: String::new(),
                 merged: true,
+                draft: false,
                 author,
                 head_ref: format!("pr-{number}"),
                 head_sha: sha.clone(),
