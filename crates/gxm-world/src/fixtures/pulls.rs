@@ -7,7 +7,7 @@ use std::path::Path;
 
 use super::{ANA as ANA_AUTHOR, t};
 use crate::World;
-use crate::hub::{ANA, CheckData, CommentData, KENJI, LEA, PullData, ReviewData, ThreadData, Verdict};
+use crate::hub::{ANA, CheckData, CommentData, KENJI, LEA, PullData, Request, ReviewData, ThreadData, Verdict};
 
 /// #131's description, as Lea wrote it (GitHub markdown).
 pub const DESCRIPTION: &str = "Avatars were evicted in the order they were loaded, so the ones on screen were often the first to go and flickered back in while scrolling.
@@ -33,6 +33,7 @@ pub fn atlas_pulls(w: &World, atlas: &Path) {
         passed,
         title: title.to_owned(),
         seconds,
+        queued: false,
     };
     let mut kenjis =
         comment(KENJI, "2026-11-11T12:00:00Z", "Does `pop_min` stay O(log n) once the heap holds 10k avatars?");
@@ -48,6 +49,7 @@ pub fn atlas_pulls(w: &World, atlas: &Path) {
             title: "Evict avatars by last paint, not insert".to_owned(),
             body: DESCRIPTION.to_owned(),
             merged: false,
+            draft: false,
             author: LEA,
             head_ref: "fix/avatar-cache".to_owned(),
             head_sha: sha("fix/avatar-cache"),
@@ -55,7 +57,7 @@ pub fn atlas_pulls(w: &World, atlas: &Path) {
             merge_commit: None,
             created: t("2026-11-11T10:00:00Z"),
             commits: 2,
-            requested: vec![ANA],
+            requested: vec![Request { person: ANA, at: t("2026-11-11T10:00:00Z") }],
             reviews: vec![
                 review("PRR_kenji", KENJI, "2026-11-11T12:00:00Z"),
                 review("PRR_lea", LEA, "2026-11-11T13:00:00Z"),
@@ -88,6 +90,7 @@ pub fn atlas_pulls(w: &World, atlas: &Path) {
             title: "Virtualize commit rows past 10k".to_owned(),
             body: "Rows outside the viewport are no longer laid out.".to_owned(),
             merged: true,
+            draft: false,
             author: KENJI,
             head_ref: "feature/graph-virtualization".to_owned(),
             head_sha: sha("feature/graph-virtualization"),
@@ -123,7 +126,13 @@ pub fn dotfiles_pull(w: &World, dotfiles: &Path) {
     r.push("prompt");
     r.checkout("main");
     let head = r.git(&["rev-parse", "prompt"]).trim().to_owned();
-    let check = |name: &str, seconds| CheckData { name: name.to_owned(), passed: true, title: String::new(), seconds };
+    let check = |name: &str, seconds| CheckData {
+        name: name.to_owned(),
+        passed: true,
+        title: String::new(),
+        seconds,
+        queued: false,
+    };
     w.hub().add_pull(
         "personal",
         "dotfiles",
@@ -132,6 +141,7 @@ pub fn dotfiles_pull(w: &World, dotfiles: &Path) {
             title: "Shorter zsh prompt".to_owned(),
             body: "The prompt shows the folder only, and the branch moves to the right.".to_owned(),
             merged: false,
+            draft: false,
             author: ANA,
             head_ref: "prompt".to_owned(),
             head_sha: head,

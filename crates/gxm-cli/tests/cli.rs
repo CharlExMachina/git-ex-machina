@@ -124,6 +124,25 @@ fn someone_signs_in_to_github_from_the_terminal() {
 }
 
 #[test]
+fn someone_reads_their_open_work_from_the_terminal() {
+    let w = World::new();
+    let m = gxm_world::fixtures::mockup(&w);
+
+    // Reviews asked of Ana, her own pull requests and the worktree with none yet, each oldest
+    // first, with why each is stuck; then every checkout. Exactly: the world's clock is fixed.
+    let work = gxm(&w, &["work", &m.atlas_web.display().to_string()]);
+    gxm_world::golden(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens/atlas-web-work.txt"), &work);
+    assert!(work.starts_with("atlas-web · 3 to review · 4 yours · 1 worktree with no PR yet\n"), "{work}");
+    assert!(!work.contains("Fix avatar cache eviction"), "#129 merged, so it isn't listed:\n{work}");
+
+    // Signed out, the worktrees are still there: git knows them.
+    w.sign_out();
+    let local = gxm(&w, &["work", &m.atlas_web.display().to_string()]);
+    assert!(local.contains("not connected to the provider: worktrees only"), "{local}");
+    assert!(local.contains("Colour the count by the oldest pull request"), "{local}");
+}
+
+#[test]
 fn someone_reads_the_settings_of_a_repository_and_tidies_its_merged_branches_from_the_terminal() {
     let w = World::new();
     let m = gxm_world::fixtures::mockup(&w);
@@ -146,8 +165,15 @@ fn someone_reads_the_settings_of_a_repository_and_tidies_its_merged_branches_fro
             "✓ feature/graph-virtualization local and origin #128 merged",
             "✓ sidebar-spring local same changes, rebased",
             "✓ tune/brass-light origin in the default branch",
+            "· feat/split-memory origin #122 is still open",
             "· fix/avatar-cache local and origin #131 is still open",
+            "· graph/fade-merged local and origin #127 is still open",
+            "· graph/keep-lane-colours origin #135 is still open",
+            "· perf/avatar-loading local and origin #118 is still open",
             "· spike/canvas-text origin 1 commit not in the default branch",
+            "· ui/filter-count local and origin #133 is still open",
+            "· ui/sidebar-badges local 2 commits only on this computer",
+            "· ui/sync-group local and origin #132 is still open",
             "· wip/lane-colors local 2 commits only on this computer",
         ],
         "{tidy}"
@@ -157,9 +183,17 @@ fn someone_reads_the_settings_of_a_repository_and_tidies_its_merged_branches_fro
     let deleted = gxm(&w, &["tidy", &atlas, "--delete"]);
     assert!(deleted.ends_with("Deleted 3 branches\n"), "{deleted}");
     let remote = w.git(&w.remote("github.com", "studio", "atlas-web"), &["branch", "--format=%(refname:short)"]);
-    assert_eq!(remote.lines().collect::<Vec<_>>(), ["fix/avatar-cache", "main", "spike/canvas-text"]);
+    let open = ["graph/fade-merged", "perf/avatar-loading", "ui/filter-count", "ui/sync-group"];
+    let mut want_remote =
+        vec!["feat/split-memory", "fix/avatar-cache", "graph/keep-lane-colours", "main", "spike/canvas-text"];
+    want_remote.extend(open);
+    want_remote.sort_unstable();
+    assert_eq!(remote.lines().collect::<Vec<_>>(), want_remote);
     let local = w.git(&m.atlas_web, &["branch", "--format=%(refname:short)"]);
-    assert_eq!(local.lines().collect::<Vec<_>>(), ["fix/avatar-cache", "main", "wip/lane-colors"]);
+    let mut want_local = vec!["fix/avatar-cache", "main", "ui/sidebar-badges", "wip/lane-colors"];
+    want_local.extend(open);
+    want_local.sort_unstable();
+    assert_eq!(local.lines().collect::<Vec<_>>(), want_local);
     let again = gxm(&w, &["tidy", &atlas]);
     assert!(!again.contains('✓'), "nothing left to tidy:\n{again}");
 }

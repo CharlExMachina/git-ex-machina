@@ -6,6 +6,7 @@ mod agents;
 mod prs;
 mod settings;
 mod tags;
+mod work;
 
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -25,6 +26,8 @@ Usage:
   gxm repos [--json]              The workspace's repositories and their state
   gxm log [PATH] [-n N] [--json]  History with its graph (PATH defaults to .)
   gxm prs [PATH]                  Pull requests on the repository's provider (gxm auth login, or GH_TOKEN)
+  gxm work [PATH]                 Its open work, oldest first: reviews asked of you, your pull
+                                  requests, worktrees with no PR yet; and every checkout
   gxm settings [PATH]             The repository's settings, on its provider and on this computer
   gxm tidy [PATH] [--delete]      Its merged branches, here and on origin; --delete deletes them
   gxm tags [PATH]                 Whether pushing a tag releases, and the next version
@@ -51,6 +54,7 @@ fn main() -> ExitCode {
         Some("repos") => repos(&env, &args[1..], &mut out),
         Some("log") => log(&env, &args[1..], &mut out),
         Some("prs") => prs::prs(&env, &args[1..], &mut out),
+        Some("work") => work::work(&env, &args[1..], &mut out),
         Some("settings") => settings::settings(&env, &args[1..], &mut out),
         Some("tidy") => settings::tidy(&env, &args[1..], &mut out),
         Some("tags") => tags::tags(&env, &args[1..], &mut out),

@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use crate::env::Env;
 use crate::remote::{Provider, Remote};
-use model::{Pull, PullSummary, Submission, User};
+use model::{Check, Pull, PullSummary, Submission, User};
 
 /// A provider's API for one repository.
 pub trait Forge: Send + Sync {
@@ -32,6 +32,12 @@ pub trait Forge: Send + Sync {
     fn pulls(&self) -> Result<Vec<PullSummary>, ForgeError>;
     /// One pull request in full.
     fn pull(&self, number: u64) -> Result<Pull, ForgeError>;
+    /// Every open pull request in full, drafts included, oldest first.
+    fn open_pulls(&self) -> Result<Vec<Pull>, ForgeError>;
+    /// Runs one finished check again.
+    fn rerun_check(&self, check: &Check) -> Result<(), ForgeError>;
+    /// Runs `pull`'s failed checks again, and only those.
+    fn rerun_failed(&self, pull: &Pull) -> Result<(), ForgeError>;
     /// Sends a review of `pull`, comments and replies included, as one review.
     fn submit(&self, pull: &Pull, review: &Submission) -> Result<(), ForgeError>;
     /// Squashes `pull` into its base as one commit with this message, provided its branch is

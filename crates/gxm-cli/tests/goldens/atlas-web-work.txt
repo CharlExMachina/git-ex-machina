@@ -1,0 +1,41 @@
+atlas-web · 3 to review · 4 yours · 1 worktree with no PR yet
+
+NEEDS YOUR REVIEW
+   14d  #122 Persist split widths per window
+        Lea Brandt · feat/split-memory · +2 −0 · no worktree · → Review
+        ! You were asked to review it 14 days ago
+    2d  #135 Keep lane colours across fetches
+        Kenji Mori · graph/keep-lane-colours · +1 −0 · no worktree · → Review
+        ! You were asked to review it 2 days ago
+    5h  #131 Evict avatars by last paint, not insert
+        Lea Brandt · fix/avatar-cache · +84 −32 · no worktree · → Review
+        ✕ 1 check is failing
+        ! You were asked to review it today
+
+YOUR OPEN PULL REQUESTS
+   23d  #118 Load avatars in parallel
+        perf/avatar-loading · +3 −3 · Kenji reviewed · worktree avatar-loading (clean · 48 behind main) · → Resolve conflicts
+        ✕ Conflicts with main in src/avatars/cache.rs, since #129 landed
+        ✕ 2 checks are failing
+        ! You haven't answered 2 of Kenji's comments in 19 days
+    6d  #127 Fade the lanes of merged branches
+        graph/fade-merged · +1 −0 · Lea asked for changes · worktree fade-merged (±3 files uncommitted) · → [Changes asked]
+        ! Lea asked for changes
+    3d  #132 Group the toolbar's sync buttons
+        ui/sync-group · +1 −0 · Kenji approved · worktree sync-group (clean · 36 behind main) · → Merge
+        ✓ Approved and every check passed: ready to merge
+    1d  #133 Show the filter's match count
+        ui/filter-count · +1 −0 · not ready for review · worktree filter-count (clean · 2 unpushed) · → [Draft]
+        · It's still a draft
+
+WORKTREES WITH NO PR YET
+    4m  Colour the count by the oldest pull request
+        ui/sidebar-badges · 2 unpushed · worktree sidebar-badges (±7 files uncommitted) · ~/worktrees/atlas-web/sidebar-badges · → Open PR
+
+CHECKOUTS
+  ! main checkout        main                                     ±3 files uncommitted  ~/code/atlas-web
+  ✕ avatar-loading       perf/avatar-loading · #118               clean · 48 behind main  ~/worktrees/atlas-web/avatar-loading
+  ! fade-merged          graph/fade-merged · #127                 ±3 files uncommitted  ~/worktrees/atlas-web/fade-merged
+  ✓ filter-count         ui/filter-count · #133                   clean · 2 unpushed  ~/worktrees/atlas-web/filter-count
+  ! sidebar-badges       ui/sidebar-badges                        ±7 files uncommitted  ~/worktrees/atlas-web/sidebar-badges
+  ✓ sync-group           ui/sync-group · #132                     clean · 36 behind main  ~/worktrees/atlas-web/sync-group

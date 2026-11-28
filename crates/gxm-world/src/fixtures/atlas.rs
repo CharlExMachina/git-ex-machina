@@ -2,7 +2,7 @@
 //!
 //! Each listed commit has its author, time and message body, on a small but complete topology:
 //! `feature/graph-virtualization` merged into `main`, `fix/avatar-cache` forked from the
-//! `v0.4.0` commit and still open, 1,284 commits in all. Files change by exact line counts, so
+//! `v0.4.0` commit and still open, 1,284 commits in all (the mockup's worktree branches add 13). Files change by exact line counts, so
 //! the merge reads `4 files · +232 −93` and its `rows.rs` hunk is short and readable.
 //! `origin/main` is on `Spring the sidebar collapse`, leaving `main` four ahead: the merge and
 //! the three feature commits it brought.

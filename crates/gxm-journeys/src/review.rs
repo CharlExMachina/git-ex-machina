@@ -284,7 +284,7 @@ pub fn review_pull_request() -> Journey {
     // Back to the plain history.
     .tap(keys::CLOSE_PULL_REQUEST)
     .gone(keys::PULL_BANNER)
-    .see_in(keys::BRANCH_SUMMARY, "main ↑4 · 1,284 commits")
+    .see_in(keys::BRANCH_SUMMARY, "main ↑4 · 1,297 commits")
     .see_in(keys::INSPECTOR_TITLE, PR)
     .mark("history")
     // A repository on a provider that isn't connected yet says so where the pull request goes.

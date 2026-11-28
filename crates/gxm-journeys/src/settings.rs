@@ -114,8 +114,30 @@ pub fn repository_settings() -> Journey {
         let s = hub(w);
         expect(
             "branches and settings",
-            remote.lines().collect::<Vec<_>>() == ["fix/avatar-cache", "main", "spike/canvas-text"]
-                && local.lines().collect::<Vec<_>>() == ["fix/avatar-cache", "main", "sidebar-spring", "wip/lane-colors"]
+            remote.lines().collect::<Vec<_>>()
+                == [
+                    "feat/split-memory",
+                    "fix/avatar-cache",
+                    "graph/fade-merged",
+                    "graph/keep-lane-colours",
+                    "main",
+                    "perf/avatar-loading",
+                    "spike/canvas-text",
+                    "ui/filter-count",
+                    "ui/sync-group",
+                ]
+                && local.lines().collect::<Vec<_>>()
+                    == [
+                        "fix/avatar-cache",
+                        "graph/fade-merged",
+                        "main",
+                        "perf/avatar-loading",
+                        "sidebar-spring",
+                        "ui/filter-count",
+                        "ui/sidebar-badges",
+                        "ui/sync-group",
+                        "wip/lane-colors",
+                    ]
                 && s.delete_branch_on_merge
                 && config(w, "gxm.deleteMergedBranches") == "true"
                 && config(w, "fetch.prune") == "true",

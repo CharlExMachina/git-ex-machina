@@ -58,6 +58,10 @@ pub struct Pull {
     pub body: String,
     pub created: Timestamp,
     pub commits: u32,
+    /// When its branch last moved: its newest commit's date. A review from before it is a
+    /// review of older code.
+    #[serde(default)]
+    pub pushed: Option<Timestamp>,
     pub mergeable: Mergeable,
     /// Who reviewed it, in the order they did, then who's still asked to.
     pub reviewers: Vec<Reviewer>,
@@ -78,6 +82,9 @@ pub enum Mergeable {
 pub struct Reviewer {
     pub user: User,
     pub status: ReviewStatus,
+    /// When they were last asked to review it, while they're still asked.
+    #[serde(default)]
+    pub requested_at: Option<Timestamp>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,6 +103,12 @@ pub struct Check {
     pub title: String,
     /// How long it ran, once it finished.
     pub seconds: Option<u32>,
+    /// The provider's id for the job, when it can be run again from here (a GitHub Actions job).
+    #[serde(default)]
+    pub job: Option<String>,
+    /// The workflow run it belongs to, whose failed jobs can be run again together.
+    #[serde(default)]
+    pub run: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

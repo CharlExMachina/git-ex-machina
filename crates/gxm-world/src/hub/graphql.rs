@@ -9,6 +9,10 @@ pub(super) fn find<'a>(s: &'a State, owner: &str, name: &str, number: u64) -> Op
     s.repos.iter().find(|(o, n, _)| o == owner && n == name)?.2.iter().find(|p| p.number == number)
 }
 
+pub(super) fn find_mut<'a>(s: &'a mut State, owner: &str, name: &str, number: u64) -> Option<&'a mut PullData> {
+    s.repos.iter_mut().find(|(o, n, _)| o == owner && n == name)?.2.iter_mut().find(|p| p.number == number)
+}
+
 fn error(message: &str) -> Value {
     json!({ "errors": [{ "message": message }] })
 }
@@ -32,9 +36,19 @@ pub(super) fn answer(s: &mut State, body: &str) -> Value {
         "Pull" => {
             let (owner, name) = (str_var("owner"), str_var("name"));
             match find(s, &owner, &name, vars["number"].as_u64().unwrap_or(0)) {
-                Some(p) => json!({ "data": { "repository": { "pullRequest": pull(&owner, &name, p) } } }),
+                Some(p) => json!({ "data": { "repository": { "pullRequest": pull(s, &owner, &name, p) } } }),
                 None => json!({ "data": { "repository": { "pullRequest": null } } }),
             }
+        }
+        "OpenPulls" => {
+            let (owner, name) = (str_var("owner"), str_var("name"));
+            let Some((_, _, pulls)) = s.repos.iter().find(|(o, n, _)| *o == owner && *n == name) else {
+                return error("Could not resolve to a Repository");
+            };
+            let mut open: Vec<&PullData> = pulls.iter().filter(|p| !p.merged).collect();
+            open.sort_by_key(|p| p.created);
+            let nodes: Vec<Value> = open.into_iter().map(|p| pull(s, &owner, &name, p)).collect();
+            json!({ "data": { "repository": { "pullRequests": { "nodes": nodes } } } })
         }
         "AddReview" => add_review(s, vars),
         "ReplyToThread" => reply(s, vars),
@@ -65,7 +79,7 @@ fn summary(owner: &str, name: &str, p: &PullData) -> Value {
         "number": p.number,
         "title": p.title,
         "state": if p.merged { "MERGED" } else { "OPEN" },
-        "isDraft": false,
+        "isDraft": p.draft && !p.merged,
         "url": format!("https://github.com/{owner}/{name}/pull/{}", p.number),
         "headRefName": p.head_ref,
         "headRefOid": p.head_sha,
@@ -88,7 +102,35 @@ fn public(p: &PullData, c: &CommentData) -> bool {
     c.review.as_ref().is_none_or(|id| p.reviews.iter().any(|r| r.id == *id && r.verdict.is_some()))
 }
 
-fn pull(owner: &str, name: &str, p: &PullData) -> Value {
+/// What merging `p` into its base would do, by real git in the world's bare repository, as
+/// GitHub works it out on its own copy.
+fn mergeable(s: &State, owner: &str, name: &str, p: &PullData) -> &'static str {
+    if p.merged {
+        return "UNKNOWN";
+    }
+    let bare = s.remotes.join("github.com").join(owner).join(format!("{name}.git"));
+    let base = format!("refs/heads/{}", p.base_ref);
+    // A fixture's pull request whose branch was never pushed: as if GitHub had it, cleanly.
+    if gxm_core::git::run(&s.env, &bare, &["cat-file", "-e", &format!("{}^{{commit}}", p.head_sha)]).is_err() {
+        return "MERGEABLE";
+    }
+    match gxm_core::git::run(&s.env, &bare, &["merge-tree", "--write-tree", "--no-messages", &base, &p.head_sha]) {
+        Ok(_) => "MERGEABLE",
+        Err(gxm_core::git::GitError::Failed { code: Some(1), .. }) => "CONFLICTING",
+        Err(_) => "UNKNOWN",
+    }
+}
+
+/// When the pull request's head commit was made, if the world's remote has it.
+fn committed(s: &State, owner: &str, name: &str, p: &PullData) -> Value {
+    let bare = s.remotes.join("github.com").join(owner).join(format!("{name}.git"));
+    gxm_core::git::run(&s.env, &bare, &["log", "-1", "--format=%cI", &p.head_sha])
+        .ok()
+        .and_then(|d| d.trim().parse::<jiff::Timestamp>().ok())
+        .map_or(Value::Null, |t| json!(t.to_string()))
+}
+
+fn pull(s: &State, owner: &str, name: &str, p: &PullData) -> Value {
     let mut v = summary(owner, name, p);
     let submitted: Vec<&ReviewData> = p.reviews.iter().filter(|r| r.verdict.is_some()).collect();
     // Each reviewer's standing is their latest review, except that a comment-only review
@@ -125,26 +167,34 @@ fn pull(owner: &str, name: &str, p: &PullData) -> Value {
     let checks: Vec<Value> = p
         .checks
         .iter()
-        .map(|c| {
+        .enumerate()
+        .map(|(i, c)| {
             let started = p.created;
             let done = started.checked_add(jiff::SignedDuration::from_secs(c.seconds)).unwrap_or(started);
-            json!({ "__typename": "CheckRun", "name": c.name, "status": "COMPLETED",
-                    "conclusion": if c.passed { "SUCCESS" } else { "FAILURE" }, "title": c.title,
-                    "startedAt": started.to_string(), "completedAt": done.to_string() })
+            let (status, conclusion, done) = if c.queued {
+                ("QUEUED", Value::Null, Value::Null)
+            } else {
+                ("COMPLETED", json!(if c.passed { "SUCCESS" } else { "FAILURE" }), json!(done.to_string()))
+            };
+            json!({ "__typename": "CheckRun", "name": c.name, "status": status, "conclusion": conclusion,
+                    "title": c.title, "startedAt": started.to_string(), "completedAt": done,
+                    "databaseId": super::actions::job_id(p.number, i),
+                    "checkSuite": { "workflowRun": { "databaseId": super::actions::run_id(p.number) } } })
         })
         .collect();
     v["id"] = json!(node_id(owner, name, p.number));
     v["body"] = json!(p.body);
     v["createdAt"] = json!(p.created.to_string());
-    v["mergeable"] = json!(if p.merged { "UNKNOWN" } else { "MERGEABLE" });
+    v["mergeable"] = json!(mergeable(s, owner, name, p));
     v["commits"] = json!({ "totalCount": p.commits });
-    v["reviewRequests"] =
-        json!({ "nodes": p.requested.iter().map(|r| json!({ "requestedReviewer": person(r) })).collect::<Vec<_>>() });
+    v["reviewRequests"] = json!({ "nodes": p.requested.iter().map(|r| json!({ "requestedReviewer": person(&r.person) })).collect::<Vec<_>>() });
+    v["timelineItems"] = json!({ "nodes": p.requested.iter().map(|r| json!({ "createdAt": r.at.to_string(), "requestedReviewer": { "login": r.person.login } })).collect::<Vec<_>>() });
     v["latestReviews"] = json!({ "nodes": latest.into_iter().map(review_json).collect::<Vec<_>>() });
     v["reviews"] = json!({ "nodes": submitted.into_iter().map(review_json).collect::<Vec<_>>() });
     v["comments"] = json!({ "nodes": p.comments.iter().map(comment_json).collect::<Vec<_>>() });
     v["reviewThreads"] = json!({ "nodes": threads });
-    v["lastCommit"] = json!({ "nodes": [{ "commit": { "statusCheckRollup": { "contexts": { "nodes": checks } } } }] });
+    v["lastCommit"] = json!({ "nodes": [{ "commit": { "committedDate": committed(s, owner, name, p),
+        "statusCheckRollup": { "contexts": { "nodes": checks } } } }] });
     v
 }
 
@@ -224,7 +274,7 @@ fn submit(s: &mut State, vars: &Value) -> Value {
             r.verdict = Some(verdict);
             r.body = vars["body"].as_str().unwrap_or_default().to_owned();
             let who = r.author.login;
-            p.requested.retain(|q| q.login != who);
+            p.requested.retain(|q| q.person.login != who);
             return json!({ "data": { "submitPullRequestReview": { "pullRequestReview": { "id": review, "state": verdict_state(verdict) } } } });
         }
     }
@@ -250,7 +300,7 @@ fn merge(s: &mut State, vars: &Value) -> Value {
     if vars["expectedHeadOid"].as_str() != Some(&p.head_sha) {
         return error("Head branch was modified. Review and try the merge again.");
     }
-    if !p.checks.iter().all(|c| c.passed) {
+    if !p.checks.iter().all(|c| c.passed && !c.queued) {
         return error("Required status checks have not passed");
     }
     let bare = remotes.join("github.com").join(&owner).join(format!("{name}.git"));

@@ -13,6 +13,8 @@ use crate::remote::Provider;
 
 pub struct GitHub {
     endpoint: String,
+    /// The REST API's root: the same host's, under `/v3` on GitHub Enterprise.
+    rest: String,
     token: String,
     owner: String,
     name: String,
@@ -20,7 +22,15 @@ pub struct GitHub {
 
 impl GitHub {
     pub fn new(api: &str, token: String, owner: String, name: String) -> GitHub {
-        GitHub { endpoint: format!("{}/graphql", api.trim_end_matches('/')), token, owner, name }
+        let api = api.trim_end_matches('/');
+        let rest = if api.ends_with("/api") { format!("{api}/v3") } else { api.to_owned() };
+        GitHub { endpoint: format!("{api}/graphql"), rest, token, owner, name }
+    }
+
+    /// A REST call on this repository: `method` on `/repos/owner/name` + `path`.
+    fn repo_rest(&self, method: &str, path: &str) -> Result<Value, ForgeError> {
+        let url = format!("{}/repos/{}/{}{path}", self.rest, self.owner, self.name);
+        http::rest(method, &url, &self.token, None)
     }
 
     /// Runs one operation; GraphQL reports failures in `errors`, beside or instead of `data`.
@@ -44,7 +54,27 @@ const SUMMARY: &str = "fragment summary on PullRequest {
   author { login ... on User { name } }
 }";
 
-const PERSON: &str = "author { login ... on User { name } }";
+/// A pull request in full: its review, threads, conversation and the checks on its newest
+/// commit, with the ids that let a failed check run again.
+const FULL: &str = "fragment full on PullRequest {
+  ...summary
+  id body createdAt mergeable
+  commits { totalCount }
+  reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login name } } } }
+  timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 50) { nodes {
+    ... on ReviewRequestedEvent { createdAt requestedReviewer { ... on User { login } } } } }
+  latestReviews(first: 20) { nodes { author { login ... on User { name } } state submittedAt } }
+  reviews(first: 100) { nodes { author { login ... on User { name } } state body submittedAt } }
+  comments(first: 100) { nodes { author { login ... on User { name } } body createdAt } }
+  reviewThreads(first: 100) { nodes { id isResolved path line diffSide
+    comments(first: 100) { nodes { author { login ... on User { name } } body createdAt } } } }
+  lastCommit: commits(last: 1) { nodes { commit { committedDate statusCheckRollup { contexts(first: 100) { nodes {
+    __typename
+    ... on CheckRun { name status conclusion title startedAt completedAt databaseId
+      checkSuite { workflowRun { databaseId } } }
+    ... on StatusContext { context state description }
+  } } } } } }
+}";
 
 impl Forge for GitHub {
     fn provider(&self) -> Provider {
@@ -75,24 +105,10 @@ impl Forge for GitHub {
         let query = format!(
             "query Pull($owner: String!, $name: String!, $number: Int!) {{
   repository(owner: $owner, name: $name) {{
-    pullRequest(number: $number) {{
-      ...summary
-      id body createdAt mergeable
-      commits {{ totalCount }}
-      reviewRequests(first: 20) {{ nodes {{ requestedReviewer {{ ... on User {{ login name }} }} }} }}
-      latestReviews(first: 20) {{ nodes {{ {PERSON} state submittedAt }} }}
-      reviews(first: 100) {{ nodes {{ {PERSON} state body submittedAt }} }}
-      comments(first: 100) {{ nodes {{ {PERSON} body createdAt }} }}
-      reviewThreads(first: 100) {{ nodes {{ id isResolved path line diffSide
-        comments(first: 100) {{ nodes {{ {PERSON} body createdAt }} }} }} }}
-      lastCommit: commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ contexts(first: 100) {{ nodes {{
-        __typename
-        ... on CheckRun {{ name status conclusion title startedAt completedAt }}
-        ... on StatusContext {{ context state description }}
-      }} }} }} }} }} }}
-    }}
+    pullRequest(number: $number) {{ ...full }}
   }}
 }}
+{FULL}
 {SUMMARY}"
         );
         let mut vars = self.repo_vars();
@@ -103,6 +119,41 @@ impl Forge for GitHub {
             return Err(ForgeError::Api(format!("there's no pull request #{number}")));
         }
         pull(pr)
+    }
+
+    fn open_pulls(&self) -> Result<Vec<Pull>, ForgeError> {
+        let query = format!(
+            "query OpenPulls($owner: String!, $name: String!) {{
+  repository(owner: $owner, name: $name) {{
+    pullRequests(states: [OPEN], first: 30, orderBy: {{field: CREATED_AT, direction: ASC}}) {{ nodes {{ ...full }} }}
+  }}
+}}
+{FULL}
+{SUMMARY}"
+        );
+        let data = self.run("OpenPulls", &query, &self.repo_vars())?;
+        nodes(&data["repository"]["pullRequests"]).iter().map(pull).collect()
+    }
+
+    fn rerun_check(&self, check: &Check) -> Result<(), ForgeError> {
+        let job = check
+            .job
+            .as_deref()
+            .ok_or_else(|| ForgeError::Api(format!("{} can't be run again from here", check.name)))?;
+        self.repo_rest("POST", &format!("/actions/jobs/{job}/rerun"))?;
+        Ok(())
+    }
+
+    fn rerun_failed(&self, pull: &Pull) -> Result<(), ForgeError> {
+        let mut runs: Vec<&str> = pull.failing().filter_map(|c| c.run.as_deref()).collect();
+        runs.dedup();
+        if runs.is_empty() {
+            return Err(ForgeError::Api("none of its failed checks can be run again from here".to_owned()));
+        }
+        for run in runs {
+            self.repo_rest("POST", &format!("/actions/runs/{run}/rerun-failed-jobs"))?;
+        }
+        Ok(())
     }
 
     fn squash_merge(&self, pull: &Pull, headline: &str) -> Result<(), ForgeError> {
@@ -233,17 +284,28 @@ fn pull(v: &Value) -> Result<Pull, ForgeError> {
             && let who = user(&r["author"])?
             && who.login != author.login
         {
-            reviewers.push(Reviewer { user: who, status });
+            reviewers.push(Reviewer { user: who, status, requested_at: None });
         }
     }
+    // When each person was last asked: the newest request event naming them.
+    let asked = nodes(&v["timelineItems"]);
+    let asked_at = |login: &str| {
+        asked
+            .iter()
+            .filter(|e| e["requestedReviewer"]["login"].as_str() == Some(login))
+            .filter_map(|e| time(&e["createdAt"]).ok())
+            .max()
+    };
     for r in nodes(&v["reviewRequests"]) {
         let who = &r["requestedReviewer"];
         // Teams have no login here; they're left out until teams are designed.
         if who["login"].is_string() {
             let u = user(who)?;
-            if !reviewers.iter().any(|r| r.user.login == u.login) {
-                reviewers.push(Reviewer { user: u, status: ReviewStatus::Requested });
-            }
+            let requested_at = asked_at(&u.login);
+            // Asked again after reviewing: they're asked, and their earlier review stays in the
+            // conversation.
+            reviewers.retain(|r| r.user.login != u.login);
+            reviewers.push(Reviewer { user: u, status: ReviewStatus::Requested, requested_at });
         }
     }
     let mut conversation = Vec::new();
@@ -269,16 +331,15 @@ fn pull(v: &Value) -> Result<Pull, ForgeError> {
             })
         })
         .collect::<Result<Vec<_>, ForgeError>>()?;
-    let contexts = nodes(&v["lastCommit"])
-        .first()
-        .map(|n| nodes(&n["commit"]["statusCheckRollup"]["contexts"]))
-        .unwrap_or_default();
+    let last = nodes(&v["lastCommit"]).first().map(|n| n["commit"].clone()).unwrap_or_default();
+    let contexts = nodes(&last["statusCheckRollup"]["contexts"]);
     Ok(Pull {
         summary: summary(v)?,
         id: text(&v["id"])?,
         body: v["body"].as_str().unwrap_or_default().to_owned(),
         created: time(&v["createdAt"])?,
         commits: v["commits"]["totalCount"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or(0),
+        pushed: time(&last["committedDate"]).ok(),
         mergeable: match v["mergeable"].as_str() {
             Some("MERGEABLE") => Mergeable::Clean,
             Some("CONFLICTING") => Mergeable::Conflicts,
@@ -304,7 +365,8 @@ fn check(v: &Value) -> Check {
             _ => CheckState::Pending,
         };
         let name = v["context"].as_str().unwrap_or("status").to_owned();
-        return Check { name, state, title: v["description"].as_str().unwrap_or_default().to_owned(), seconds: None };
+        let title = v["description"].as_str().unwrap_or_default().to_owned();
+        return Check { name, state, title, seconds: None, job: None, run: None };
     }
     let state = match (v["status"].as_str(), v["conclusion"].as_str()) {
         (Some("COMPLETED"), Some("SUCCESS" | "NEUTRAL")) => CheckState::Passed,
@@ -321,5 +383,7 @@ fn check(v: &Value) -> Check {
         state,
         title: v["title"].as_str().unwrap_or_default().to_owned(),
         seconds,
+        job: v["databaseId"].as_u64().map(|id| id.to_string()),
+        run: v["checkSuite"]["workflowRun"]["databaseId"].as_u64().map(|id| id.to_string()),
     }
 }
