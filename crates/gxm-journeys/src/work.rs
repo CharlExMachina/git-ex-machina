@@ -24,7 +24,7 @@ Branch `perf/avatar-loading` into `main`, checked out in `~/worktrees/atlas-web/
 
 ## Why it's stuck
 
-- Conflicts with main in src/avatars/cache.rs, since #129 landed
+- Conflicts with main in src/avatars/cache.rs and 3 more files, since #129 landed
 - 2 checks are failing
 - You haven't answered 2 of Kenji's comments in 19 days
 
@@ -86,7 +86,7 @@ pub fn work_queue() -> Journey {
     // The inspector opens on the one stuck the longest, and says why.
     .see_in(keys::WORK_INSPECTOR, "STUCK THE LONGEST")
     .see_in(keys::WORK_TITLE, "#118 Load avatars in parallel")
-    .see_in(keys::WORK_STUCK, "Conflicts with main in src/avatars/cache.rs, since #129 landed")
+    .see_in(keys::WORK_STUCK, "Conflicts with main in src/avatars/cache.rs and 3 more files, since #129 landed")
     .see_in(keys::WORK_STUCK, "2 checks are failing")
     .see_in(keys::WORK_STUCK, "You haven't answered 2 of Kenji's comments in 19 days")
     .see_in(keys::WORK_CHECKS, "2 failing · 3 passed")

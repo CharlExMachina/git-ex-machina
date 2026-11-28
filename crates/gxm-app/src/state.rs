@@ -73,6 +73,10 @@ pub struct App {
     pub checkout_summary: Option<RepoSummary>,
     /// The checkout menu is open.
     pub checkout_menu: bool,
+    /// The resolve-conflicts window: opening it on a pull request, and hearing how it went.
+    pub resolve_link: crate::resolve_window::ResolveLink,
+    /// The worktree an agent started by the resolve window is working in.
+    pub agent_at: Option<PathBuf>,
 }
 
 /// The main view.
@@ -234,6 +238,8 @@ impl App {
             checkout: None,
             checkout_summary: None,
             checkout_menu: false,
+            resolve_link: crate::resolve_window::ResolveLink::default(),
+            agent_at: None,
         }
     }
 

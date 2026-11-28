@@ -21,6 +21,29 @@ pub enum Agent {
     Works,
     /// Starts, says it's looking, and keeps going until it's stopped.
     Lingers,
+    /// Resolves every conflict marker in its folder's files by keeping both sides, as an agent
+    /// asked to keep both sides' intent might, then runs `cargo check`, which lasts until
+    /// [`finish`] says it's done.
+    Resolves,
+}
+
+/// Where a [`Agent::Resolves`] session waits for its `cargo check` to end: a FIFO in the
+/// world's home, which [`finish`] writes to.
+fn check_done(w: &World) -> std::path::PathBuf {
+    w.env().home.join(".agent-check")
+}
+
+/// Ends the `cargo check` an [`Agent::Resolves`] session is waiting on.
+pub fn finish(w: &World) {
+    let fifo = check_done(w);
+    // Opening a FIFO to write waits for its reader: give up, loudly, if the agent never comes.
+    let (done, wait) = std::sync::mpsc::channel();
+    std::thread::spawn(move || done.send(std::fs::write(&fifo, "done\n")).ok());
+    match wait.recv_timeout(std::time::Duration::from_secs(20)) {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => panic!("end the agent's check: {e}"),
+        Err(_) => panic!("the agent never waited on its check"),
+    }
 }
 
 /// Single-quoted for the shell.
@@ -75,6 +98,7 @@ pub fn claude(w: &World, signed_in: bool, agent: Agent) {
         .collect::<Vec<_>>()
         .join("\n"),
         Agent::Lingers => format!("      printf '%s\\n' {}\n      lingering=1", say("Looking at the conflicts…")),
+        Agent::Resolves => resolves(w, session, &say),
     };
     let aborted = quoted(&format!(
         r#"{{"type":"result","subtype":"error_during_execution","is_error":true,"terminal_reason":"aborted_streaming","session_id":"{session}"}}"#
@@ -104,6 +128,66 @@ done
 "#
     );
     w.install_tool("claude", &script);
+}
+
+/// What a [`Agent::Resolves`] session does: each file with conflict markers, both sides kept
+/// (the base dropped), an `Edit` for it; then `cargo check`, until [`finish`]; then the end.
+fn resolves(w: &World, session: &str, say: &dyn Fn(&str) -> String) -> String {
+    let fifo = check_done(w);
+    if !fifo.exists() {
+        let made = std::process::Command::new("mkfifo").arg(&fifo).status();
+        assert!(made.is_ok_and(|s| s.success()), "mkfifo {}", fifo.display());
+    }
+    let edit = format!(
+        r#"'{{"type":"assistant","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"toolu_edit_'"$n"'","name":"Edit","input":{{"file_path":"'"$f"'","old_string":"<<<<<<<","new_string":""}}}}]}},"session_id":"{session}"}}'"#
+    );
+    let edited = format!(
+        r#"'{{"type":"user","message":{{"role":"user","content":[{{"tool_use_id":"toolu_edit_'"$n"'","type":"tool_result","content":"The file '"$f"' has been updated."}}]}},"parent_tool_use_id":null,"session_id":"{session}"}}'"#
+    );
+    let check = format!(
+        r#"'{{"type":"assistant","message":{{"role":"assistant","content":[{{"type":"tool_use","id":"toolu_check","name":"Bash","input":{{"command":"cargo check"}}}}]}},"session_id":"{session}"}}'"#
+    );
+    let checked = format!(
+        r#"'{{"type":"user","message":{{"role":"user","content":[{{"tool_use_id":"toolu_check","type":"tool_result","content":"Finished dev profile"}}]}},"parent_tool_use_id":null,"session_id":"{session}"}}'"#
+    );
+    let done = format!(
+        r#"'{{"type":"assistant","message":{{"role":"assistant","content":[{{"type":"text","text":"Resolved '"$n"' files, keeping both sides; cargo check passes. Nothing is committed."}}]}},"parent_tool_use_id":null,"session_id":"{session}"}}'"#
+    );
+    let result = format!(
+        r#"'{{"type":"result","subtype":"success","is_error":false,"api_error_status":null,"duration_ms":9120,"num_turns":6,"result":"Done.","stop_reason":"end_turn","session_id":"{session}","total_cost_usd":0.0121}}'"#
+    );
+    format!(
+        r#"      printf '%s\n' {start}
+      nl='
+'
+      n=0
+      for f in * */* */*/* */*/*/*; do
+        [ -f "$f" ] || continue
+        out=; state=0; had=
+        while IFS= read -r l || [ -n "$l" ]; do
+          case "$state:$l" in
+            0:'<<<<<<<'*) state=1; had=1 ;;
+            1:'|||||||'*) state=2 ;;
+            [12]:'=======') state=3 ;;
+            3:'>>>>>>>'*) state=0 ;;
+            2:*) ;;
+            *) out="$out$l$nl" ;;
+          esac
+        done < "$f"
+        [ -n "$had" ] || continue
+        printf '%s' "$out" > "$f"
+        n=$((n + 1))
+        printf '%s\n' {edit}
+        printf '%s\n' {edited}
+      done
+      printf '%s\n' {check}
+      read -r go < "{fifo}"
+      printf '%s\n' {checked}
+      printf '%s\n' {done}
+      printf '%s\n' {result}"#,
+        start = say("I'll resolve each conflict, keeping both sides' intent."),
+        fifo = fifo.display(),
+    )
 }
 
 /// Installs `codex`, signed in with ChatGPT as [`AGENT_EMAIL`] or signed out.

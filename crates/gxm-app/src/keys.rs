@@ -359,3 +359,57 @@ pub fn rerun(check: &str) -> String {
 pub fn checkout_item(name: &str) -> String {
     format!("checkout-item-{}", sanitize(name))
 }
+
+// The resolve-conflicts window (`resolve_window`): its bars, sidebar, panes and footer.
+pub const RESOLVE_WINDOW: &str = "resolve-window";
+pub const RESOLVE_TITLE: &str = "resolve-title";
+/// `Merging main into perf/avatar-loading · worktree avatar-loading`.
+pub const RESOLVE_SUBTITLE: &str = "resolve-subtitle";
+/// `3 of 5 resolved`, with its bar.
+pub const RESOLVE_PROGRESS: &str = "resolve-progress";
+/// The sidebar: every conflicted file, and its conflicts under it.
+pub const RESOLVE_FILES: &str = "resolve-files";
+/// `‹ Conflict 4 of 5 ›`, and its two buttons.
+pub const RESOLVE_NAV: &str = "resolve-nav";
+pub const RESOLVE_PREV: &str = "resolve-prev";
+pub const RESOLVE_NEXT: &str = "resolve-next";
+/// `path:line` of the conflict shown.
+pub const RESOLVE_PLACE: &str = "resolve-place";
+pub const ASK_AGENT: &str = "ask-agent";
+/// The two sides, side by side, and what each offers.
+pub const RESOLVE_YOURS: &str = "resolve-yours";
+pub const RESOLVE_THEIRS: &str = "resolve-theirs";
+pub const USE_YOURS: &str = "use-yours";
+pub const USE_MAIN: &str = "use-main";
+pub const USE_BOTH: &str = "use-both";
+/// The resolution, editable, and what marks it edited by hand.
+pub const RESOLVE_RESULT: &str = "resolve-result";
+pub const RESOLVE_EDITED: &str = "resolve-edited";
+pub const RESOLVE_RESET: &str = "resolve-reset";
+pub const MARK_RESOLVED: &str = "mark-resolved";
+/// `Why main changed this: #129 …`.
+pub const RESOLVE_WHY: &str = "resolve-why";
+/// The strip down the right edge, a tick per conflict.
+pub const RESOLVE_MINIMAP: &str = "resolve-minimap";
+pub const RESOLVE_FOOTER: &str = "resolve-footer";
+pub const ABORT_MERGE: &str = "abort-merge";
+/// `2 conflicts left`.
+pub const RESOLVE_LEFT: &str = "resolve-left";
+pub const COMMIT_MERGE: &str = "commit-merge";
+/// What went wrong last: the merge wouldn't start, a write, the commit or the push failed.
+pub const RESOLVE_ERROR: &str = "resolve-error";
+/// Dismisses a merge that wouldn't start.
+pub const RESOLVE_CLOSE: &str = "resolve-close";
+/// The agent at work: who, how many, since when, its latest event, and Stop.
+pub const AGENT_STATUS: &str = "agent-status";
+pub const AGENT_STOP: &str = "agent-stop";
+
+/// A conflicted file in the resolve window's sidebar, by its path.
+pub fn resolve_file(path: &str) -> String {
+    format!("resolve-file-{}", sanitize(path))
+}
+
+/// A conflict in the resolve window, counting every file's from 0.
+pub fn resolve_conflict(n: usize) -> String {
+    format!("resolve-conflict-{n}")
+}

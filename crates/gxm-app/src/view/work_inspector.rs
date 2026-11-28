@@ -307,14 +307,8 @@ fn actions(s: &App, r: &Row<'_>, p: &Pull, t: &Theme) -> El {
         c = c.child(text(message.clone()).key(keys::WORK_ERROR).font(ty::CAPTION).color(t.removed).wrap());
     }
     if r.work.conflict(p.summary.number).is_some() || p.mergeable == gxm_core::forge::model::Mergeable::Conflicts {
-        c = c.child(
-            ui::button(t, Variant::Primary, None, "Resolve conflicts", None)
-                .key(keys::RESOLVE_CONFLICTS)
-                .w_full()
-                .justify_center()
-                .help("Coming next: resolve every conflict in one window")
-                .disabled(true),
-        );
+        let button = ui::button(t, Variant::Primary, None, "Resolve conflicts", None).w_full().justify_center();
+        c = c.child(super::work::resolve_button(r, p, button).key(keys::RESOLVE_CONFLICTS));
     }
     let viewer = r.work.open.as_ref().map_or("", |o| o.viewer.login.as_str());
     let place = r.work.local.on_branch(&p.summary.head_ref).map(|w| s.env.tilde(&w.path));

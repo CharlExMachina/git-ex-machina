@@ -13,7 +13,7 @@
 mod claude;
 mod codex;
 mod event;
-mod probe;
+pub(crate) mod probe;
 mod run;
 pub mod session;
 

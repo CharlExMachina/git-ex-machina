@@ -1,5 +1,4 @@
-//! Every journey. Each one is a test (`tests/journeys.rs`), a video (`cargo xtask journey NAME
-//! --video`) and a set of screenshots at its marks.
+//! Every journey: each a test (`tests/journeys.rs`), a video (`xtask journey NAME --video`) and marks.
 
 use gxm_app::keys;
 use gxm_world::World;
@@ -21,6 +20,7 @@ pub fn all() -> Vec<Journey> {
         crate::update::update_app(),
         crate::agents::agents_settings(),
         crate::work::work_queue(),
+        crate::resolve::resolve_conflicts(),
     ]
 }
 

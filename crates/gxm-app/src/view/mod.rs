@@ -13,6 +13,8 @@ mod on_graph;
 mod picker;
 mod pull;
 mod pull_parts;
+mod resolve;
+mod resolve_panes;
 mod settings;
 mod sheet;
 mod sidebar;
@@ -74,6 +76,14 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
 /// The tag window (`crate::tag_window`).
 pub fn tag_window(s: &crate::tag_window::TagWindow, cx: &mut Cx<crate::tag_window::TagWindow>) -> El {
     tag::window(s, cx)
+}
+
+/// The resolve-conflicts window (`crate::resolve_window`).
+pub fn resolve_window(
+    s: &crate::resolve_window::ResolveWindow,
+    cx: &mut Cx<crate::resolve_window::ResolveWindow>,
+) -> El {
+    resolve::window(s, cx)
 }
 
 fn message(t: &Theme, e: &str) -> El {

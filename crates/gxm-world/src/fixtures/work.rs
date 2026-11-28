@@ -1,8 +1,8 @@
 //! atlas-web's open work, as Ana (the viewer) finds it: worktrees in `~/worktrees/atlas-web`,
 //! her open pull requests, the ones she's asked to review, and a worktree with no pull request
 //! yet. All of it is real git: the branches are pushed to the world's remote, the worktrees are
-//! `git worktree add`ed, and #118 really conflicts with main (in `src/avatars/cache.rs`, since
-//! #129's merge changed the same lines).
+//! `git worktree add`ed, and #118 really conflicts with main: in `src/avatars/cache.rs`, since
+//! #129's merge changed the same lines, and in three files main's sidebar spring changed since.
 //!
 //! The branches' commits are dated in mid-October, one branch per day, each forking from that
 //! day's main and never overlapping another: the history's first screens and its lane count
@@ -49,12 +49,18 @@ pub fn atlas_work(w: &World, atlas: &Path) {
             ],
         },
     );
-    loading.replace_lines(
-        "src/avatars/cache.rs",
-        49,
-        3,
-        &["    let loaded = pool.load_all(missing); // 49".to_owned()],
-    );
+    // Each edit lands where main has changed since (#129's eviction fix, then the sidebar's
+    // spring and its brass token), so merging main stops on four conflicts, one per file.
+    let edit = |file: &str, line, count, with: &[&str]| {
+        loading.replace_lines(file, line, count, &with.iter().map(|l| (*l).to_owned()).collect::<Vec<_>>());
+    };
+    edit("src/avatars/cache.rs", 45, 1, &["pub fn load_missing(&mut self, missing: &[AvatarId]) {"]);
+    edit("src/avatars/cache.rs", 49, 3, &["    let loaded = pool.load_all(missing); // 49"]);
+    edit("src/sidebar.rs", 36, 1, &["fn collapse(&mut self, motion: Motion) {"]);
+    edit("src/sidebar.rs", 44, 1, &["    avatars.prefetch(self.visible_rows()); // 44"]);
+    edit("src/theme/motion.rs", 6, 1, &["pub mod springs {"]);
+    edit("src/theme/motion.rs", 11, 1, &["pub const AVATAR_FADE: Spring = Spring::new(0.24, 1.0);"]);
+    edit("src/brass.json", 6, 1, &["  \"avatar-fade\": \"quick\","]);
     loading.commit(ANA, oct(17, 11), "Load missing avatars together", &[]);
     loading.push("perf/avatar-loading");
 

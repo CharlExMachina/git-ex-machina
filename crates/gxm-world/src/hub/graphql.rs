@@ -17,8 +17,34 @@ fn error(message: &str) -> Value {
     json!({ "errors": [{ "message": message }] })
 }
 
+/// Moves each open pull request's head to its branch in the world's remote when a push moved
+/// the branch on from it, as GitHub follows a pull request's branch. A branch behind the head
+/// (a fixture's commit never pushed) leaves it be.
+fn follow_pushes(s: &mut State) {
+    let (env, remotes) = (s.env.clone(), s.remotes.clone());
+    for (owner, name, pulls) in &mut s.repos {
+        let bare = remotes.join("github.com").join(&*owner).join(format!("{name}.git"));
+        // One read of every branch, then git again only for a branch that moved.
+        let Ok(refs) =
+            gxm_core::git::run(&env, &bare, &["for-each-ref", "--format=%(refname:short) %(objectname)", "refs/heads"])
+        else {
+            continue;
+        };
+        for p in pulls.iter_mut().filter(|p| !p.merged) {
+            let Some(tip) = refs.lines().find_map(|l| l.strip_prefix(&format!("{} ", p.head_ref))) else { continue };
+            if tip == p.head_sha {
+                continue;
+            }
+            if gxm_core::git::run(&env, &bare, &["merge-base", "--is-ancestor", &p.head_sha, tip]).is_ok() {
+                tip.clone_into(&mut p.head_sha);
+            }
+        }
+    }
+}
+
 pub(super) fn answer(s: &mut State, body: &str) -> Value {
     let Ok(req) = serde_json::from_str::<Value>(body) else { return error("Problems parsing JSON") };
+    follow_pushes(s);
     let vars = &req["variables"];
     let str_var = |k: &str| vars[k].as_str().unwrap_or_default().to_owned();
     match req["operationName"].as_str().unwrap_or_default() {

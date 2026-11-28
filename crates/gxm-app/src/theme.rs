@@ -336,6 +336,23 @@ impl Theme {
         [outer(0.0, 0.0, 0.0, 1.0, self.removed.alpha(0.35)), inset(0.0, 1.0, 0.0, 0.0, highlight)]
     }
 
+    /// `--agent`: what a coding agent is doing, in the second lane's teal.
+    pub fn agent(&self) -> Color {
+        self.lanes[1]
+    }
+
+    /// `--agent-soft`: the ground of the agent's status strip.
+    pub fn agent_soft(&self) -> Color {
+        mix(self.agent(), if self.dark { 0.12 } else { 0.1 }, self.raised)
+    }
+
+    /// A side of a conflict, in its lane's colour: the branch's in the third lane, the base's in
+    /// the first (main's, as the history draws it). The ink, and the tint its changed lines sit on.
+    pub fn side(&self, base: bool) -> (Color, Color) {
+        let lane = if base { self.lanes[0] } else { self.lanes[2] };
+        (lane, mix(lane, if self.dark { 0.14 } else { 0.12 }, self.well))
+    }
+
     /// `--ring-here`: the checkout being worked on, ringed in the accent.
     pub fn ring_here(&self) -> Shadow {
         outer(0.0, 0.0, 0.0, 1.0, self.accent)
@@ -383,6 +400,14 @@ pub mod size {
     pub const WORK_ACTION: f32 = 140.0;
     /// The checkout control in the toolbar, and its menu.
     pub const CHECKOUT_W: f32 = 260.0;
+    /// The resolve window: its file list, the tick strip down its right edge, the progress bar
+    /// in its title bar, and the result pane's height.
+    pub const RESOLVE_SIDEBAR: f32 = 272.0;
+    pub const RESOLVE_MINIMAP: f32 = 16.0;
+    pub const RESOLVE_PROGRESS: f32 = 140.0;
+    pub const RESOLVE_RESULT: f32 = 210.0;
+    /// A line number's column in a pane.
+    pub const LINE_NO: f32 = 34.0;
     pub const CHECKOUT_MENU_W: f32 = 400.0;
 }
 

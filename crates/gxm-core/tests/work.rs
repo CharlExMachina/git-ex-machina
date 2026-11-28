@@ -61,16 +61,18 @@ fn ana_reads_her_work_reruns_failed_checks_and_merges_what_is_ready() {
     assert!(states.contains(&("filter-count".to_owned(), "clean · 2 unpushed".to_owned())), "{states:?}");
     assert!(states.contains(&("sidebar-badges".to_owned(), "±7 files uncommitted".to_owned())), "{states:?}");
 
-    // #118 conflicts in the file #129 changed, and says so with its other reasons.
+    // #118 conflicts in the file #129 changed and in three main changed without a pull request,
+    // and says so with its other reasons.
     let p118 = work.pull(118).unwrap_or_else(|| panic!("#118 is open"));
     let conflict = work.conflict(118).unwrap_or_else(|| panic!("#118 conflicts"));
-    assert_eq!((conflict.files.as_slice(), conflict.since), (&["src/avatars/cache.rs".to_owned()][..], Some(129)));
+    let files = ["src/avatars/cache.rs", "src/sidebar.rs", "src/theme/brass.json", "src/theme/motion.rs"];
+    assert_eq!((conflict.files.as_slice(), conflict.since), (&files.map(str::to_owned)[..], Some(129)));
     let now = w.env().now();
     let why: Vec<String> = rules::stuck(p118, "ana-ruiz", Some(conflict)).iter().map(|r| r.sentence(now)).collect();
     assert_eq!(
         why,
         [
-            "Conflicts with main in src/avatars/cache.rs, since #129 landed",
+            "Conflicts with main in src/avatars/cache.rs and 3 more files, since #129 landed",
             "2 checks are failing",
             "You haven't answered 2 of Kenji's comments in 19 days",
         ]
