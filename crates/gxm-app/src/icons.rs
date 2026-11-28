@@ -28,6 +28,12 @@ icon!(PULL, "gxm-pull", r#"<path d="M8 2.5v8"/><path d="M4.5 7 8 10.5 11.5 7"/><
 icon!(PUSH, "gxm-push", r#"<path d="M8 13.5v-8"/><path d="M4.5 9 8 5.5 11.5 9"/><path d="M3 2.5h10"/>"#);
 icon!(TAG, "gxm-tag", r#"<path d="M2.5 2.5h5l6 6-5 5-6-6z"/><circle cx="5.5" cy="5.5" r="0.75"/>"#);
 icon!(PLUS, "gxm-plus", r#"<path d="M8 3v10M3 8h10"/>"#);
+// A checkout: the main one or a worktree, a house for the work.
+icon!(
+    WORKTREE,
+    "gxm-worktree",
+    r#"<path d="M2.5 7.5 8 3l5.5 4.5"/><path d="M4 6.5v6.5h8V6.5"/><path d="M6.75 13v-3.5h2.5V13"/>"#
+);
 // The release notes' formatting bar.
 icon!(HEADING, "gxm-heading", r#"<path d="M4 3v10M12 3v10M4 8h8"/>"#);
 icon!(

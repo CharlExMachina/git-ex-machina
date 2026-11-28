@@ -20,6 +20,7 @@ pub fn all() -> Vec<Journey> {
         crate::settings::settings_without_admin(),
         crate::update::update_app(),
         crate::agents::agents_settings(),
+        crate::work::work_queue(),
     ]
 }
 
@@ -135,8 +136,11 @@ pub fn get_started() -> Journey {
     .see_in(keys::INIT_README_TEXT, "# Lantern")
     .mark("make-it-a-repo")
     .tap(keys::INIT_CONFIRM)
-    .wait_for(keys::BRANCH_SUMMARY, "main · no commits yet")
+    // It opens on Work, with nothing waiting yet; its history is one click away.
+    .wait_for(keys::WORK_SUMMARY, "lantern · 0 to review")
     .gone(keys::SHEET)
+    .tap(keys::VIEW_HISTORY)
+    .wait_for(keys::BRANCH_SUMMARY, "main · no commits yet")
     .see_in(keys::repo("lantern"), "main · local")
     // Everything waits uncommitted, to look over first; Godot's cache stays out.
     .see_in(keys::INSPECTOR, "WORKING TREE")
@@ -269,6 +273,8 @@ pub fn first_look() -> Journey {
         "Someone opens git-ex-machina on their workspace, reads atlas-web's history, inspects a few commits and jumps to another repository.",
         mockup_world,
     )
+    // The app opens on Work; this journey is about the history, one click away.
+    .tap(keys::VIEW_HISTORY)
     // The pinned repository opens first, with its branch, how far it is ahead, and the graph.
     .see_in(keys::repo("atlas-web"), "atlas-web")
     .see_in(keys::repo("atlas-web"), "↑4")
@@ -392,6 +398,8 @@ pub fn push_and_pull() -> Journey {
         "Someone pushes their merged work, catches up a repository that fell behind, fetches, and sees why a pull on a diverged branch can't go through.",
         diverged_world,
     )
+    // The app opens on Work; this journey is about the history, one click away.
+    .tap(keys::VIEW_HISTORY)
     // atlas-web is four ahead: Push sends them, and the badges go.
     .see_in(keys::PUSH, "Push 4")
     .see_in(keys::BRANCH_SUMMARY, "main ↑4")
@@ -435,6 +443,8 @@ pub fn shape_history() -> Journey {
         "Someone commits their work in progress, cherry-picks a fix, reverts a commit, checks out a branch, and sets another repository's changes aside.",
         mockup_world,
     )
+    // The app opens on Work; this journey is about the history, one click away.
+    .tap(keys::VIEW_HISTORY)
     // The uncommitted row offers staging; staging everything offers the commit.
     .tap(keys::WORKTREE_ROW)
     .see_in(keys::INSPECTOR, "3 files changed, nothing staged")
@@ -524,6 +534,8 @@ pub fn sign_in() -> Journey {
         "Someone signs in to GitHub with a one-time code, sees who they're signed in as, signs out, and sees a declined sign-in explained.",
         signed_out_world,
     )
+    // The app opens on Work; this journey is about the history, one click away.
+    .tap(keys::VIEW_HISTORY)
     .see_in(keys::ACCOUNT, "Sign in to GitHub")
     // Signed out, a commit in a pull request can't say which one.
     .tap_text("Evict avatars by last paint, not insert")

@@ -149,6 +149,8 @@ pub fn tag_a_release() -> Journey {
         "Someone releases the next version of beacon by tagging a commit on main, writing its notes from GitHub's draft without markdown (a mention, a reference, tasks and a screenshot included), and pushing the tag, sees what tagging a commit off main would mean, and tags a commit in a repository that doesn't release from tags.",
         release_world,
     )
+    // The app opens on Work; this journey is about the history, one click away.
+    .tap(keys::VIEW_HISTORY)
     // beacon releases from version tags, so a commit selected offers to tag a release.
     .tap_text("Fix the --json flag (#6)")
     .see_in(keys::CREATE_TAG, "Tag a release")

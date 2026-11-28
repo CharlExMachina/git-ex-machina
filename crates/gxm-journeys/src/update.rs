@@ -47,6 +47,8 @@ pub fn update_app() -> Journey {
         "Someone starts git-ex-machina, installed as their system installs it, and sees a newer version at the sidebar's foot; they download it (a damaged first download is refused, and the retry lands), read what's new, put the restart off, then restart into it.",
         update_world,
     )
+    // The app opens on Work; this journey is about the history, one click away.
+    .tap(keys::VIEW_HISTORY)
     // On a fresh start the app asked GitHub, and offers the newer release in the corner, as an
     // icon that says what it does.
     .see_in(keys::UPDATE, "Update to 0.2.0")

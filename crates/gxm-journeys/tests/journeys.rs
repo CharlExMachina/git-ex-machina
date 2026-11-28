@@ -25,6 +25,11 @@ fn sign_in() {
 }
 
 #[test]
+fn work_queue() {
+    journey("work_queue");
+}
+
+#[test]
 fn first_look() {
     journey("first_look");
 }

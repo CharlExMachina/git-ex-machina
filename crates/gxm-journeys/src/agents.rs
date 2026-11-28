@@ -30,6 +30,8 @@ pub fn agents_settings() -> Journey {
         "Someone who codes with an agent opens Settings › Agents: with nothing installed it says how to add one; it explains why Claude Code isn't usable until they sign in; with Claude Code and Codex both ready they pick Codex, which the app remembers; and a run from the terminal streams Codex's session to its end.",
         agents_world,
     )
+    // The app opens on Work; the settings button sits beside the history's commit search.
+    .tap(keys::VIEW_HISTORY)
     // Nothing installed: the page says what an agent is for here and how to add one.
     .tap(keys::SETTINGS)
     .wait_for(keys::SETTINGS_DIALOG, "studio/atlas-web")

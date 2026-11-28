@@ -24,6 +24,7 @@ mod settings;
 mod tree;
 mod update;
 mod window;
+mod work;
 
 pub use paint::{Pixels, SCALE};
 pub use proof::{proof_dir, write_proof};

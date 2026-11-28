@@ -177,6 +177,10 @@ impl App {
                 let (path, origin) = (r.summary.path.clone(), r.summary.origin.clone());
                 self.pulls.open(&self.env, path, origin.as_ref());
             }
+            // The pull requests in the work list come with the token too.
+            if self.load == crate::state::Load::Loaded {
+                self.read_work();
+            }
         }
     }
 

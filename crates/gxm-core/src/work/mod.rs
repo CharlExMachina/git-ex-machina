@@ -8,6 +8,7 @@
 //! [`conflicts`] works out what a pull request conflicts in and which merge caused it; and
 //! [`read`] puts it together, from git and the provider.
 
+pub mod brief;
 pub mod conflicts;
 pub mod read;
 pub mod rules;

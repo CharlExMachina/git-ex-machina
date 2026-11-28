@@ -40,7 +40,7 @@ fn empty(t: &Theme, message: &str) -> El {
 
 /// `⑂ main ↑2 · 1,284 commits · fetched 2 minutes ago`, the multi-select hint and commit search.
 fn summary(s: &App, h: &History, t: &Theme) -> El {
-    let status = s.repo().map(|r| &r.summary.status);
+    let status = s.status();
     let branch = status.and_then(|st| st.branch.clone()).unwrap_or_else(|| "detached HEAD".to_owned());
     let mut line = row()
         .key(keys::BRANCH_SUMMARY)

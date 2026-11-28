@@ -2,6 +2,7 @@
 //! (360 + its border), each under its own 48-point bar.
 
 mod account;
+mod checkout;
 mod cockpit;
 mod cockpit_side;
 mod graph;
@@ -20,10 +21,12 @@ mod toast;
 mod toolbar;
 mod update;
 mod welcome;
+mod work;
+mod work_inspector;
 
 use rune::{Cx, El, row, text};
 
-use crate::state::{App, Load};
+use crate::state::{App, Load, View};
 use crate::theme::{Theme, size, ty};
 
 /// The sidebar's and inspector's widths with their 1-point borders (the CSS sizes the content
@@ -37,9 +40,11 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
         return welcome::screen(s, &t).children(sheet::layer(s, &t)).child(toast::layer(s, &t));
     }
     let cockpit = s.cockpit().is_some();
+    let work = s.view == View::Work && !cockpit;
     let main = match &s.load {
         Load::Failed(e) => message(&t, e),
         Load::NotStarted | Load::Loading | Load::Loaded if cockpit => cockpit::pane(s, &t),
+        Load::NotStarted | Load::Loading | Load::Loaded if work => work::pane(s, &t),
         Load::NotStarted | Load::Loading | Load::Loaded => history::pane(s, &t),
     };
     let mut shell = row().w_full().h_full().fill(t.chrome);
@@ -50,6 +55,7 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
     shell = shell.child(main.grow(1.0).min_w(0.0).h_full());
     if s.inspector_open {
         let right = match s.pull_view() {
+            _ if work => work_inspector::inspector(s, &t),
             Some(_) if cockpit => cockpit_side::review_panel(s, &t),
             Some(v) => pull::inspector(s, v, &t),
             None => inspector::inspector(s, &t),
@@ -58,6 +64,9 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
     }
     if s.add_menu && s.sidebar_open && !cockpit {
         shell = shell.children(sidebar::add_menu(&t));
+    }
+    if s.checkout_menu && !cockpit {
+        shell = shell.children(checkout::menu(s, &t));
     }
     shell.children(settings::layer(s, &t)).children(sheet::layer(s, &t)).child(toast::layer(s, &t))
 }

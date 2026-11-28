@@ -2,6 +2,7 @@
 //! here, by name (the names follow CSS custom properties: `--accent`, `--shadow-raised`). New UI
 //! uses these names; a new look starts as a new token here, never a literal in a view.
 
+use gxm_core::work::{Staleness, Tone};
 use rune::{Color, Shadow, TextStyle};
 
 /// The colour tokens, dark or light.
@@ -302,6 +303,44 @@ impl Theme {
         ]
     }
 
+    /// A tone's ink and the soft ground it sits on: removed, accent and added for red, amber
+    /// and green; muted ink on a control's hover for a quiet one.
+    pub fn tone(&self, tone: Tone) -> (Color, Color) {
+        match tone {
+            Tone::Bad => (self.removed, self.removed_soft),
+            Tone::Warn => (self.accent, self.accent_soft),
+            Tone::Good => (self.added, self.added_soft),
+            Tone::Quiet => (self.ink_muted, self.control_hover),
+        }
+    }
+
+    /// An age's ink, by how long the work has waited: faint while fresh, muted after two days,
+    /// accent after five, removed after ten.
+    pub fn staleness(&self, s: Staleness) -> Color {
+        match s {
+            Staleness::Fresh => self.ink_faint,
+            Staleness::Settled => self.ink_muted,
+            Staleness::Aging => self.accent,
+            Staleness::Stale => self.removed,
+        }
+    }
+
+    /// `--danger-soft-hover`: the danger-soft button under the pointer, a step towards removed.
+    pub fn danger_soft_hover(&self) -> Color {
+        mix(self.removed, 0.12, self.removed_soft)
+    }
+
+    /// `--shadow-danger-soft`: `inset 0 1px 0 <highlight>, 0 0 0 1px <removed at 35%>`.
+    pub fn shadow_danger_soft(&self) -> [Shadow; 2] {
+        let highlight = if self.dark { rgba(0xffffff, 0.04) } else { rgba(0xffffff, 0.5) };
+        [outer(0.0, 0.0, 0.0, 1.0, self.removed.alpha(0.35)), inset(0.0, 1.0, 0.0, 0.0, highlight)]
+    }
+
+    /// `--ring-here`: the checkout being worked on, ringed in the accent.
+    pub fn ring_here(&self) -> Shadow {
+        outer(0.0, 0.0, 0.0, 1.0, self.accent)
+    }
+
     /// `inset 0 0 0 <width> <color>`: a ring inside the box that takes no layout space.
     pub fn ring(width: f32, color: Color) -> Shadow {
         inset(0.0, 0.0, 0.0, width, color)
@@ -338,6 +377,13 @@ pub mod size {
     pub const ROW_REPO: f32 = 36.0;
     pub const ROW_COMMIT: f32 = 30.0;
     pub const ROW_FILE: f32 = 28.0;
+    /// A work list row's columns: the age, the worktree tile and the action.
+    pub const WORK_AGE: f32 = 40.0;
+    pub const WORK_TILE: f32 = 200.0;
+    pub const WORK_ACTION: f32 = 140.0;
+    /// The checkout control in the toolbar, and its menu.
+    pub const CHECKOUT_W: f32 = 260.0;
+    pub const CHECKOUT_MENU_W: f32 = 400.0;
 }
 
 pub const SANS: &str = "Hanken Grotesk";
@@ -406,6 +452,11 @@ pub mod ty {
     pub const BODY_SEMI: TextStyle = sans(13.0, 600.0, 18.0);
     /// 400 11px on the body's 18px line: the review cockpit's comment counts.
     pub const SMALL: TextStyle = sans(11.0, 400.0, 18.0);
+    /// A work item's age, a bare number: 650 18px/20px.
+    pub const AGE: TextStyle = sans(18.0, 650.0, 20.0);
+    /// A worktree tile's name, 600 12px/16px, and its state, 400 10.5px/14px.
+    pub const TILE_NAME: TextStyle = sans(12.0, 600.0, 16.0);
+    pub const TILE_STATE: TextStyle = sans(10.5, 400.0, 14.0);
     /// `.state`: a pull request's state pill, 600 11.5px/20px.
     pub const STATE: TextStyle = sans(11.5, 600.0, 20.0);
     /// 400 12.5px/18px: a pull request's description.
