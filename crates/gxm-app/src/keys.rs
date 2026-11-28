@@ -296,3 +296,66 @@ fn slug(s: &str) -> String {
 pub fn toast(id: u64) -> String {
     format!("toast-{id}")
 }
+
+// The main view: Work (the work list) or History (the graph), and the Work view's parts.
+pub const VIEW_WORK: &str = "view-work";
+pub const VIEW_HISTORY: &str = "view-history";
+pub const WORK_LIST: &str = "work-list";
+/// The line over the list: `atlas-web · 3 to review · 4 yours · …`.
+pub const WORK_SUMMARY: &str = "work-summary";
+/// Why the list holds no pull requests (signed out, no provider, an error).
+pub const WORK_NOTICE: &str = "work-notice";
+pub const WORK_INSPECTOR: &str = "work-inspector";
+pub const WORK_TITLE: &str = "work-title";
+pub const WORK_STUCK: &str = "work-stuck";
+pub const WORK_CHECKS: &str = "work-checks";
+pub const WORK_THREADS: &str = "work-threads";
+pub const RERUN_FAILED: &str = "rerun-failed";
+/// Why the last write on a pull request failed, in the work inspector.
+pub const WORK_ERROR: &str = "work-error";
+pub const RESOLVE_CONFLICTS: &str = "resolve-conflicts";
+pub const COPY_BRIEF: &str = "copy-brief";
+pub const OPEN_TERMINAL: &str = "open-terminal";
+pub const NEW_WORKTREE: &str = "new-worktree";
+/// The sidebar's entry for every repository's open work at once.
+pub const ALL_WORK: &str = "all-work";
+/// The checkout control at the toolbar's left, its menu, and the menu's last two items.
+pub const CHECKOUT_PICKER: &str = "checkout-picker";
+pub const CHECKOUT_MENU: &str = "checkout-menu";
+pub const CHECKOUT_NEW_WORKTREE: &str = "checkout-new-worktree";
+pub const CHECKOUT_SWITCH_BRANCH: &str = "checkout-switch-branch";
+
+/// A section of the work list: `work-section-review`.
+pub fn work_section(id: &str) -> String {
+    format!("work-section-{id}")
+}
+
+/// A pull request's row in the work list, by its repository's name and its number, and the
+/// button that ends the row: `work-pull-atlas-web-118`, `work-action-atlas-web-118`.
+pub fn work_pull(repo: &str, number: u64) -> String {
+    format!("work-pull-{}-{number}", sanitize(repo))
+}
+
+pub fn work_action(repo: &str, number: u64) -> String {
+    format!("work-action-{}-{number}", sanitize(repo))
+}
+
+/// A worktree's row in the work list, by its folder's name: `work-worktree-sidebar-badges`.
+pub fn work_worktree(name: &str) -> String {
+    format!("work-worktree-{}", sanitize(name))
+}
+
+/// A row's worktree tile, by the row's key: `work-tile-work-pull-atlas-web-118`.
+pub fn work_tile(row: &str) -> String {
+    format!("work-tile-{row}")
+}
+
+/// A failed check's ↻ in the work inspector, by the check's name.
+pub fn rerun(check: &str) -> String {
+    format!("rerun-{}", slug(check))
+}
+
+/// A checkout in the checkout menu, by its folder's name.
+pub fn checkout_item(name: &str) -> String {
+    format!("checkout-item-{}", sanitize(name))
+}

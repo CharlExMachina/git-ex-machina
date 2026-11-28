@@ -46,6 +46,9 @@ pub struct Loads {
 
 /// A repository's history as read off the UI thread, ready to show.
 struct Read {
+    /// The repository, as the workspace lists it.
+    repo: PathBuf,
+    /// The checkout it was read in: the repository itself, or one of its worktrees.
     path: PathBuf,
     summary: Option<RepoSummary>,
     history: History,
@@ -99,6 +102,12 @@ impl App {
     pub fn select_repo(&mut self, i: usize) {
         // Another repository: back to its plain history, and ask its provider for its pull
         // requests.
+        if self.selected_repo != Some(i) {
+            // Another repository: its own main checkout.
+            self.checkout = None;
+            self.checkout_summary = None;
+            self.checkout_menu = false;
+        }
         if let Some(entry) = self.repos.get(i) {
             self.mode = crate::review::Mode::History;
             self.pulls.open(&self.env, entry.summary.path.clone(), entry.summary.origin.as_ref());
@@ -119,11 +128,18 @@ impl App {
         self.read_history(i);
     }
 
+    /// Reads the selected repository in the checkout just picked, with nothing selected.
+    pub fn reload_checkout(&mut self, i: usize) {
+        self.loads.keep = None;
+        self.read_history(i);
+    }
+
     fn read_history(&mut self, i: usize) {
         let Some(entry) = self.repos.get(i) else { return };
         self.selected_repo = Some(i);
-        let path = entry.summary.path.clone();
-        self.loads.history.request((self.env.clone(), path), |(env, path)| read_history(&env, path));
+        let repo = entry.summary.path.clone();
+        let path = self.checkout.clone().unwrap_or_else(|| repo.clone());
+        self.loads.history.request((self.env.clone(), repo, path), |(env, repo, path)| read_history(&env, repo, path));
     }
 
     /// Asks for the inspector's details when its subject changed. Until they land, the inspector
@@ -176,6 +192,7 @@ impl App {
                     if let Some(i) = first {
                         self.select_repo(i);
                     }
+                    self.read_work();
                 }
                 Err(e) => self.load = Load::Failed(e),
             }
@@ -209,12 +226,14 @@ impl App {
     }
 
     fn land_history(&mut self, read: Read, tx: &mut Tx) {
-        let Some(i) = self.repos.iter().position(|r| r.summary.path == read.path) else { return };
-        if self.selected_repo != Some(i) {
+        let Some(i) = self.repos.iter().position(|r| r.summary.path == read.repo) else { return };
+        if self.selected_repo != Some(i) || self.checkout_path().as_ref() != Some(&read.path) {
             return;
         }
-        if let Some(summary) = read.summary {
-            self.repos[i].summary = summary;
+        match read.summary {
+            Some(summary) if read.path != read.repo => self.checkout_summary = Some(summary),
+            Some(summary) => self.repos[i].summary = summary,
+            None => {}
         }
         let mut history = read.history;
         // The same repository read again keeps what's still true until its own reads land.
@@ -264,7 +283,7 @@ impl App {
 
 /// The repository's summary, its tags and its newest commits laid out as a graph, read side by
 /// side.
-fn read_history(env: &Env, path: PathBuf) -> Read {
+fn read_history(env: &Env, repo: PathBuf, path: PathBuf) -> Read {
     let (summary, tagging, log) = std::thread::scope(|scope| {
         let summary = scope.spawn(|| RepoSummary::read(env, &path).ok());
         let tagging = scope.spawn(|| gxm_core::tag::survey(env, &path));
@@ -292,7 +311,7 @@ fn read_history(env: &Env, path: PathBuf) -> Read {
     let cols = graph.iter().map(|g| g.width).max().unwrap_or(1);
     let history =
         History { path: path.clone(), rows, graph, cols, total: None, details: None, error, lit: None, tagging };
-    Read { path, summary, history }
+    Read { repo, path, summary, history }
 }
 
 /// The inspector's details for `subject`: its files in review order, a single commit's message

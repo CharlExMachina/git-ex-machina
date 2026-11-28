@@ -63,6 +63,26 @@ pub struct App {
     pub settings_jobs: crate::settings::Jobs,
     /// What just happened, in the window's corner for a moment.
     pub toasts: crate::toast::Toasts,
+    /// The main view: the work list, or the history.
+    pub view: View,
+    /// Every repository's open work, and what the Work view is doing.
+    pub work: crate::work::Model,
+    /// The worktree Fetch, Pull, Push and History act on; None for the main checkout.
+    pub checkout: Option<PathBuf>,
+    /// That worktree's state, once read.
+    pub checkout_summary: Option<RepoSummary>,
+    /// The checkout menu is open.
+    pub checkout_menu: bool,
+}
+
+/// The main view.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum View {
+    /// What's open and waiting on someone, oldest first.
+    #[default]
+    Work,
+    /// The commit graph.
+    History,
 }
 
 /// Loading is an explicit machine: nothing is read before the first frame is up, and the
@@ -209,6 +229,24 @@ impl App {
             settings: crate::settings::Model::default(),
             settings_jobs: crate::settings::Jobs::default(),
             toasts: crate::toast::Toasts::default(),
+            view: View::Work,
+            work: crate::work::Model::default(),
+            checkout: None,
+            checkout_summary: None,
+            checkout_menu: false,
+        }
+    }
+
+    /// Where git acts: the worktree picked in the checkout menu, else the repository itself.
+    pub fn checkout_path(&self) -> Option<PathBuf> {
+        self.checkout.clone().or_else(|| self.repo().map(|r| r.summary.path.clone()))
+    }
+
+    /// The checkout's `git status`: the picked worktree's once read, else the repository's.
+    pub fn status(&self) -> Option<&gxm_core::repo::Status> {
+        match &self.checkout {
+            Some(_) => self.checkout_summary.as_ref().map(|s| &s.status),
+            None => self.repo().map(|r| &r.summary.status),
         }
     }
 
@@ -219,6 +257,7 @@ impl App {
             || self.account_jobs.reading()
             || self.update_jobs.checking()
             || self.settings_jobs.busy()
+            || self.work.busy()
     }
 
     /// Lights the open pull request's commits in the graph, or clears the light.
@@ -250,7 +289,7 @@ impl App {
 
     /// The commit at HEAD, if the history has one.
     pub fn head(&self) -> Option<&str> {
-        self.repo().and_then(|r| r.summary.status.head.as_deref())
+        self.status().and_then(|s| s.head.as_deref())
     }
 
     pub fn subject(&self) -> Option<Subject> {
@@ -368,7 +407,7 @@ impl App {
 
     /// The working tree's state: everything staged, or not.
     pub fn all_staged(&self) -> bool {
-        self.repo().is_some_and(|r| r.summary.status.staged > 0 && r.summary.status.staged == r.summary.status.changed)
+        self.status().is_some_and(|s| s.staged > 0 && s.staged == s.changed)
     }
 
     pub fn is_selected(&self, id: &str) -> bool {

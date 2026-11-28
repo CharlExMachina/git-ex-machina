@@ -96,7 +96,7 @@ fn heading(s: &App, d: &Details, t: &Theme, byline: bool) -> El {
     let mut h = col().w_full().gap(8.0);
     match &d.subject {
         Subject::Head(id) | Subject::Commit(id) => {
-            let kicker = match (&d.subject, s.repo().and_then(|r| r.summary.status.branch.as_deref())) {
+            let kicker = match (&d.subject, s.status().and_then(|st| st.branch.as_deref())) {
                 (Subject::Head(_), Some(branch)) => format!("Head of {branch}"),
                 (Subject::Head(_), None) => "Head".to_owned(),
                 _ => "Commit".to_owned(),

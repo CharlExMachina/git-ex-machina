@@ -23,6 +23,7 @@ pub mod toast;
 pub mod ui;
 pub mod update;
 pub mod view;
+pub mod work;
 
 use gxm_core::env::Env;
 use rune::{AppSpec, Chrome, Key, KeyEvent, Tx};
@@ -65,8 +66,9 @@ fn poll(s: &mut App, t: f64, tx: &mut Tx) -> bool {
     let account = s.land_account(tx);
     let update = s.land_update(tx);
     let settings = s.land_settings();
+    let work = s.land_work(tx);
     let toasts = s.toasts.tick(t, tx);
-    s.land() | landed | pulled | sheet | account | update | settings | toasts
+    s.land() | landed | pulled | sheet | account | update | settings | work | toasts
 }
 
 fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
@@ -110,6 +112,10 @@ fn on_key(s: &mut App, ev: &KeyEvent, tx: &mut Tx) -> bool {
             return true;
         }
     }
+    // The arrows walk the history; the work list is picked with the pointer.
+    if s.view == state::View::Work {
+        return false;
+    }
     let by = match ev.key {
         Key::Down if plain => 1,
         Key::Up if plain => -1,
@@ -145,6 +151,7 @@ pub fn main_app() -> rune::App<App> {
             s.account_jobs.set_waker(waker.clone());
             s.update_jobs.set_waker(waker.clone());
             s.settings_jobs.set_waker(&waker);
+            s.work.set_waker(&waker);
             s.loads.set_waker(waker);
         }),
         on_key: Some(on_key),

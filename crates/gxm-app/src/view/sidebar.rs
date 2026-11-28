@@ -2,13 +2,15 @@
 //! the filter, pinned repositories, the rest, and, at the foot, the GitHub account beside the
 //! update's icon button.
 
+use gxm_core::work::rules;
+use gxm_core::work::{Item, Staleness, Tone};
 use rune::{El, col, icon, row, text};
 
 use super::bar;
 use crate::icons;
 use crate::keys;
 use crate::sheet::Event;
-use crate::state::{App, RepoEntry};
+use crate::state::{App, RepoEntry, View};
 use crate::theme::{Theme, size, ty};
 use crate::ui::{self, Variant};
 
@@ -49,6 +51,11 @@ pub fn sidebar(s: &App, t: &Theme) -> El {
         .grow(1.0),
     );
     let mut list = col().w_full().grow(1.0).min_h(0.0).child(top).child(filter);
+    if s.view == View::Work {
+        list = list
+            .child(row().pt(18.0).px(16.0).pb(8.0).child(ui::label(t, "Everywhere")))
+            .child(col().px(8.0).child(all_work(s, t)));
+    }
     for (title, pinned) in [("Pinned", true), ("Repositories", false)] {
         let repos = s.visible_repos(pinned);
         if repos.is_empty() {
@@ -87,24 +94,40 @@ fn repo_row(s: &App, i: usize, r: &RepoEntry, t: &Theme) -> El {
         .child(icon(&icons::BRANCH, 11.0).color(t.ink_muted))
         .child(text(branch.to_owned()).font(ty::REPO_META).color(t.ink_muted).truncate())
         .child(text(format!("· {}", r.summary.owner())).font(ty::REPO_META).color(t.ink_muted));
+    let waiting = if s.view == View::Work { waiting(s, r) } else { None };
+    let quiet = waiting.as_ref().is_some_and(|(_, badge)| badge.is_none());
+    let meta = match &waiting {
+        Some((words, _)) => text(words.clone()).font(ty::REPO_META).color(t.ink_muted).truncate(),
+        None => meta,
+    };
     let name = col()
         .grow(1.0)
         .min_w(0.0)
         .child(text(r.summary.name.clone()).font(ty::REPO_NAME).color(t.ink).truncate())
         .child(meta);
     let mut side = row().gap(6.0).center_y();
-    if st.ahead > 0 {
-        side = side.child(
-            text(format!("↑{}", st.ahead)).font(ty::MONO_11).color(t.ink_muted).help(format!("{} to push", st.ahead)),
-        );
-    }
-    if st.behind > 0 {
-        side = side.child(
-            text(format!("↓{}", st.behind)).font(ty::MONO_11).color(t.ink_muted).help(format!("{} to pull", st.behind)),
-        );
-    }
-    if st.changed > 0 {
-        side = side.child(ui::changes(t, st.changed));
+    if let Some((_, badge)) = waiting {
+        side = side.children(badge.map(|(n, tone)| ui::count(t, n, tone)));
+    } else {
+        if st.ahead > 0 {
+            side = side.child(
+                text(format!("↑{}", st.ahead))
+                    .font(ty::MONO_11)
+                    .color(t.ink_muted)
+                    .help(format!("{} to push", st.ahead)),
+            );
+        }
+        if st.behind > 0 {
+            side = side.child(
+                text(format!("↓{}", st.behind))
+                    .font(ty::MONO_11)
+                    .color(t.ink_muted)
+                    .help(format!("{} to pull", st.behind)),
+            );
+        }
+        if st.changed > 0 {
+            side = side.child(ui::changes(t, st.changed));
+        }
     }
     let mut row_el = row()
         .key(keys::repo(&r.summary.name))
@@ -116,8 +139,14 @@ fn repo_row(s: &App, i: usize, r: &RepoEntry, t: &Theme) -> El {
         .child(ui::tile(t, &r.summary.name, lane))
         .child(name)
         .child(side)
-        .on_press(move |s: &mut App| s.select_repo(i));
-    if s.selected_repo == Some(i) {
+        .on_press(move |s: &mut App| {
+            s.select_repo(i);
+            s.show_everywhere(false);
+        });
+    if quiet {
+        row_el = row_el.opacity(0.55);
+    }
+    if s.selected_repo == Some(i) && !(s.view == View::Work && s.work.everywhere) {
         row_el = row_el.fill(t.raised);
         for sh in t.shadow_lifted() {
             row_el = row_el.box_shadow(sh);
@@ -126,6 +155,70 @@ fn repo_row(s: &App, i: usize, r: &RepoEntry, t: &Theme) -> El {
         row_el = row_el.hover(t.control_hover);
     }
     row_el
+}
+
+/// What's waiting in a repository, as its row says it in the Work view: `oldest PR 23d` and
+/// a count in the oldest one's colour. None until its work has been read.
+fn waiting(s: &App, r: &RepoEntry) -> Option<(String, Option<(usize, Tone)>)> {
+    let work = s.work.of(&r.summary.path)?.work.as_ref()?;
+    // Without its provider, only worktrees could be listed: say nothing rather than "nothing".
+    if work.entries.is_empty() {
+        return work.open.is_some().then(|| ("nothing open".to_owned(), None));
+    }
+    let now = s.env.now();
+    let oldest_pull = work.entries.iter().filter(|e| matches!(e.item, Item::Pull(_))).map(|e| e.since).min();
+    let oldest = work.entries.iter().map(|e| e.since).min()?;
+    let words = match oldest_pull {
+        Some(at) => format!("oldest PR {}", rules::age(at, now)),
+        None => format!("worktree edited {}", rules::age(oldest, now)),
+    };
+    Some((words, Some((work.entries.len(), Staleness::of(oldest, now).tone()))))
+}
+
+/// The Work view's entry for every repository's open work at once.
+fn all_work(s: &App, t: &Theme) -> El {
+    let now = s.env.now();
+    let works: Vec<_> = s.work.repos.iter().filter_map(|r| r.work.as_ref()).collect();
+    let open = works.iter().filter(|w| !w.entries.is_empty()).count();
+    let count: usize = works.iter().map(|w| w.entries.len()).sum();
+    let oldest = works.iter().flat_map(|w| w.entries.iter().map(|e| e.since)).min();
+    let meta = match open {
+        1 => "1 repository".to_owned(),
+        n => format!("{n} repositories"),
+    };
+    let mut el = row()
+        .key(keys::ALL_WORK)
+        .h(size::ROW_REPO)
+        .px(8.0)
+        .gap(10.0)
+        .center_y()
+        .radius(size::RADIUS_SM)
+        .child(
+            row()
+                .size(22.0, 22.0)
+                .radius(size::RADIUS_SM)
+                .center()
+                .fill(t.accent)
+                .child(icon(&icons::WORKTREE, 13.0).color(t.on_accent)),
+        )
+        .child(
+            col()
+                .grow(1.0)
+                .min_w(0.0)
+                .child(text("All open work").font(ty::REPO_NAME).color(t.ink))
+                .child(text(meta).font(ty::REPO_META).color(t.ink_muted)),
+        )
+        .children(oldest.map(|at| ui::count(t, count, Staleness::of(at, now).tone())))
+        .on_press(|s: &mut App| s.show_everywhere(true));
+    if s.work.everywhere {
+        el = el.fill(t.raised);
+        for sh in t.shadow_lifted() {
+            el = el.box_shadow(sh);
+        }
+    } else {
+        el = el.hover(t.control_hover);
+    }
+    el
 }
 
 /// Where the + menu opens: under the sidebar's bar, inside the sidebar.

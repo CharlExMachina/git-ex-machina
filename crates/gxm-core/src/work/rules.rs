@@ -81,6 +81,15 @@ impl Staleness {
             _ => Staleness::Stale,
         }
     }
+
+    /// A count's tone when this is its oldest: red once stale, amber while aging.
+    pub fn tone(self) -> Tone {
+        match self {
+            Staleness::Stale => Tone::Bad,
+            Staleness::Aging => Tone::Warn,
+            Staleness::Fresh | Staleness::Settled => Tone::Quiet,
+        }
+    }
 }
 
 /// Whole days from `since` to `now`, never negative.

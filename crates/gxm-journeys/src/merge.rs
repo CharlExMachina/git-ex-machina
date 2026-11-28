@@ -20,6 +20,8 @@ pub fn merge_pull_request() -> Journey {
         "Someone opens their own green pull request from its commit, squashes and merges it, and sees the squash commit arrive in the history.",
         mockup_world,
     )
+    // The app opens on Work; this journey is about the history, one click away.
+    .tap(keys::VIEW_HISTORY)
     // First, dotfiles deletes merged branches: on GitHub, and the local copy too.
     .tap(keys::repo("dotfiles"))
     .tap(keys::SETTINGS)

@@ -16,6 +16,8 @@ The app runs headless with Rune's real renderer, on a fixed virtual clock, insid
 
 ## Journeys
 
+The app opens on **Work** (the work list); the graph is the History tab. A journey about the history starts with `.tap(keys::VIEW_HISTORY)`.
+
 1. Add the steps to `crates/gxm-journeys/src/catalog.rs`. Steps are `tap(key)`, `tap_text`, `type_text`, `press`, `scroll_to(key)` (wheels until it's in view, as a person scrolls to something below the fold), `wait` and `mark`. Expectations are `see`, `see_in(key, text)`, `not_see`, `gone(key)` and `world_check`. Put a `mark` at every moment worth a screenshot.
 2. A new journey also needs its `#[test]` in `crates/gxm-journeys/tests/journeys.rs`, and a world: a fixture in `gxm-world` or inline in the catalog.
 3. `cargo test -p gxm-journeys` runs it. A failure names the step and prints the screen as text: `[key] "text"`, one element per line.

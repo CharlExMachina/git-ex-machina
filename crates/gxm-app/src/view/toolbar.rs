@@ -1,6 +1,7 @@
-//! The action bar over the history: what it offers follows the selection.
+//! The action bar over the main view: the checkout control at its left, then what it offers,
+//! which follows the selection in History, and the Work | History switch at its right.
 //!
-//! - nothing selected: Fetch, Pull, Push
+//! - in Work, or nothing selected: Fetch, Pull, Push
 //! - the uncommitted row: Stage all, Discard all; with everything staged, Commit, Unstage all,
 //!   Discard all
 //! - one commit: Checkout, Cherry-pick, Revert, Branch from here
@@ -14,7 +15,7 @@ use rune::{El, Icon};
 use super::bar;
 use crate::icons;
 use crate::keys;
-use crate::state::{App, InspectorTab, Subject};
+use crate::state::{App, InspectorTab, Subject, View};
 use crate::theme::Theme;
 use crate::ui::{self, Variant};
 
@@ -31,11 +32,13 @@ pub fn toolbar(s: &App, t: &Theme) -> El {
                 .on_press(|s: &mut App| s.sidebar_open = true),
         );
     }
+    bar = bar.child(super::checkout::control(s, t));
     let b = Buttons { s, t };
     if s.pull_view().is_some() {
-        return bar.children(b.pull());
+        return bar.children(b.pull()).child(switch(s, t));
     }
-    let actions: Vec<El> = match s.subject() {
+    let subject = if s.view == View::Work { None } else { s.subject() };
+    let actions: Vec<El> = match subject {
         Some(Subject::Worktree) if s.all_staged() => {
             vec![b.commit(), b.op(Variant::Secondary, None, keys::UNSTAGE_ALL, Op::UnstageAll, None), b.discard()]
         }
@@ -83,7 +86,7 @@ pub fn toolbar(s: &App, t: &Theme) -> El {
             v
         }
         Some(Subject::Head(_)) | None => {
-            let st = s.repo().map(|r| &r.summary.status);
+            let st = s.status();
             let ahead = st.map_or(0, |st| st.ahead);
             let mut push = b.op(
                 Variant::Primary,
@@ -102,7 +105,29 @@ pub fn toolbar(s: &App, t: &Theme) -> El {
             ]
         }
     };
-    bar.children(actions)
+    let mut bar = bar.children(actions).child(rune::el().grow(1.0));
+    if s.view == View::Work {
+        bar = bar.child(b.soon(
+            Variant::Secondary,
+            Some(&icons::PLUS),
+            keys::NEW_WORKTREE,
+            "New worktree",
+            "Coming next: start a worktree for new work",
+        ));
+    }
+    bar.child(switch(s, t))
+}
+
+/// Work | History.
+fn switch(s: &App, t: &Theme) -> El {
+    let option = |label: &str, key: &str, view: View| {
+        let on = s.view == view;
+        (ui::segment_label(t, label, on).key(key).on_press(move |s: &mut App| s.show_view(view)), on)
+    };
+    ui::segmented(
+        t,
+        vec![option("Work", keys::VIEW_WORK, View::Work), option("History", keys::VIEW_HISTORY, View::History)],
+    )
 }
 
 /// The branch whose tip a commit is, so Checkout lands on a branch rather than a detached HEAD

@@ -64,7 +64,7 @@ impl App {
         if self.ops.running().is_some() {
             return;
         }
-        let Some(path) = self.repo().map(|r| r.summary.path.clone()) else { return };
+        let Some(path) = self.checkout_path() else { return };
         self.ops.state = OpState::Running(op.clone());
         let env = self.env.clone();
         self.ops.job.request((env, path, op), |(env, path, op)| ops::run(&env, &path, &op).map_err(Ops::said));
@@ -84,6 +84,8 @@ impl App {
                 }
                 // The history scrolls to HEAD when the re-read lands.
                 self.reload_repo();
+                // Commits made, pushed or fetched change what's waiting.
+                self.read_work();
                 if matches!(op, Op::Fetch | Op::Pull | Op::Push) {
                     // New commits may belong to pull requests (a merge just made, say).
                     self.pulls.refresh(&self.env);

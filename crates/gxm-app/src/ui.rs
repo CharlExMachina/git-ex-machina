@@ -14,6 +14,8 @@ pub enum Variant {
     Ghost,
     /// A raised control whose words warn: it deletes, publishes or gives away.
     Danger,
+    /// A soft red control for what's broken and needs fixing first: Resolve conflicts.
+    DangerSoft,
 }
 
 /// `Button` at `size="sm"`: 24 tall, 8 a side, radius 6, 12px medium, icon 14, gap 6.
@@ -59,7 +61,7 @@ fn build(
         Variant::Primary => t.on_accent,
         Variant::Secondary => t.ink,
         Variant::Ghost => t.ink_muted,
-        Variant::Danger => t.removed,
+        Variant::Danger | Variant::DangerSoft => t.removed,
     };
     let only_icon = label.is_empty();
     let mut b = row().h(24.0).gap(6.0).center_y().radius(size::RADIUS_SM);
@@ -70,6 +72,7 @@ fn build(
             lit(b, t.control, t.control_bottom).hover(t.control_hover).press(t.control_press)
         }
         Variant::Ghost => b.hover(t.control_hover).press(t.control_press),
+        Variant::DangerSoft => b.fill(t.removed_soft).hover(t.danger_soft_hover()).press(t.removed_soft),
     };
     if pressed {
         b = b.mt(0.5);
@@ -82,6 +85,10 @@ fn build(
         }
     } else if matches!(variant, Variant::Secondary | Variant::Danger) {
         for s in t.shadow_raised() {
+            b = b.box_shadow(s);
+        }
+    } else if variant == Variant::DangerSoft {
+        for s in t.shadow_danger_soft() {
             b = b.box_shadow(s);
         }
     }
@@ -390,6 +397,19 @@ pub fn state_pill(t: &Theme, state: gxm_core::forge::model::PullState, ground: C
         .fill(bg)
         .child(icon(glyph, 12.0).color(fg))
         .child(text(state.word()).font(ty::STATE).color(fg))
+}
+
+/// `.pill`: a word or two in a tone's ink on its soft ground, 20 tall, 8 a side: `Draft`,
+/// `Changes asked`, a count.
+pub fn pill(t: &Theme, label: impl Into<String>, tone: gxm_core::work::Tone) -> El {
+    let (fg, bg) = t.tone(tone);
+    row().h(20.0).px(8.0).radius(size::PILL).center().fill(bg).child(text(label.into()).font(ty::CONTROL).color(fg))
+}
+
+/// A count in a tone, as a sidebar row ends with it: mono 11 in an 18-tall pill.
+pub fn count(t: &Theme, n: usize, tone: gxm_core::work::Tone) -> El {
+    let (fg, bg) = t.tone(tone);
+    row().h(18.0).px(6.0).radius(size::PILL).center().fill(bg).child(text(n.to_string()).font(ty::MONO_11).color(fg))
 }
 
 /// `.card`: raised, radius 12, a hairline ring inside.

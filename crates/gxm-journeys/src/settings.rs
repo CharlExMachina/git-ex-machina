@@ -40,6 +40,8 @@ pub fn repository_settings() -> Journey {
         "Someone who runs atlas-web changes its settings from the app, every page GitHub has and what lives on their computer, tidies up its merged branches, and finally deletes it on GitHub.",
         settings_world,
     )
+    // The app opens on Work; this journey is about the history, one click away.
+    .tap(keys::VIEW_HISTORY)
     // The button beside commit search opens the settings, on General.
     .tap(keys::SETTINGS)
     .wait_for(keys::SETTINGS_DIALOG, "studio/atlas-web")
@@ -422,6 +424,8 @@ pub fn settings_without_admin() -> Journey {
         "Someone who maintains atlas-web but isn't an admin opens its settings: GitHub's are there to read, what lives on their computer is theirs to change, and a GitLab repository shows what it can.",
         write_access_world,
     )
+    // The app opens on Work; this journey is about the history, one click away.
+    .tap(keys::VIEW_HISTORY)
     .tap(keys::SETTINGS)
     .wait_for(keys::SETTINGS_NOTICE, "Only admins change studio/atlas-web's settings on GitHub")
     .see_in(keys::SETTINGS_NOTICE, "You have Maintain access")

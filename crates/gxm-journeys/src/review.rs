@@ -45,6 +45,8 @@ pub fn review_pull_request() -> Journey {
         "Someone sees that a commit belongs to a pull request, opens it on the graph, reviews its diff with comments, approves it and sees the approval land, without opening GitHub.",
         mockup_world,
     )
+    // The app opens on Work; this journey is about the history, one click away.
+    .tap(keys::VIEW_HISTORY)
     // A commit in an open pull request: its Overview's details name the pull request once
     // GitHub answers.
     .tap(TIP)
