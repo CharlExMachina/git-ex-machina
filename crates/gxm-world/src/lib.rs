@@ -117,6 +117,25 @@ impl World {
         gxm_core::auth::sign_out(&self.env).unwrap_or_else(|e| fail("sign Ana out", e));
     }
 
+    /// Puts an executable `name` on the world's tool path (`~/.local/bin`), running `script`
+    /// (a `#!/bin/sh` script), replacing any there: how a world installs a command-line tool.
+    pub fn install_tool(&self, name: &str, script: &str) -> PathBuf {
+        let bin = self.env.home.join(".local/bin");
+        std::fs::create_dir_all(&bin).unwrap_or_else(|e| fail("make ~/.local/bin", e));
+        let path = bin.join(name);
+        // Written aside and moved in, so a run of the old one never reads half the new one.
+        let fresh = bin.join(format!(".{name}.new"));
+        std::fs::write(&fresh, script).unwrap_or_else(|e| fail(&format!("write {name}"), e));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::fs::set_permissions(&fresh, std::fs::Permissions::from_mode(0o755))
+                .unwrap_or_else(|e| fail(&format!("make {name} executable"), e));
+        }
+        std::fs::rename(&fresh, &path).unwrap_or_else(|e| fail(&format!("install {name}"), e));
+        path
+    }
+
     /// What the world's app runs from, which an update replaces: `~/Applications/`[`INSTALLED`].
     pub fn installed(&self) -> PathBuf {
         self.env.home.join("Applications").join(INSTALLED)

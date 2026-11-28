@@ -11,6 +11,7 @@ pub mod env;
 pub mod forge;
 pub mod git;
 pub mod graph;
+pub mod harness;
 pub mod history;
 pub mod init;
 pub mod local;

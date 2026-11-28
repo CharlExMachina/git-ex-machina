@@ -204,3 +204,44 @@ fn someone_releases_the_next_version_by_pushing_a_tag_from_the_terminal() {
     assert!(!taken.status.success());
     assert!(String::from_utf8_lossy(&taken.stderr).contains("v0.1.1 already exists, on "), "{taken:?}");
 }
+
+#[test]
+fn someone_checks_their_agents_and_runs_a_prompt_from_the_terminal() {
+    use gxm_world::fixtures::agents::{self, Agent};
+    let w = World::new();
+
+    // Nothing installed: it says so, and how to add one.
+    let none = gxm(&w, &["agents"]);
+    assert!(none.contains("claude-code  Claude Code  -          not installed"), "{none}");
+    assert!(none.contains("No coding agent found."), "{none}");
+    let refused = gxm_run(&w, &["agents", "run", "Resolve the conflicts"]);
+    assert!(!refused.status.success());
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("no agent harness is ready"));
+
+    // Claude Code signed out, Codex ready: Codex is the one to use, and Claude says why not.
+    agents::claude(&w, false, Agent::Works);
+    agents::codex(&w, true);
+    let listed = gxm(&w, &["agents"]);
+    let lines: Vec<&str> = listed.lines().collect();
+    assert_eq!(lines[0], "  claude-code  Claude Code  2.1.111    not usable", "{listed}");
+    assert_eq!(lines[1], "    Claude Code is not authenticated. Run `claude auth login` and try again.");
+    assert_eq!(lines[2], "★ codex        Codex        0.156.1    ready, signed in as ana@example.com");
+    let json: serde_json::Value = serde_json::from_str(&gxm(&w, &["agents", "--json"])).expect("valid JSON");
+    assert_eq!((json[1]["id"].as_str(), json[1]["preferred"].as_bool()), (Some("codex"), Some(true)));
+
+    // A run streams the session, line by line, to its end, in the folder it's given.
+    let site = w.code().join("site");
+    std::fs::create_dir_all(&site).expect("make site");
+    std::fs::write(site.join("README.md"), "# site\n").expect("write README");
+    let ran = gxm(&w, &["agents", "run", "--in", "~/code/site", "Resolve", "the", "conflicts"]);
+    assert_eq!(
+        ran,
+        "● started session 01a0d5eb-f0c0-7481-a417-5e8871805cbc\n→ command: git status\n✎ edited README.md\nResolved: README.md says so.\n✓ done\n"
+    );
+    assert!(std::fs::read_to_string(site.join("README.md")).expect("read README").ends_with("Resolved by Codex.\n"));
+
+    // Asking for a harness that can't run says why it couldn't start.
+    agents::claude(&w, true, Agent::Works);
+    assert_eq!(gxm(&w, &["agents", "prefer", "claude-code"]), "Claude Code is preferred\n");
+    assert!(gxm(&w, &["agents"]).lines().next().is_some_and(|l| l.starts_with("★ claude-code")));
+}

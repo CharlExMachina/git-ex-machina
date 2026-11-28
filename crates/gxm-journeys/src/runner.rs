@@ -10,7 +10,7 @@ use rune::{ElementInfo, Key, KeyEvent, Mods, PhysicalInput, Runtime, TitlebarAct
 use crate::window::Window;
 use serde_json::{Value, json};
 
-use crate::{Journey, Press, Step};
+use crate::{Journey, Step};
 
 /// Frames advance at 60 Hz on the runtime's virtual clock, as `--script` renders do.
 const DT: f64 = 1.0 / 60.0;
@@ -118,6 +118,7 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
         marks: Vec::new(),
     };
     d.advance_to(START);
+    let mut outside = 0;
     for (i, step) in j.steps.iter().enumerate() {
         let fail = |why: String, d: &Driver| Failure {
             journey: j.name,
@@ -203,7 +204,7 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                 d.advance_to(t + AFTER_TAP);
             }
             Step::Press(p) => {
-                let key = key_of(p).ok_or_else(|| fail(format!("journeys can't press {:?} yet", p.name), &d))?;
+                let key = p.rune_key().ok_or_else(|| fail(format!("journeys can't press {:?} yet", p.name), &d))?;
                 d.win_mut()
                     .key(KeyEvent { key, mods: Mods { cmd: p.cmd, shift: p.shift, alt: p.alt, ..Mods::default() } });
                 d.events.push(
@@ -319,6 +320,13 @@ pub fn run(j: &Journey, world: &World) -> Result<Recording, Failure> {
                 }
             }
             Step::World { check, .. } => check(world).map_err(|why| fail(why, &d))?,
+            Step::Outside { act, .. } => {
+                act(world);
+                d.events.push(json!({ "t": t, "type": "mark", "name": crate::outside_mark(outside) }));
+                outside += 1;
+                // Time for the replay to hear the mark and act before the next step.
+                d.advance_to(t + AFTER_PRESS);
+            }
         }
     }
     let end = d.now + TAIL;
@@ -577,21 +585,4 @@ impl Driver {
         }
         s
     }
-}
-
-fn key_of(p: &Press) -> Option<Key> {
-    Some(match p.name {
-        "Down" => Key::Down,
-        "Up" => Key::Up,
-        "Left" => Key::Left,
-        "Right" => Key::Right,
-        "Enter" => Key::Enter,
-        "Escape" => Key::Escape,
-        "Tab" => Key::Tab,
-        "Home" => Key::Home,
-        "End" => Key::End,
-        name if p.cmd && name.chars().count() == 1 => Key::Command(name.chars().next()?.to_ascii_lowercase()),
-        name if name.chars().count() == 1 => Key::Text(name.to_owned()),
-        _ => return None,
-    })
 }

@@ -272,6 +272,10 @@ fn read_all(env: &Env, repo: &Path, admin: Option<&dyn Admin>, pulls: &[PullSumm
                 let default = default.clone().unwrap_or_else(|| tidy::default_branch(env, repo));
                 tidy::survey(env, repo, &default, pulls).map(Found::Branches).map_err(|e| e.to_string())
             }
+            What::Agents => Ok(Found::Agents(super::Agents {
+                statuses: gxm_core::harness::available(env),
+                chosen: gxm_core::harness::choice(env),
+            })),
             What::RemoteBranches => {
                 git::run(env, repo, &["for-each-ref", "--format=%(refname:lstrip=3)", "refs/remotes/origin"])
                     .map(|out| Found::RemoteBranches(out.lines().filter(|b| *b != "HEAD").map(str::to_owned).collect()))
@@ -326,6 +330,7 @@ fn write(env: &Env, repo: &Path, admin: Option<&dyn Admin>, action: &Action) -> 
         Action::DeleteBranches(bs) => {
             tidy::delete(env, repo, bs).map(|d| Some(d.sentence())).map_err(|e| e.to_string())
         }
+        Action::PreferAgent(h) => gxm_core::harness::prefer(env, *h).map(|()| None),
     }
 }
 

@@ -1,6 +1,7 @@
 //! The repository settings dialog: every setting of the selected repository, on its provider
 //! (GitHub's settings pages, all of them) and on this computer (its `.git/config`, its large
-//! files), and tidying up its merged branches.
+//! files), tidying up its merged branches, and the app's own settings for every repository (the
+//! agent harness it drives).
 //!
 //! One machine ([`Model`], [`step`]): opening reads the repository, picking a section reads what
 //! it shows, and every change is an [`Action`] carried out off the UI thread, one at a time, in
@@ -12,6 +13,7 @@ mod work;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use gxm_core::forge::admin::{Page, Reading, Repo, Role, Scope, Write};
+use gxm_core::harness::{Harness, HarnessStatus};
 use gxm_core::local::{Lfs, LocalChange, LocalSettings, RemoteChange, RemoteEntry, Signing};
 use gxm_core::tidy::Branch;
 use rune::TextEdit;
@@ -37,11 +39,12 @@ pub enum Section {
     Remotes,
     Identity,
     LargeFiles,
+    Agents,
     DangerZone,
 }
 
 impl Section {
-    pub const ALL: [Section; 17] = [
+    pub const ALL: [Section; 18] = [
         Section::General,
         Section::Branches,
         Section::PullRequests,
@@ -58,6 +61,7 @@ impl Section {
         Section::Remotes,
         Section::Identity,
         Section::LargeFiles,
+        Section::Agents,
         Section::DangerZone,
     ];
 
@@ -79,6 +83,7 @@ impl Section {
             Section::Remotes => "Remotes",
             Section::Identity => "Identity",
             Section::LargeFiles => "Large files",
+            Section::Agents => "Agents",
             Section::DangerZone => "Danger zone",
         }
     }
@@ -90,13 +95,14 @@ impl Section {
             Section::Actions => Some("Automation"),
             Section::CodeSecurity => Some("Security"),
             Section::Remotes => Some("This computer"),
+            Section::Agents => Some("Every repository"),
             _ => None,
         }
     }
 
     /// It lives on the provider (and needs a connection to it).
     pub fn on_provider(self) -> bool {
-        !matches!(self, Section::Remotes | Section::Identity | Section::LargeFiles)
+        !matches!(self, Section::Remotes | Section::Identity | Section::LargeFiles | Section::Agents)
     }
 
     /// What it reads to show itself.
@@ -120,6 +126,7 @@ impl Section {
             Section::Remotes => vec![What::Remotes, What::Local],
             Section::Identity => vec![What::Local],
             Section::LargeFiles => vec![What::Lfs],
+            Section::Agents => vec![What::Agents],
         }
     }
 }
@@ -136,6 +143,8 @@ pub enum What {
     Branches,
     /// `origin`'s branches, to pick a default branch or a Pages branch from.
     RemoteBranches,
+    /// The agent harnesses on this computer, and the one chosen.
+    Agents,
 }
 
 /// What a read found.
@@ -147,6 +156,22 @@ pub enum Found {
     Lfs(Lfs),
     Branches(Vec<Branch>),
     RemoteBranches(Vec<String>),
+    Agents(Agents),
+}
+
+/// The agent harnesses found on this computer, in the order the page lists them, and the one
+/// the person chose, if they did.
+#[derive(Clone, Debug)]
+pub struct Agents {
+    pub statuses: Vec<HarnessStatus>,
+    pub chosen: Option<Harness>,
+}
+
+impl Agents {
+    /// The one a session would use: the chosen one while it's usable, else the first usable.
+    pub fn preferred(&self) -> Option<Harness> {
+        gxm_core::harness::pick(self.chosen, &self.statuses)
+    }
 }
 
 /// Each read's answer, in the order asked.
@@ -162,6 +187,8 @@ pub enum Action {
     Untrack(String),
     /// Deletes these branches, done ones only, here and on origin.
     DeleteBranches(Vec<Branch>),
+    /// Makes this the agent harness the app drives.
+    PreferAgent(Harness),
 }
 
 impl Action {
@@ -179,6 +206,7 @@ impl Action {
             Action::Remote(_) => vec![What::Remotes],
             Action::Track(_) | Action::Untrack(_) => vec![What::Lfs],
             Action::DeleteBranches(_) => vec![What::Branches, What::RemoteBranches],
+            Action::PreferAgent(_) => vec![What::Agents],
         }
     }
 
@@ -190,6 +218,7 @@ impl Action {
             Action::Local(_) | Action::Remote(_) => "Saved in .git/config".to_owned(),
             Action::Track(_) | Action::Untrack(_) => "Saved in .gitattributes".to_owned(),
             Action::DeleteBranches(_) => "Deleted".to_owned(),
+            Action::PreferAgent(_) => "Saved for every repository".to_owned(),
         }
     }
 }
@@ -447,6 +476,11 @@ fn optimistic(m: &mut Model, action: &Action) {
                 }
             }
         }
+        Action::PreferAgent(h) => {
+            if let Some(Found::Agents(a)) = m.found.get_mut(&What::Agents) {
+                a.chosen = Some(*h);
+            }
+        }
         _ => {}
     }
 }
@@ -482,6 +516,13 @@ impl Model {
     pub fn branches(&self) -> Option<&[Branch]> {
         match self.found.get(&What::Branches) {
             Some(Found::Branches(b)) => Some(b),
+            _ => None,
+        }
+    }
+
+    pub fn agents(&self) -> Option<&Agents> {
+        match self.found.get(&What::Agents) {
+            Some(Found::Agents(a)) => Some(a),
             _ => None,
         }
     }

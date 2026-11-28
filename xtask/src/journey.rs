@@ -9,6 +9,26 @@ use gxm_journeys::{catalog, run as run_journey, write_proof};
 
 use crate::{build_world, build_world_in, cargo_bin, proof_dir, run};
 
+/// Runs the replay, doing what the person did outside the app (`Step::Outside`) to its world when
+/// the app announces that step's mark (`rune-mark outside-N`, on stdout in a `--realtime` run).
+fn replay_with_outside(c: &mut Command, j: &gxm_journeys::Journey, world: &gxm_world::World) -> Result<(), String> {
+    use std::io::BufRead as _;
+    let shown = format!("{c:?}");
+    let mut child = c.spawn().map_err(|e| format!("{shown}: {e}"))?;
+    let acts = j.outside_acts();
+    if let Some(out) = child.stdout.take() {
+        for line in std::io::BufReader::new(out).lines() {
+            let line = line.map_err(|e| format!("{shown}: {e}"))?;
+            let mark = line.strip_prefix("rune-mark ").and_then(|m| m.split(' ').next()).unwrap_or_default();
+            if let Some(act) = (0..acts.len()).find(|n| gxm_journeys::outside_mark(*n) == mark).map(|n| acts[n]) {
+                act(world);
+            }
+        }
+    }
+    let status = child.wait().map_err(|e| format!("{shown}: {e}"))?;
+    if status.success() { Ok(()) } else { Err(format!("{shown} failed: {status}")) }
+}
+
 pub fn list() -> Result<(), String> {
     for j in catalog::all() {
         println!("{:<20} {}", j.name, j.story);
@@ -41,7 +61,7 @@ pub fn journey(args: &[String]) -> Result<(), String> {
         // Files the journey drops are named from the world's `~/code`.
         c.current_dir(replay.code());
         c.envs(replay.env().child_vars()).arg("--script").arg(dir.join("script.json"));
-        c.args(["--theme", theme, "--realtime"]).stdout(std::process::Stdio::null());
+        c.args(["--theme", theme, "--realtime"]).stdout(std::process::Stdio::piped());
         if recording.windows {
             // Another window showed: record the desktop, every window as it stood, the main
             // window filling the frame and the others over it, as a screen recording shows them.
@@ -53,7 +73,8 @@ pub fn journey(args: &[String]) -> Result<(), String> {
                 .arg(&backdrop))?;
             c.arg("--desktop").arg(&backdrop).args(["--size", &format!("{w}x{h}")]);
         }
-        run(c.arg("--video").arg(&mp4).args(["--keys", "--pointer", "--scale", "1", "--fps", "30"]))?;
+        c.arg("--video").arg(&mp4).args(["--keys", "--pointer", "--scale", "1", "--fps", "30"]);
+        replay_with_outside(&mut c, &j, &replay)?;
         drop(replay);
         let gif = dir.join(format!("{name}.gif"));
         let filter = "fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4";

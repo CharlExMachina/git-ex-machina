@@ -36,6 +36,10 @@ pub struct Env {
     pub secrets: Secrets,
     /// Which version is running, and the file it runs from when it can replace itself.
     pub install: Install,
+    /// Where the person's command-line tools are found (`PATH`): the agent harnesses they
+    /// bring (`claude`, `codex`) are looked up here, never in the developer's own `PATH` when
+    /// isolated.
+    pub path: Vec<PathBuf>,
 }
 
 /// The running app as an installation: its version, and the bundle it was started from. Only an
@@ -154,6 +158,8 @@ pub const GITHUB_WEB_VAR: &str = "GXM_GITHUB_WEB";
 pub const VERSION_VAR: &str = "GXM_VERSION";
 /// What a sandboxed run plays it runs from: an AppImage, or a Mac app (`….app`).
 pub const BUNDLE_VAR: &str = "GXM_BUNDLE";
+/// The tool search path a sandboxed run uses in place of `PATH`.
+pub const PATH_VAR: &str = "GXM_PATH";
 
 impl Env {
     /// The real environment, with the `GXM_*` overrides a sandboxed run sets.
@@ -189,7 +195,10 @@ impl Env {
             };
             Install { bundle: appimage.or_else(mac_app), ..Install::this_build() }
         };
-        Env { home, config_dir, clock, tz, isolated, git_vars, forge, secrets, install, ui_thread: None }
+        // An isolated run finds only the tools its sandbox put on its path.
+        let path = if isolated { var(PATH_VAR) } else { var("PATH") };
+        let path = path.map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
+        Env { home, config_dir, clock, tz, isolated, git_vars, forge, secrets, install, path, ui_thread: None }
     }
 
     /// A sandboxed environment rooted at `home`, at a fixed time, in UTC.
@@ -204,6 +213,7 @@ impl Env {
             forge: ForgeAccess::none(),
             secrets: Secrets::File(home.join(".config/git-ex-machina/secrets.json")),
             install: Install::this_build(),
+            path: vec![home.join(".local/bin")],
             ui_thread: None,
         }
     }
@@ -274,7 +284,28 @@ impl Env {
         if let Some(bundle) = &self.install.bundle {
             vars.push((BUNDLE_VAR.into(), bundle.path().into()));
         }
+        if let Ok(path) = std::env::join_paths(&self.path) {
+            vars.push((PATH_VAR.into(), path));
+        }
         vars
+    }
+
+    /// The tool `name` (`claude`), as the first executable file of that name on [`Env::path`].
+    pub fn which(&self, name: &str) -> Option<PathBuf> {
+        self.off_ui_thread(&format_args!("looking for {name} on the path"));
+        self.path.iter().map(|dir| dir.join(name)).find(|p| is_executable(p))
+    }
+}
+
+fn is_executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    }
+    #[cfg(not(unix))]
+    {
+        path.is_file()
     }
 }
 

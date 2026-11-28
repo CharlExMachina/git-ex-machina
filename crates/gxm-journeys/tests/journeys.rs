@@ -71,6 +71,11 @@ fn update_app() {
 }
 
 #[test]
+fn agents_settings() {
+    journey("agents_settings");
+}
+
+#[test]
 fn every_journey_is_tested() {
     let tested = include_str!("journeys.rs");
     for j in catalog::all() {

@@ -264,6 +264,8 @@ pub const SETTINGS_STATUS: &str = "settings-status";
 pub const SETTINGS_NOTICE: &str = "settings-notice";
 /// The section's content.
 pub const SETTINGS_PAGE: &str = "settings-page";
+/// Settings › Agents with no agent harness installed: how to add one.
+pub const AGENTS_EMPTY: &str = "agents-empty";
 
 /// A section in the dialog's sidebar: `settings-section-pull-requests`.
 pub fn settings_section(title: &str) -> String {

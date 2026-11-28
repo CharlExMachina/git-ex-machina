@@ -3,6 +3,7 @@
 //! the last change.
 
 mod access;
+mod agents;
 mod automation;
 mod branches;
 mod local;
@@ -156,7 +157,10 @@ fn pane(s: &App, t: &Theme) -> El {
         .child(status.key(keys::SETTINGS_STATUS))
         .child(close);
     let mut page = col().key(keys::SETTINGS_PAGE).w_full().px(28.0).pt(20.0).pb(28.0).gap(22.0);
-    if let Some(why) = m.locked(&s.settings_jobs).filter(|_| m.section.on_provider() || s.settings_jobs.admin.is_none())
+    // The app's own settings aren't the repository's: nothing about it locks them.
+    let repo_wide = m.section != Section::Agents;
+    if let Some(why) =
+        m.locked(&s.settings_jobs).filter(|_| repo_wide && (m.section.on_provider() || s.settings_jobs.admin.is_none()))
     {
         page = page.child(notice(t, &why));
     }
@@ -205,6 +209,7 @@ fn section(s: &App, t: &Theme) -> Vec<El> {
         Section::Remotes => local::remotes(s, t),
         Section::Identity => local::identity(s, t),
         Section::LargeFiles => local::large_files(s, t),
+        Section::Agents => agents::agents(s, t),
         Section::DangerZone => repo::danger_zone(s, t),
     }
 }

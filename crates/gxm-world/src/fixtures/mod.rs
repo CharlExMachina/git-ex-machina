@@ -9,6 +9,7 @@ use jiff::Timestamp;
 
 use crate::{Author, RepoBuilder, World};
 
+pub mod agents;
 mod atlas;
 mod pulls;
 mod settings;
